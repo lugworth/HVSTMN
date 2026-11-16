@@ -1,0 +1,582 @@
+@import "tailwindcss";
+
+/* DejaVu Sans Mono subset (see public/fonts/LICENSE-DejaVu.txt): guarantees the
+   box-drawing, block and symbol glyphs used by the Enhanced renderer. */
+@font-face {
+  font-family: "HRVSTMN Mono";
+  src: url("/fonts/DejaVuSansMono.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "HRVSTMN Mono";
+  src: url("/fonts/DejaVuSansMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --base00: #000000;
+  --base01: #404040;
+  --base02: #606060;
+  --base03: #808080;
+  --base04: #c0c0c0;
+  --base05: #d0d0d0;
+  --base06: #e0e0e0;
+  --base07: #ffffff;
+  --base08: #ff0000;
+  --base09: #ff9900;
+  --base0A: #ff0099;
+  --base0B: #33ff00;
+  --base0C: #00ffff;
+  --base0D: #0066ff;
+  --base0E: #cc00ff;
+  --base0F: #3300ff;
+  /* Farm chrome: weathered wood from the dark end of the Isotope orange ramp, the same three
+     values the canvas HUD snaps its fence rails, posts and sign board to. */
+  --fence-rail: #6f4013;
+  --fence-post: #9a5a11;
+  --sign-board: #3d2310;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--base00);
+  color: var(--base05);
+  font-family: "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  overflow: hidden;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+}
+
+/* ---- App shell: fill the dynamic viewport (tracks mobile browser toolbars) inside the safe areas */
+.app-shell {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--base00);
+}
+.game-root {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
+/* Contour Farm controls: sharp edges, keycap badges, and one painted-sign primary action.
+   The footer continues the HUD's fence: a wooden rail along the top, and fence posts between groups. */
+.game-toolbar {
+  position: relative; /* the game menu hangs above it */
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--fence-rail);
+  box-shadow: inset 0 1px 0 var(--sign-board);
+  background: var(--base00);
+  font-size: clamp(11.5px, 1.05vw, 15px);
+  line-height: 1.2;
+}
+.game-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  color: var(--base05);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  font: inherit;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.game-control:hover {
+  color: var(--base07);
+  background: var(--sign-board);
+  border-color: var(--fence-rail);
+}
+.game-control:active {
+  transform: translateY(1px);
+}
+.game-icon {
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  color: var(--base06);
+  transition: color 120ms ease;
+}
+.game-icon-px {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  background: transparent;
+}
+.game-icon-space { color: var(--base0C); }
+.game-icon-x { color: var(--base06); }
+.game-icon-tab { color: var(--base04); }
+.game-icon-i { color: var(--fence-post); }
+.game-icon-y { color: var(--base09); }
+.game-icon-r { color: var(--base0A); }
+.game-icon-esc { color: var(--base06); }
+.game-icon-menu { color: var(--fence-post); }
+.game-control:hover .game-icon,
+.game-menu-btn[aria-expanded="true"] .game-icon {
+  color: var(--base0C);
+}
+.game-control-primary:hover .game-icon {
+  color: var(--base07);
+}
+.game-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border: 1px solid var(--base02);
+  background: var(--base00);
+  color: var(--base06);
+  font: inherit;
+  font-size: 0.82em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.game-control:hover .game-shortcut {
+  border-color: var(--base0C);
+  color: var(--base0C);
+}
+.game-control-primary {
+  padding: 5px 11px 5px 7px;
+  background: var(--sign-board);
+  border-color: var(--fence-post);
+  color: var(--base07);
+  font-weight: 700;
+}
+.game-control-primary .game-shortcut {
+  border-color: var(--base0C);
+  background: var(--base0C);
+  color: var(--base00);
+}
+.game-control-primary:hover {
+  background: var(--sign-board);
+  border-color: var(--base0C);
+  color: var(--base07);
+}
+.game-control-primary:hover .game-shortcut {
+  border-color: var(--base07);
+  background: var(--base07);
+  color: var(--base00);
+}
+.game-sep {
+  flex: none;
+  align-self: center;
+  margin: 0 3px;
+  color: var(--fence-post);
+  line-height: 1;
+  user-select: none;
+}
+.game-sep::before { content: "╪"; content: "╪" / ""; } /* decorative: no text alternative */
+.game-sep-end { margin-left: auto; } /* the menu sits at the right end, as in the reference */
+.game-menu-btn {
+  border-color: var(--fence-rail);
+  color: var(--base05);
+}
+.game-menu-btn .game-shortcut {
+  border-color: var(--fence-rail);
+  color: var(--base05);
+}
+.game-menu-btn:hover .game-shortcut,
+.game-menu-btn[aria-expanded="true"] .game-shortcut {
+  border-color: var(--base0C);
+  color: var(--base0C);
+}
+.game-menu-btn[aria-expanded="true"] {
+  background: var(--sign-board);
+  border-color: var(--base0C);
+  color: var(--base0C);
+}
+.game-control:focus-visible, .pad-btn:focus-visible, .menu-item:focus-visible, #term:focus-visible { outline: 2px solid var(--base0C); outline-offset: 2px; }
+
+/* ---- Game menu: section columns above the desktop toolbar; on touch, a sheet over the map. */
+.game-menu {
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 1px solid var(--fence-post);
+  background: #0c0703;
+  box-shadow: 0 0 0 1px var(--sign-board), 0 10px 28px rgba(0, 0, 0, 0.88);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 12px;
+  background: var(--sign-board);
+  border-bottom: 1px solid var(--fence-rail);
+}
+.menu-title {
+  color: var(--base07);
+  font-size: 0.9em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.menu-hint {
+  color: var(--base04);
+  font-size: 0.78em;
+  letter-spacing: 0.06em;
+}
+.menu-sections {
+  display: grid;
+  gap: 10px 20px;
+  padding: 10px 12px 12px;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+}
+.game-menu-pop {
+  position: absolute;
+  right: min(25%, 350px);
+  bottom: calc(100% + 52px);
+  max-height: calc(100dvh - 150px);
+  font-size: 14px;
+}
+.menu-group { display: flex; flex-direction: column; min-width: 0; }
+.menu-group::before {
+  content: attr(data-title);
+  padding: 2px 8px 4px;
+  color: var(--fence-post);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--base05);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.menu-item:hover { color: var(--base0C); }
+.menu-item:focus {
+  outline: none;
+  background: var(--sign-board);
+  color: var(--base07);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--base0C);
+}
+.menu-item[aria-disabled="true"] { color: var(--base02); cursor: default; }
+.menu-item[aria-disabled="true"]:focus {
+  background: #1a120a;
+  color: var(--base03);
+  font-weight: 400;
+  box-shadow: inset 3px 0 0 var(--base02);
+}
+.menu-mark { flex: none; white-space: pre; color: var(--base03); }
+.menu-item[aria-checked="true"] .menu-mark { color: var(--base0B); }
+.menu-key { margin-left: auto; padding-left: 16px; color: var(--base04); font: inherit; }
+.menu-item:focus .menu-mark { color: var(--base0B); }
+.menu-item:focus .menu-key { color: var(--base0C); }
+@media (max-width: 1080px) {
+  .game-menu-pop { right: 16px; bottom: calc(100% + 46px); }
+}
+@media (max-width: 760px) {
+  .game-menu-pop { left: 6px; right: 6px; bottom: calc(100% + 6px); font-size: 13px; }
+  .menu-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.game-menu-sheet {
+  position: absolute;
+  inset: auto 8px 8px;
+  z-index: 30;
+  max-height: calc(100% - 16px);
+  font-size: 13px;
+}
+.game-menu-sheet .menu-sections {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 8px;
+}
+.game-menu-sheet .menu-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 6px;
+}
+.game-menu-sheet .menu-group::before { grid-column: 1 / -1; padding: 0 2px; }
+.game-menu-sheet .menu-item {
+  justify-content: center;
+  min-height: 44px;
+  padding: 4px 6px;
+  border: 1px solid var(--base02);
+  background: var(--base01);
+  font-weight: 700;
+  text-align: center;
+  white-space: normal;
+  touch-action: manipulation;
+}
+.game-menu-sheet .menu-key,
+.game-menu-sheet .menu-mark { display: none; } /* on touch the green border shows what is checked */
+@media (orientation: landscape) and (max-height: 540px) {
+  .game-menu-sheet { font-size: 12px; }
+  .game-menu-sheet .menu-group { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+  .game-menu-sheet .menu-item { min-height: 40px; }
+}
+.game-menu-sheet .menu-item[aria-checked="true"] { border-color: var(--base0B); }
+@media (max-width: 1120px) {
+  .game-toolbar { gap: 3px; padding: 7px 10px; font-size: clamp(10.5px, 1vw, 13px); }
+  .game-control { gap: 4px; padding: 4px 5px; }
+  .game-control-primary { padding: 4px 7px 4px 5px; }
+  .game-shortcut { padding: 2px 4px; font-size: 0.8em; }
+  .game-sep { margin: 0 1px; }
+}
+@media (max-width: 720px) {
+  .game-toolbar { flex-wrap: wrap; gap: 4px 6px; padding: 6px 8px; font-size: 11px; }
+  .game-control { gap: 4px; padding: 4px 6px; }
+  .game-sep-end { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-control,
+  .game-icon,
+  .game-shortcut {
+    transition: none;
+  }
+  .game-control:active {
+    transform: none;
+  }
+}
+
+/* ---- Touch layout. Portrait: map on top, then a utility row, D-pad (left thumb) and actions
+   (right thumb). Short landscape screens (phones) put the controls in columns either side. */
+.touch-ui {
+  --u: clamp(40px, 12.5vw, 56px);
+  --gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "stage stage"
+    "util util"
+    "move act";
+  touch-action: none;
+  overscroll-behavior: none;
+}
+.touch-ui .t-stage {
+  grid-area: stage;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.touch-ui .t-util {
+  grid-area: util;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: var(--gap);
+  padding: 6px 12px 0;
+}
+.touch-ui .t-util-a,
+.touch-ui .t-util-b {
+  display: contents;
+}
+.touch-ui .t-move {
+  grid-area: move;
+  align-self: end;
+  padding: 10px 0 12px 12px;
+}
+.touch-ui .t-act {
+  grid-area: act;
+  align-self: end;
+  padding: 10px 12px 12px 0;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .touch-ui {
+    --u: clamp(36px, 11.5vh, 52px);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "util-a stage util-b"
+      "move stage act";
+  }
+  .touch-ui .t-util {
+    display: contents;
+  }
+  .touch-ui .t-util-a,
+  .touch-ui .t-util-b {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: var(--gap);
+    padding-top: 8px;
+  }
+  .touch-ui .t-util-a {
+    grid-area: util-a;
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+  .touch-ui .t-util-b {
+    grid-area: util-b;
+    padding-left: 8px;
+    padding-right: 10px;
+  }
+  .touch-ui .t-move {
+    padding: 8px 8px 10px 10px;
+  }
+  .touch-ui .t-act {
+    padding: 8px 10px 10px 8px;
+  }
+}
+
+.pad-btn,
+.dpad-arm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  border-radius: 0;
+  border: 1px solid var(--base02);
+  background: var(--base01);
+  color: var(--base05);
+  font: 700 clamp(11px, calc(var(--u, 44px) * 0.24), 14px)/1.1 "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 0 var(--base00);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.pad-btn:active,
+.dpad-arm[data-on="1"] {
+  background: var(--base02);
+  border-color: var(--base03);
+}
+.pad-btn[aria-pressed="true"] {
+  border-color: currentColor; /* toggles that are on wear their own colour */
+}
+.dpad-arm[data-on="1"] {
+  color: var(--base07);
+}
+.pad-btn:active,
+.dpad-arm[data-on="1"] {
+  transform: translateY(1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pad-btn:active,
+  .dpad-arm[data-on="1"] {
+    transform: none;
+  }
+}
+
+.dpad {
+  display: grid;
+  width: max-content; /* the box must hug the arms: directions are measured from its centre */
+  grid-template-columns: repeat(3, var(--u));
+  grid-template-rows: repeat(3, var(--u));
+  gap: var(--gap);
+  touch-action: none;
+}
+.dpad-arm {
+  font-size: calc(var(--u) * 0.36);
+  pointer-events: none; /* the D-pad surface tracks the thumb */
+}
+.dpad-up { grid-area: 1 / 2; }
+.dpad-left { grid-area: 2 / 1; }
+.dpad-right { grid-area: 2 / 3; }
+.dpad-down { grid-area: 3 / 2; }
+.dpad-hub {
+  grid-area: 2 / 2;
+  margin: 22%;
+  border-radius: 50%;
+  border: 1px solid var(--base01);
+}
+
+.act-grid {
+  display: grid;
+  grid-template-columns: calc(var(--u) * 1.35) calc(var(--u) * 1.65);
+  grid-template-rows: calc(var(--u) * 1.15) calc(var(--u) * 1.85);
+  gap: var(--gap);
+}
+.act-grid .pad-btn {
+  font-size: clamp(10px, calc(var(--u) * 0.24), 13px);
+}
+.act-tool,
+.act-use {
+  color: var(--base05);
+}
+.act-menu {
+  color: var(--base04);
+}
+.act-grid .act-a {
+  color: var(--base00);
+  background: var(--base0C);
+  border-color: var(--base0C);
+  font-size: clamp(11px, calc(var(--u) * 0.28), 15px);
+  word-spacing: 100vw; /* one word per line: "USE / HAMMER" */
+}
+
+.type-bar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 30;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--base0D);
+  border-radius: 10px;
+  background: var(--base00);
+}
+/* Hidden but focusable: the field must already be in the page when a prompt opens. */
+.type-bar.type-off {
+  opacity: 0;
+  pointer-events: none;
+}
+.type-bar input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--base02);
+  border-radius: 6px;
+  background: var(--base00);
+  color: var(--base07);
+  font: 16px "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace; /* >= 16px: no iOS focus zoom */
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+.type-bar input::placeholder {
+  color: var(--base03);
+}
+.type-bar .type-done {
+  padding: 0 14px;
+  color: var(--base0B);
+}
