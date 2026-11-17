@@ -1332,15 +1332,6 @@ export class Game {
         ? [{ key: 'loadauto', raw: 'Load Auto-Save', label: 'Load Auto-Save', icon: '◈', iconCol: '0C', right: formatSlotBadge(slots.auto), rightCol: '0C' }]
         : []),
       {
-        key: 'hires',
-        raw: `Graphics: High-res Detail ${this.scr.hires ? 'On' : 'Off'}`,
-        label: 'High-res Ground Detail',
-        icon: '❖',
-        iconCol: '0C',
-        right: this.scr.hires ? 'ON' : 'OFF',
-        rightCol: this.scr.hires ? '0B' : '03',
-      },
-      {
         key: 'cues',
         raw: `Accessible Cues: ${this.scr.accessibleCues ? 'On' : 'Off'}`,
         label: 'Accessible State Cues',
@@ -1428,9 +1419,6 @@ export class Game {
       this.export_save();
     } else if (key === 'import') {
       await this.import_save();
-    } else if (key === 'hires') {
-      this.scr.setHires(!this.scr.hires);
-      this.msg(`High-res ground detail: ${this.scr.hires ? 'On' : 'Off'}.`, '0C');
     } else if (key === 'cues') {
       this.scr.accessibleCues = !this.scr.accessibleCues;
       this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');

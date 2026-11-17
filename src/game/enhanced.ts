@@ -1384,7 +1384,7 @@ function styleMinimapCell(k: string, t: number): OutCell {
  * @param t seconds, used for animation (water, rain, snow, fireflies)
  */
 export function computeFrame(
-  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion'>>,
+  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires'>>,
   t: number,
 ): OutCell[][] {
   const { buf, tags, ctx } = scr;
@@ -1902,7 +1902,8 @@ export function computeFrame(
   if (outdoor && ctx.weather === 'Sunny') reflections(out, tags, v, t, W, H);
   shoreFoam(out, tags, v, W, H, motion ? t : 0);
   connectedBorders(out, tags, v, W, H, ctx.toolTier ?? 0);
-  worldMicroDetail(out, tags, v, F, W, H, boxes, season, lightMap);
+  // vector micro-detail only exists for the dormant high-res look; skip the work otherwise
+  if (scr.hires) worldMicroDetail(out, tags, v, F, W, H, boxes, season, lightMap);
   if (ctx.fx?.length) drawFx(out, ctx.fx, v, W, H, motion);
   if (!ctx.indoor) worldMargin(out, tags, buf, v, ctx.divX, ctx.divY, boxes);
   else if (ctx.mapName !== 'mine') indoorFrame(out, tags, buf, v, ctx.divX, ctx.divY, boxes);

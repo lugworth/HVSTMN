@@ -31,11 +31,12 @@ here on top of that; the older sections still describe the shared architecture.
   dark quiet field), lifts water and its ripples and `monochrome()` gives water the cool tone,
   and field objects are brightened (`MONO_OBJECT_LIFT`). Winter ground is paler. The full
   Isotope palette is unchanged.
-- **High-res detail.** `GameScreen` renders at the screen's real `devicePixelRatio` (it used to
-  force at least 2x, which blurred 1x screens). `hiresLevel` never returns 3: the 3x3 grid of
-  third-size glyphs read as static, and a 19px desktop font always got it. Cells with vector
-  micro-detail skip the tiny-glyph texture on top. Roof outlines (`╱╲─`, which contourTile
-  makes from `◢◣▄`) are `roof_edge` micro and stay drawn. See `docs/hires-before-after.png`.
+- **High-res detail removed as a setting (2026-11-17).** The player asked for the plain look
+  only. `Screen.hires` is `false` with no setter; the F10 menu item, the Diary entry and the
+  `hrvstmn-hires` preference are gone (an old saved value is deleted on load). `computeFrame`
+  skips `worldMicroDetail` unless `scr.hires`, which brought the farm back to ~10 ms median /
+  15 ms p95. The high-res renderer code is still there, dormant; its tests switch it on with
+  `hiresScene()`. Earlier fixes to it (real devicePixelRatio, no 3x3 level, roof outlines) stand.
 - Validation: 326 tests pass, TypeScript is clean, production build passes. A random-key fuzz
   of the engine (several screen sizes, about 120k keys per run) found the camera crash and no
   other exception.

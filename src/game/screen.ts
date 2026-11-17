@@ -136,13 +136,16 @@ export class Screen {
   style: VisualStyle = 'enhanced';
   paletteMode: PaletteMode = 'mono';
   reducedMotion: boolean = false;
-  /** Whether texture cells may use half-size 2x2/3x3 detail glyphs. */
-  hires: boolean = true;
+  /**
+   * High-res detail (half-size texture glyphs and vector micro-detail). Off, with no setting to
+   * turn it on: the plain glyph look is the game's only look. Tests still switch it on to keep
+   * the dormant high-res renderer honest.
+   */
+  hires: boolean = false;
   /** Colourblind-safe state cues: ripe/ wet/ ready markers in addition to colour. */
   accessibleCues: boolean = false;
   /** Optional CRT scanline and phosphor bloom pass over the canvas. */
   crt: boolean = false;
-  onHiresChange?: (hires: boolean) => void;
   onPaletteChange?: (mode: PaletteMode) => void;
   onCrtChange?: (crt: boolean) => void;
   keyQueue: string[] = [];
@@ -187,12 +190,6 @@ export class Screen {
   /** Choose a renderer programmatically. The UI never exposes a style switch. */
   setStyle(style: VisualStyle) {
     this.style = style;
-  }
-
-  setHires(hires: boolean) {
-    if (this.hires === hires) return;
-    this.hires = hires;
-    this.onHiresChange?.(hires);
   }
 
   setPaletteMode(mode: PaletteMode) {
