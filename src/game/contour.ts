@@ -1,11 +1,18 @@
 // World-anchored character textures. No screen coordinates, animation, or game state.
-export type ContourTexture = { x: number; y: number; kind: 'ground' | 'roof' | 'water' | 'tree' };
+export type ContourTexture = { x: number; y: number; kind: 'ground' | 'sand' | 'roof' | 'water' | 'tree' };
 
 const patterns = new Map<string, string>();
 
 function mark(x: number, y: number, kind: ContourTexture['kind']): string {
   if (kind === 'water') {
     return Math.abs(Math.sin(y * 3.4 + Math.sin(x * 0.35) * 0.9)) < 0.38 ? '~' : ' ';
+  }
+  if (kind === 'sand') {
+    // wind-combed sand: loose grains, with a short ripple line here and there
+    const grain = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+    const f = grain - Math.floor(grain);
+    const ripple = Math.abs(Math.sin(y * 1.7 + Math.sin(x * 0.11) * 1.3)) < 0.12;
+    return ripple && f < 0.55 ? '-' : f < 0.2 ? '.' : f > 0.93 ? ':' : ' ';
   }
   const roof = kind === 'roof';
   const a = x * (roof ? 0.52 : 0.19);

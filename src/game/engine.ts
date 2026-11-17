@@ -107,6 +107,7 @@ import {
   PUBLIC_WORKS,
 } from './constants';
 import type { ValleyLandmark } from './constants';
+import type { CatchOdds } from './rules';
 import {
   CoordSet,
   parseCoordKey,
@@ -150,6 +151,9 @@ import {
   BASKET_CAPACITY,
   getBasketTotal,
   rollRegionCatch,
+  regionCatchOdds,
+  valleyCatchOdds,
+  rollCatch,
   rollStoneSkips,
   innSceneFor,
   stallVisit,
@@ -210,6 +214,8 @@ type HudMenuCfg = {
   banner?: () => { left: string; leftCol?: string; right?: string; rightCol?: string };
   entries?: HudMenuEntry[];
   footerHint?: string;
+  /** Turn off the 1-9 shortcuts, for prompts where a stray number must not pick an answer. */
+  noDigits?: boolean;
 };
 
 const ITEM_BADGE: Record<string, [string, string]> = {
@@ -261,6 +267,18 @@ function makerGain(steps: { input: string; output: string; qty: number }[]): [nu
   return [n, gain];
 }
 
+/** Thrown out of an open menu or dialog once the page has let go of the engine, so its loop ends. */
+class EngineStopped extends Error {}
+
+/** After a cast, how long a still-held cast key is ignored, and the longest gap between its repeats. */
+const FISH_CAST_GRACE = 0.6;
+const FISH_REPEAT_GAP = 0.2;
+/** The board only asks for a fish that is at least this likely per catch; scarcer ones are asked for singly. */
+const REQUEST_MIN_CATCH = 0.1;
+const REQUEST_SCARCE_CATCH = 0.2;
+/** Maps where forage grows overnight. */
+const FORAGE_MAPS = ['mountain', 'beach', 'woods', 'ridge', 'river', 'point', 'grove'];
+
 export interface VillagerRequest {
   id: number;
   npc: string;
@@ -304,6 +322,8 @@ export class Game {
 
   scr!: Screen;
   started: boolean = false;
+  /** Set by "Save & quit": play stops and the title screen comes back. */
+  to_title: boolean = false;
   running: boolean = true;
   autostart: boolean = false;
   msgs: [string, string][] = [];
@@ -445,6 +465,8 @@ export class Game {
   /** Eased camera top-left, in map cells. Null means snap on the next frame. */
   cam_x: number | null = null;
   cam_y: number | null = null;
+  /** The map the camera position belongs to. */
+  cam_map: string | null = null;
   animals: any[] = [];
   house_flags: string[] = [];
   project: [string, number] | null = null;
@@ -959,6 +981,7 @@ export class Game {
       this.shortcuts = Array.isArray(this.shortcuts) ? this.shortcuts.filter((id) => SHORTCUT_IDS.includes(id)) : [];
       for (const id of this.shortcuts) open_shortcut(this.maps, id);
       this.prune_forage();
+      this.prune_requests();
       this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
@@ -1014,49 +1037,68 @@ export class Game {
     this.applySaveData(data);
   }
 
+  /**
+   * One session after another: the title screen, then play until "Save & quit" brings the title
+   * back. Nothing a player can press ends the loop; `running` only goes false when the page lets go.
+   */
   async run(): Promise<void> {
-    if (this.autostart) {
-      if (this.hasSave('auto')) {
-        try {
-          this.load('auto');
-          this.update_npcs();
-          this.msg(`Resumed ${this.farm} Farm (${this.date_str()}).`, '0B');
-        } catch {
+    try {
+      await this.sessions();
+    } catch (e) {
+      if (!(e instanceof EngineStopped)) throw e;
+    }
+  }
+
+  private async sessions(): Promise<void> {
+    let first = true;
+    while (this.running) {
+      if (first && this.autostart) {
+        if (this.hasSave('auto')) {
+          try {
+            this.load('auto');
+            this.update_npcs();
+            this.msg(`Resumed ${this.farm} Farm (${this.date_str()}).`, '0B');
+          } catch {
+            this.new_game('Pete', 'Moon');
+            this.autosave(true);
+            this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+          }
+        } else {
           this.new_game('Pete', 'Moon');
           this.autosave(true);
           this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
         }
+        this.render();
+        this.scr.flush();
       } else {
-        this.new_game('Pete', 'Moon');
-        this.autosave(true);
-        this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+        this.started = false;
+        this.setBodyState('title');
+        await this.title();
       }
-      this.render();
-      this.scr.flush();
-    } else {
-      this.setBodyState('title');
-      await this.title();
-    }
-    this.last = Date.now() / 1000;
-    while (this.running) {
-      let k = await this.scr.getKey(1 / 20);
-      while (k && this.running) {
-        const prevMap = this.mapname;
-        await this.handle(k);
-        if (this.started && this.running) {
-          if (k in DIRS && this.mapname === prevMap) {
-            this.markDirty(false);
-            this.autosave(false);
-          } else {
-            this.autosave(true);
+      first = false;
+      this.to_title = false;
+      this.last = Date.now() / 1000;
+      while (this.running && !this.to_title) {
+        let k = await this.scr.getKey(1 / 20);
+        while (k && this.running && !this.to_title) {
+          const prevMap = this.mapname;
+          await this.handle(k);
+          if (this.started && this.running && !this.to_title) {
+            if (k in DIRS && this.mapname === prevMap) {
+              this.markDirty(false);
+              this.autosave(false);
+            } else {
+              this.autosave(true);
+            }
           }
+          k = await this.scr.getKey(0);
         }
-        k = await this.scr.getKey(0);
+        if (this.to_title) break;
+        await this.update();
+        this.autosave(false);
+        this.render();
+        this.scr.flush();
       }
-      await this.update();
-      this.autosave(false);
-      this.render();
-      this.scr.flush();
     }
   }
 
@@ -1199,7 +1241,7 @@ export class Game {
       await this.show_lines('Help & Controls', HELP);
     } else if (k === 'esc') {
       await this.pause_menu();
-    } else if (k === 'Q' || k === 'ctrl-c') {
+    } else if (k === 'Q') {
       await this.quit_prompt();
     }
   }
@@ -1315,7 +1357,7 @@ export class Game {
     }
     entries.push(
       { key: 'help', raw: 'Help (?)', label: 'Help & Controls', icon: '?', iconCol: '0C', right: '[?]', rightCol: '0C', hotkey: '?' },
-      { key: 'quit', raw: 'Quit', label: 'Quit Game', icon: '×', iconCol: '08', right: 'Exit', rightCol: '08' },
+      { key: 'quit', raw: 'Quit', label: 'Save & Quit to Title', icon: '×', iconCol: '08', right: 'Title', rightCol: '08' },
     );
 
     const sel = await this.menu(
@@ -1428,10 +1470,18 @@ export class Game {
     }
   }
 
+  /**
+   * Leaving is never the highlighted answer and has no number shortcut, so a stray confirm key
+   * (the same keys that use a tool or talk) keeps the game going. Quitting saves and returns to
+   * the title screen.
+   */
   async quit_prompt(): Promise<void> {
-    if (await this.confirm('Save to Slot 1 and Quit?')) {
+    const sel = await this.menu('Save and return to the title screen?', ['Keep playing', 'Save & quit to title'], 0, null, null, {
+      noDigits: true,
+    });
+    if (sel === 1) {
       this.save(1);
-      this.running = false;
+      this.to_title = true;
     }
   }
 
@@ -2098,6 +2148,9 @@ export class Game {
     const start = Date.now() / 1000;
     let bite: number | null = null;
     let result: string | null = null;
+    // The key that cast the line is often still down, and a held key repeats. Those repeats are not
+    // a reel: keys are ignored until the stream that started with the cast has gone quiet.
+    let castHeldUntil = start + FISH_CAST_GRACE;
     while (result === null) {
       const now = Date.now() / 1000;
       if (bite === null && now - start >= wait) {
@@ -2123,8 +2176,13 @@ export class Game {
       this.scr.flush();
       const k = await this.scr.getKey(0.05);
       if (k) {
+        const at = Date.now() / 1000;
         if (CANCEL_KEYS.has(k)) {
           result = 'quit';
+        } else if (at < castHeldUntil) {
+          castHeldUntil = at + FISH_REPEAT_GAP;
+        } else if (!OK_KEYS.has(k)) {
+          // moving a thumb across the pad or brushing another key does not pull the line in
         } else if (bite === null) {
           result = 'early';
         } else {
@@ -2146,7 +2204,7 @@ export class Game {
         this.fx_add('sparkle', tx, ty, 0.9);
         this.msg(`A rare catch: ${caught}!`, '0C');
       } else {
-        this.msg(`You caught a ${caught}!`, '0C');
+        this.msg(`You caught ${/^[AEIOU]/.test(caught) ? 'an' : 'a'} ${caught}!`, '0C');
       }
     } else if (result === 'early') {
       this.msg('You reeled in too early.');
@@ -2163,19 +2221,55 @@ export class Game {
     if (table) {
       return rollRegionCatch(table, { season: this.season, weather: this.weather, rodLvl }, () => py_rng().random());
     }
-    const r = py_rng().random();
     if (this.mapname === 'mine' && this.mine_type === 'lake' && this.mine_floor === 9) return 'Coelacanth';
-    if (this.mapname === 'beach' && rodLvl >= 4 && r < 0.12) {
-      if (this.season === 3 && !this.berry_sources.includes('ocean_fish')) {
-        this.give_power_berry('ocean_fish');
-      }
-      return this.season === 1 ? 'Pirate Treasure' : this.season === 2 ? 'Fossil of Ancient Fish' : 'Squid';
+    const odds = valleyCatchOdds({ map: this.mapname, season: this.season, rodLvl });
+    const caught = rollCatch(odds, py_rng().random());
+    // the beach's special catch (first in its odds) brings a Power Berry with it in winter
+    if (this.mapname === 'beach' && rodLvl >= 4 && caught === odds[0][0] && this.season === 3 && !this.berry_sources.includes('ocean_fish')) {
+      this.give_power_berry('ocean_fish');
     }
-    if (rodLvl >= 3 && r < 0.08) return this.mapname === 'mountain' ? 'Carp' : 'Catfish';
-    if (r < 0.06) return py_rng().choice(['Boot', 'Empty Can']);
-    if (r < 0.25 + rodLvl * 0.08) return 'Large Fish';
-    if (r < 0.6) return 'Medium Fish';
-    return 'Small Fish';
+    return caught;
+  }
+
+  /** What a cast on this map can bring up today, with the chance of each per landed catch. */
+  catch_odds(mapname: string): CatchOdds {
+    const rodLvl = this.levels['Fishing Rod'] || 0;
+    const table = REGION_CATCH[mapname];
+    return table
+      ? regionCatchOdds(table, { season: this.season, weather: this.weather, rodLvl })
+      : valleyCatchOdds({ map: mapname, season: this.season, rodLvl });
+  }
+
+  /** Outdoor maps with water to cast into. */
+  fishing_maps(): string[] {
+    return Object.keys(this.maps).filter((name) => {
+      const m = this.maps[name];
+      if (m.indoor || name === 'mine') return false;
+      for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) if (m.tile(x, y) === 'water' || m.tile(x, y) === 'pond') return true;
+      return false;
+    });
+  }
+
+  /**
+   * Every fish that bites somewhere today with the rod in hand: its best water and the chance per
+   * landed catch there. The request board and its hints both read from this, so the board cannot
+   * ask for a fish the valley will not give up.
+   */
+  fishing_guide(): { item: string; where: string; chance: number }[] {
+    const best = new Map<string, { titles: string[]; chance: number }>();
+    for (const name of this.fishing_maps()) {
+      for (const [item, chance] of this.catch_odds(name)) {
+        if (ITEMS[item]?.[2] !== 'fish') continue;
+        const cur = best.get(item);
+        if (!cur || chance > cur.chance + 1e-9) best.set(item, { titles: [this.maps[name].title], chance });
+        else if (Math.abs(chance - cur.chance) <= 1e-9) cur.titles.push(this.maps[name].title);
+      }
+    }
+    return [...best.entries()].map(([item, b]) => ({
+      item,
+      chance: b.chance,
+      where: b.titles.length > 2 ? 'most ponds, lakes and shores' : b.titles.join(' or '),
+    }));
   }
 
   async interact(): Promise<void> {
@@ -4804,16 +4898,55 @@ export class Game {
     await this.show_pages('Museum Collection', pages);
   }
 
+  /**
+   * What villagers may ask for: only things that can be had before a request runs out. Crops that
+   * are in season and already in the ground or the rucksack, forage growing somewhere today, and
+   * fish that bite today with the rod in hand.
+   */
   request_pool(): string[] {
-    const crops = Object.keys(CROPS).filter((c) => c !== 'Grass' && CROPS[c][0] === this.season);
-    const extras = Object.keys(ITEMS).filter((i) => ITEMS[i][2] === 'forage' || ITEMS[i][2] === 'fish');
-    return py_sorted([...crops, ...extras]);
+    const growing = new Set(Object.values(this.crops).map((c) => c[0]));
+    const crops = Object.keys(CROPS).filter(
+      (c) => c !== 'Grass' && CROPS[c][0] === this.season_name && ITEMS[c] && (growing.has(c) || (this.inv[c] || 0) > 0),
+    );
+    const forage = FORAGE_MAPS.flatMap((m) => (this.maps[m] ? this.forage_pool(m) : [])).filter((i) => ITEMS[i]?.[2] === 'forage');
+    const fish = this.fishing_guide()
+      .filter((f) => f.chance >= REQUEST_MIN_CATCH)
+      .map((f) => f.item);
+    return py_sorted([...new Set([...crops, ...forage, ...fish])]);
+  }
+
+  /**
+   * Older saves can hold requests for things nothing in the valley gives (a fish that never bit, or
+   * forage out of season). Drop the ones that cannot be filled; the board refills in the morning.
+   */
+  prune_requests(): void {
+    if (!Array.isArray(this.requests)) this.requests = [];
+    this.requests = this.requests.filter((r) => (this.inv[r.item] || 0) >= r.qty || this.request_source(r.item) !== null);
+  }
+
+  /** Where a requested item comes from today, in a line for the board. Null if nothing in the valley gives it now. */
+  request_source(item: string): string | null {
+    const kind = ITEMS[item]?.[2];
+    if (kind === 'fish') {
+      const f = this.fishing_guide().find((g) => g.item === item);
+      if (!f) return null;
+      const inTen = Math.max(1, Math.round(f.chance * 10));
+      return `Fish: ${f.where}, about ${inTen} in 10 catches.`;
+    }
+    if (kind === 'forage') {
+      const maps = FORAGE_MAPS.filter((m) => this.maps[m] && this.forage_pool(m).includes(item));
+      if (!maps.length) return null;
+      return maps.length > 3 ? 'Forage: grows all over the valley this season.' : `Forage: ${maps.map((m) => this.maps[m].title).join(', ')}.`;
+    }
+    if (CROPS[item]) return CROPS[item][0] === this.season_name ? 'Crop: in season on your farm.' : null;
+    return null;
   }
 
   request_refresh(count: number = 3): number {
     const rng = py_rng();
     const npcs = py_sorted(Object.keys(NPCS).filter((n) => n !== 'Curator'));
     const pool = this.request_pool();
+    const guide = this.fishing_guide();
     let added = 0;
     while (this.requests.length < count && this.requests.length < 3) {
       const used = new Set(this.requests.map((r) => r.npc));
@@ -4821,7 +4954,8 @@ export class Game {
       const npc = rng.choice(available.length ? available : npcs);
       const item = rng.choice(pool);
       if (!npc || !item) break;
-      const qty = rng.randint(1, 3);
+      const scarce = guide.some((f) => f.item === item && f.chance < REQUEST_SCARCE_CATCH);
+      const qty = scarce ? 1 : rng.randint(1, 3);
       const price = Math.max(1, Number(ITEMS[item]?.[0]) || 40);
       this.requests.push({
         id: this.next_request_id++,
@@ -5035,7 +5169,16 @@ export class Game {
       const days = Math.max(0, r.deadline - this.absday());
       return `${r.npc}: ${r.qty} × ${r.item} — ${r.reward}G (${days}d left)`;
     });
-    const sel = await this.menu('Rose Square Request Board', [...labels, 'Leave']);
+    const info = (s: number): string[] => {
+      const r = this.requests[s];
+      if (!r) return ['', ''];
+      const have = this.inv[r.item] || 0;
+      return [
+        have >= r.qty ? `You have ${have}. Hand ${r.qty} over?` : `You have ${have} of ${r.qty}.`,
+        this.request_source(r.item) ?? 'Not to be found in the valley today.',
+      ];
+    };
+    const sel = await this.menu('Rose Square Request Board', [...labels, 'Leave'], 0, info);
     if (sel === null || sel >= this.requests.length) return;
     const request = this.requests[sel];
     const result = this.request_deliver(sel);
@@ -5997,7 +6140,7 @@ export class Game {
 
   spawn_forage(): void {
     const rng = py_rng();
-    for (const mapKey of ['mountain', 'beach', 'woods', 'ridge', 'river', 'point', 'grove']) {
+    for (const mapKey of FORAGE_MAPS) {
       const m = this.maps[mapKey];
       if (!m) continue;
       const items = this.forage_pool(mapKey);
@@ -6582,8 +6725,11 @@ export class Game {
     } else {
       targetY = clamp(this.py - Math.floor(vh / 2), 0, m.h - vh);
     }
+    // The camera eases toward the player, but only within one map: a position left over from
+    // another map (waking at home after collapsing outdoors, a mine floor change) snaps instead.
     if (
       s.reducedMotion ||
+      this.cam_map !== this.mapname ||
       this.cam_x === null ||
       this.cam_y === null ||
       Math.abs(targetX - this.cam_x) > 6 ||
@@ -6595,8 +6741,10 @@ export class Game {
       this.cam_x += (targetX - this.cam_x) * 0.28;
       this.cam_y += (targetY - this.cam_y) * 0.28;
     }
-    const cx = Math.round(this.cam_x);
-    const cy = Math.round(this.cam_y);
+    this.cam_map = this.mapname;
+    // Never look past the edge of the map, whatever the camera was doing before.
+    const cx = clamp(Math.round(this.cam_x), 0, Math.max(0, m.w - vw));
+    const cy = clamp(Math.round(this.cam_y), 0, Math.max(0, m.h - vh));
     if (s.ctx) {
       const now = Date.now() / 1000;
       s.ctx.fx = this.fx
@@ -7361,6 +7509,7 @@ export class Game {
     this.modal_depth += 1;
     try {
       while (true) {
+        if (!this.running) throw new EngineStopped();
         this.render();
         draw();
         this.scr.flush();
@@ -7699,7 +7848,7 @@ export class Game {
         const hk = cfg.entries.findIndex((e) => e.hotkey && e.hotkey === k);
         if (hk >= 0) return hk;
       }
-      if (k.length === 1 && /^\d$/.test(k) && 1 <= Number(k) && Number(k) <= Math.min(n, 9)) {
+      if (!cfg?.noDigits && k.length === 1 && /^\d$/.test(k) && 1 <= Number(k) && Number(k) <= Math.min(n, 9)) {
         return Number(k) - 1;
       }
     }
@@ -7846,8 +7995,6 @@ export class Game {
         opts.push('Manage Saves');
         meta.push(null);
       }
-      opts.push('Quit');
-      meta.push(null);
 
       const info = (sIdx: number) => {
         const s = meta[sIdx];
@@ -7867,12 +8014,10 @@ export class Game {
         return [];
       };
 
+      // The title has no way out: Esc, Q and Backspace just leave the menu where it is.
       const sel = await this.menu('Menu', opts, 0, info, 13);
-      const choice = sel !== null ? opts[sel] : 'Quit';
-      if (choice === 'Quit') {
-        this.running = false;
-        return;
-      }
+      if (sel === null) continue;
+      const choice = opts[sel];
       if (choice.startsWith('Continue')) {
         const slot: SaveSlot = choice.includes('Auto-Save') ? 'auto' : choice.includes('Slot 2') ? 2 : 1;
         try {

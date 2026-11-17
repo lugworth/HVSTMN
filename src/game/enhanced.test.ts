@@ -1682,3 +1682,83 @@ describe('high-resolution world micro-detail', () => {
 });
 
 
+
+describe('terrain reads by value in black and white', () => {
+  /** A strip of each ground, far enough apart that edge blending and shadows stay out of the samples. */
+  const terrain = (over: Partial<RenderCtx> = {}) => {
+    const s = scene(over);
+    const kinds: [string, number][] = [['field', 4], ['sand', 16], ['water', 28]];
+    for (const [t, x0] of kinds) for (let y = 3; y < 18; y++) for (let x = x0; x < x0 + 8; x++) {
+      s.put(x, y, t === 'water' ? '~' : '.', '0B', '00');
+      s.tag(x, y, { t, wx: x, wy: y });
+    }
+    return s;
+  };
+  /** Average background luminance over the middle of a strip (x0 is the strip's first column). */
+  const meanBg = (frame: OutCell[][], x0: number) => {
+    let sum = 0;
+    let n = 0;
+    for (let y = 6; y < 15; y++) for (let x = x0 + 2; x < x0 + 6; x++) {
+      sum += lum(frame[y][x].bg);
+      n++;
+    }
+    return sum / n;
+  };
+  const GRASS = 40;
+
+  test('pale sand, mid-grey meadow, dark field: each ground has its own value', () => {
+    const f = computeFrame(terrain({ palette: 'mono' }), 0);
+    const [field, sand, grass] = [meanBg(f, 4), meanBg(f, 16), meanBg(f, GRASS)];
+    assert.ok(field < grass - 3, `field ${field} is darker than meadow ${grass}`);
+    assert.ok(sand > grass + 20, `sand ${sand} is clearly paler than meadow ${grass}`);
+  });
+
+  test('water is a lighter, cool sheet with bright ripples, not a patch of black', () => {
+    const f = computeFrame(terrain({ palette: 'mono' }), 0);
+    assert.ok(meanBg(f, 28) > meanBg(f, GRASS) + 8, `water ${meanBg(f, 28)} vs meadow ${meanBg(f, GRASS)}`);
+    let ripples = 0;
+    for (let y = 6; y < 15; y++) for (let x = 30; x < 34; x++) {
+      const o = f[y][x];
+      const [r, , b] = hexToRgb(o.bg);
+      assert.ok(b > r, `water bg ${o.bg} leans cool`);
+      if (o.ch !== ' ') {
+        ripples++;
+        assert.ok(lum(o.fg) > lum(o.bg) + 60, `ripple ${o.fg} stands off ${o.bg}`);
+      }
+    }
+    assert.ok(ripples > 0);
+    // the land stays neutral: the cool cast is for water alone
+    const [r, g, b] = hexToRgb(f[10][GRASS + 3].bg);
+    assert.ok(r === g && g === b, 'meadow is a plain grey');
+  });
+
+  test('weeds, stones and branches outshine the field they lie on', () => {
+    const s = terrain({ palette: 'mono' });
+    const objs: [string, string][] = [['obj:weed', 'w'], ['obj:stone', 'o'], ['obj:branch', '/'], ['obj:stump', 'O']];
+    objs.forEach(([k, ch], i) => {
+      s.put(6 + i, 10, ch, '0B', '00');
+      s.tag(6 + i, 10, { t: 'field', wx: 6 + i, wy: 10, k });
+    });
+    const f = computeFrame(s, 0);
+    let ground = 0;
+    for (let x = 6; x < 10; x++) ground = Math.max(ground, lum(f[12][x].fg));
+    objs.forEach(([k], i) => assert.ok(lum(f[10][6 + i].fg) > ground + 50, `${k} ${f[10][6 + i].fg} vs ground texture ${ground}`));
+  });
+
+  test('the full-colour palette keeps its own terrain colours', () => {
+    const f = computeFrame(terrain({ palette: 'isotope' }), 0);
+    const [r, g, b] = hexToRgb(f[10][31].bg);
+    assert.ok(b > r * 2 && b > g, `water stays blue (${f[10][31].bg})`);
+    // and its grounds are not regraded: the meadow is green, not the mono palette's grey
+    const [mr, mg] = hexToRgb(f[10][GRASS + 3].bg);
+    assert.ok(mg > mr, `meadow stays green (${f[10][GRASS + 3].bg})`);
+  });
+
+  test('snow lies pale over meadow and field alike', () => {
+    const winter = computeFrame(terrain({ palette: 'mono', season: 3 }), 0);
+    const spring = computeFrame(terrain({ palette: 'mono', season: 0 }), 0);
+    assert.ok(meanBg(winter, GRASS) > meanBg(spring, GRASS) + 25, 'snowy meadow');
+    assert.ok(meanBg(winter, 4) > meanBg(spring, 4) + 12, 'snowy field');
+    assert.ok(meanBg(winter, 4) < meanBg(winter, GRASS), 'the field still shows as the darker ground');
+  });
+});

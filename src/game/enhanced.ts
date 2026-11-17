@@ -340,6 +340,8 @@ function monochrome(out: OutCell[][], boxes: Screen['boxes'], tone?: Tone) {
       // Time of day leans the greys warm or cool; lamplight keeps its own warm pool at night.
       // In 'duotone' mode, `tone.base` supplies the seasonal wash when neither warm nor cool dominates.
       let t: RGB | null = tone?.base ?? null;
+      // water keeps a cool cast in plain black and white, so a pond never reads as bare ground
+      if (!t && tone && WATERY.has(tone.tags[y]?.[x]?.t ?? '')) t = COOL_TONE;
       if (tone) {
         const lit = tone.light ? Math.min(1, tone.light[y * W + x] * 3) : 0;
         const warm = Math.max(tone.warm, lit);
@@ -450,9 +452,9 @@ export const THEMES: Theme[] = [
   },
   {
     // Winter
-    grassBg: '#262e3a', grassBg2: '#2e3846', grassDetail: '#c8d4e4', tuft: '#9aa8b8',
+    grassBg: '#4a5464', grassBg2: '#566072', grassDetail: '#eef2fa', tuft: '#c4ceda',
     trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820', treeGlyphs: ['♠', '♠'],
-    soilBg: '#262a30', soilDot: '#8a96a6', weed: '#a0aab4',
+    soilBg: '#394049', soilDot: '#a4aebc', weed: '#d0d8e0',
     waterBg: '#10304e', waterBg2: '#143a5c', waterFg: '#8ac8ff',
     snow: true,
   },
@@ -1139,14 +1141,30 @@ function ripeCropGlyph(cropName: string, fam: CropFamily, fallback: string): { c
 }
 
 /** Contour Farm treatment: only scenery changes; sprites, crops and cues stay full size. */
+// How the black-and-white palettes tell terrain apart (see contourTile).
+const MONO_GROUND = {
+  grass: { fg: '#707070', lift: 0 },
+  field: { fg: '#4c4c4c', lift: -0.35 },
+  sand: { fg: '#a0a0a0', lift: 0.1 },
+} as const;
+const MONO_OBJECT_LIFT = 0.45;
+const MONO_WATER_LIFT = 0.13;
+const MONO_WATER_RIPPLE = 0.3;
+
 function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 'mono'): OutCell {
+  const fullCol = palette === 'isotope';
+  // Without colour, things to clear off the field must outshine the ground they lie on.
+  if (!fullCol && !F.indoor && !o.accent && tag.k?.startsWith('obj:')) return { ...o, fg: mix(o.fg, '#ffffff', MONO_OBJECT_LIFT), bold: true };
   if (F.indoor || tag.ent || o.accent || o.glow || o.ch === '˙' || o.ch === '✧' || tag.k?.startsWith('obj:') || tag.k?.startsWith('crop:') || tag.k?.startsWith('soil')) return o;
   const x = tag.wx ?? 0;
   const y = tag.wy ?? 0;
-  const fullCol = palette === 'isotope';
   if (['grass', 'field', 'sand'].includes(tag.t) && o.ch !== '╿' && o.ch !== '◦' && !F.theme.snow) {
-    const texture: ContourTexture = { x, y, kind: 'ground' };
-    return { ...o, ch: contourPattern(texture, 1), fg: fullCol ? mix(o.fg, '#ffffff', 0.16) : '#808080', bold: false, texture };
+    const texture: ContourTexture = { x, y, kind: tag.t === 'sand' ? 'sand' : 'ground' };
+    if (fullCol) return { ...o, ch: contourPattern(texture, 1), fg: mix(o.fg, '#ffffff', 0.16), bold: false, texture };
+    // In black and white the grounds differ by value: pale combed sand, mid-grey meadow, and a
+    // dark, quiet field that leaves the eye free for what grows and lies on it.
+    const g = MONO_GROUND[tag.t as 'grass' | 'field' | 'sand'];
+    return { ...o, ch: contourPattern(texture, 1), fg: g.fg, bg: g.lift >= 0 ? mix(o.bg, '#ffffff', g.lift) : mix(o.bg, '#000000', -g.lift), bold: false, texture };
   }
   if (tag.t === 'roof') {
     const texture: ContourTexture = { x, y, kind: 'roof' };
@@ -1155,7 +1173,13 @@ function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 
   }
   if (tag.t === 'tree') return { ...o, fg: mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4), texture: { x, y, kind: 'tree' } };
   if (tag.t === 'wall' && tag.k !== 'deco') return { ...o, ch: o.ch === '▀' ? '─' : o.ch, fg: mix(o.fg, '#ffffff', fullCol ? 0.25 : 0.55) };
-  if (WATERY.has(tag.t)) return { ...o, texture: { x: x + (Math.floor(F.t * 1.5) % 8) * 0.15, y, kind: 'water' } };
+  if (WATERY.has(tag.t)) {
+    const texture: ContourTexture = { x: x + (Math.floor(F.t * 1.5) % 8) * 0.15, y, kind: 'water' };
+    if (fullCol) return { ...o, texture };
+    // Blue is nearly black once it is greyed, which hid the water. Here it is a lighter sheet
+    // than the land around it, with bright ripples (and the cool lean monochrome() gives it).
+    return { ...o, fg: mix(o.fg, '#ffffff', MONO_WATER_RIPPLE), bg: mix(o.bg, '#ffffff', MONO_WATER_LIFT), texture };
+  }
   return o;
 }
 

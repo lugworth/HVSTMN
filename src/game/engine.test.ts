@@ -1357,3 +1357,243 @@ describe('renderer context', () => {
     assert.equal(g.scr.ctx.day, 29);
   });
 });
+
+describe('leaving the game takes a deliberate choice', () => {
+  /** Feed keys one at a time, letting the engine settle between them, then report where it stands. */
+  const play = async (g: any, keys: string[]) => {
+    for (const k of keys) {
+      g.scr.pushKey(k);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  };
+  /** Run the engine in the background and stop it when the test is done. */
+  const session = async (autostart: boolean, body: (g: any) => Promise<void>) => {
+    const g = new Game(new Screen(132, 30), autostart) as any;
+    const done = g.run();
+    try {
+      await body(g);
+    } finally {
+      g.running = false;
+      g.scr.pushKey('esc');
+      await done;
+    }
+  };
+
+  test('Esc, Q, Backspace and wrapping past the last entry never leave the title screen', async () => {
+    await session(false, async (g) => {
+    await play(g, ['esc', 'q', 'backspace', 'ctrl-c', 'up', 'esc']);
+    assert.equal(g.running, true);
+    assert.equal(g.started, false);
+    assert.ok(g.modal_depth > 0, 'the title menu is still open');
+    });
+  });
+
+  test('the title menu has no Quit entry', async () => {
+    await session(false, async (g) => {
+    await play(g, ['up']);
+    const rows = g.scr.buf.map((row: any[]) => row.map((c: any) => c[0]).join(''));
+    assert.ok(rows.some((r: string) => r.includes('New Game')));
+    assert.ok(!rows.some((r: string) => /Quit/.test(r)));
+    });
+  });
+
+  test('mashing a confirm key through the Diary Quit entry keeps the game going', async () => {
+    for (const ok of ['enter', 'space', 'x', 'e', 'z']) {
+      await session(true, async (g) => {
+      await play(g, ['esc', 'up', ok, ok, ok]); // Diary > wrap up to Quit > select > confirm > confirm
+      assert.equal(g.running, true, ok);
+      assert.equal(g.to_title, false, ok);
+      assert.equal(g.started, true, ok);
+      });
+    }
+  });
+
+  test('Shift+Q then a tool, talk or number key keeps the game going', async () => {
+    for (const next of ['space', 'x', 'e', 'enter', 'z', '1', '2', 'esc', 'q']) {
+      await session(true, async (g) => {
+      await play(g, ['Q', next]);
+      assert.equal(g.to_title, false, next);
+      assert.equal(g.started, true, next);
+      });
+    }
+  });
+
+  test('Ctrl+C no longer asks to quit', async () => {
+    await session(true, async (g) => {
+    await play(g, ['ctrl-c']);
+    assert.equal(g.modal_depth, 0);
+    });
+  });
+
+  test('choosing Save & quit saves and returns to the title screen, where Continue resumes', async () => {
+    await session(true, async (g) => {
+    g.gold = 4321;
+    await play(g, ['Q', 'down', 'enter']);
+    assert.equal(g.running, true, 'the engine keeps running');
+    assert.equal(g.started, false, 'back on the title screen');
+    assert.equal(JSON.parse(store['hrvstmn-save']).gold, 4321);
+    g.gold = 0;
+    await play(g, ['enter', 'enter']); // Continue (Diary Slot 1) > welcome back
+    assert.equal(g.started, true);
+    assert.equal(g.gold, 4321);
+    });
+  });
+});
+
+describe('fishing and the request board', () => {
+  /** Fish one cast with a scripted clock: `keys(t)` says which key (if any) arrives t seconds after the cast. */
+  const cast = async (keys: (t: number) => string | null) => {
+    const g = fresh();
+    const [realNow, realRandom] = [Date.now, Math.random];
+    let now = 5_000_000;
+    Date.now = () => now;
+    Math.random = () => 0; // the bite comes exactly 1.0 s after the cast
+    const start = now;
+    g.scr.getKey = async () => {
+      now += 50;
+      return keys((now - start) / 1000);
+    };
+    try {
+      await g.fish();
+    } finally {
+      Date.now = realNow;
+      Math.random = realRandom;
+    }
+    return g.msgs.map((m: [string, string]) => m[0]).join(' | ');
+  };
+  const once = (at: number, key: string) => (t: number) => (Math.abs(t - at) < 0.026 ? key : null);
+
+  test('a cast key that is still held down does not reel the line in early', async () => {
+    // Space held for 0.9 s: the first repeat after 0.3 s, then one every 50 ms; a fresh press on the bite
+    const held = (t: number) => (t >= 0.3 && t <= 0.9 ? 'space' : Math.abs(t - 1.3) < 0.026 ? 'space' : null);
+    const log = await cast(held);
+    assert.ok(!log.includes('too early'), log);
+    assert.match(log, /caught|rare catch/);
+  });
+
+  test('a fresh press before the bite is still too early, and a press on the bite lands it', async () => {
+    assert.match(await cast(once(0.8, 'space')), /too early/);
+    assert.match(await cast(once(1.4, 'x')), /caught|rare catch/);
+    assert.match(await cast(() => null), /got away/);
+  });
+
+  test('brushing a movement key while waiting does not pull the line in', async () => {
+    const log = await cast((t) => (Math.abs(t - 0.8) < 0.026 ? 'left' : Math.abs(t - 1.3) < 0.026 ? 'space' : null));
+    assert.ok(!log.includes('too early'), log);
+    assert.match(log, /caught|rare catch/);
+  });
+
+  test('every fish the board can ask for bites somewhere today with the rod in hand', () => {
+    const g = fresh();
+    for (let season = 0; season < 4; season++) for (const rod of [0, 1, 2, 3, 4, 5]) for (const weather of ['Sunny', 'Rain']) {
+      g.season = season;
+      g.weather = weather;
+      g.levels['Fishing Rod'] = rod;
+      const guide = new Map(g.fishing_guide().map((f: any) => [f.item, f]));
+      for (const item of g.request_pool()) {
+        if (ITEMS[item][2] !== 'fish') continue;
+        const f: any = guide.get(item);
+        assert.ok(f && f.chance >= 0.1, `${item} in ${SEASONS[season]} with rod ${rod}`);
+        // and it really comes out of the water there
+        const map = Object.keys(g.maps).find((m) => g.maps[m].title === f.where.split(' or ')[0]) ?? 'farm';
+        assert.ok(g.catch_odds(map).some((o: [string, number]) => o[0] === item), `${item} bites at ${map}`);
+      }
+    }
+  });
+
+  test('fish nothing in the valley gives are never requested', () => {
+    const g = fresh();
+    const never = ['Monkfish', 'Spa Catfish', 'Coelacanth'];
+    for (let season = 0; season < 4; season++) {
+      g.season = season;
+      g.levels['Fishing Rod'] = 5;
+      const pool = g.request_pool();
+      for (const item of never) assert.ok(!pool.includes(item), `${item} in ${SEASONS[season]}`);
+      assert.ok(pool.includes('Small Fish') && pool.includes('Large Fish'));
+    }
+    g.season = 0;
+    g.levels['Fishing Rod'] = 0;
+    const pool = g.request_pool();
+    assert.ok(pool.includes('Willow Chub') && pool.includes('Mackerel'), 'the river and the sea in spring');
+    for (const item of ['Burbot', 'Sea Bass', 'Carp', 'Catfish', 'Squid', 'Elder Sturgeon', 'Storm Marlin']) {
+      assert.ok(!pool.includes(item), `${item} needs another season or a better rod`);
+    }
+    g.season = 3;
+    assert.ok(g.request_pool().includes('Burbot'), 'burbot in winter');
+  });
+
+  test('forage is asked for only in the season it grows; crops only when you grow or hold them', () => {
+    const g = fresh();
+    g.season = 3;
+    const winter = g.request_pool();
+    assert.ok(winter.includes('White Grass') && !winter.includes('Bamboo Shoot') && !winter.includes('Blackberry'));
+    g.season = 0;
+    assert.ok(g.request_pool().includes('Bamboo Shoot'));
+    assert.ok(!g.request_pool().includes('Turnip'), 'nothing planted yet');
+    g.crops['10,10'] = ['Turnip', 0];
+    assert.ok(g.request_pool().includes('Turnip'), 'a crop in the ground');
+    delete g.crops['10,10'];
+    g.inv['Potato'] = 2;
+    assert.ok(g.request_pool().includes('Potato'), 'a crop in the rucksack');
+    g.inv['Tomato'] = 2;
+    assert.ok(!g.request_pool().includes('Tomato'), 'summer crops wait for summer');
+  });
+
+  test('requests are for obtainable things, a scarce fish is asked for one at a time, and each has a source line', () => {
+    const g = fresh();
+    g.levels['Fishing Rod'] = 4; // squid off the beach at 12%: allowed, but scarce
+    let squid = 0;
+    for (let i = 0; i < 400; i++) {
+      g.requests = [];
+      g.request_refresh(3);
+      assert.equal(g.requests.length, 3);
+      for (const r of g.requests) {
+        assert.ok(g.request_source(r.item), `${r.item} has a source`);
+        if (r.item === 'Squid') {
+          squid++;
+          assert.equal(r.qty, 1);
+        }
+      }
+    }
+    assert.ok(squid > 0);
+    assert.match(g.request_source('Willow Chub'), /^Fish: Willow Bend, about \d+ in 10 catches\.$/);
+    assert.match(g.request_source('Small Fish'), /^Fish: /);
+    assert.equal(g.request_source('Monkfish'), null);
+    assert.match(g.request_source('Bamboo Shoot'), /^Forage: /);
+  });
+
+  test('loading a save drops requests nothing can fill and keeps the rest', () => {
+    const g = fresh();
+    g.requests = [
+      { id: 1, npc: 'Ann', item: 'Monkfish', qty: 2, reward: 100, deadline: g.absday() + 2 },
+      { id: 2, npc: 'Gray', item: 'Small Fish', qty: 1, reward: 100, deadline: g.absday() + 2 },
+      { id: 3, npc: 'Mary', item: 'Spa Catfish', qty: 1, reward: 100, deadline: g.absday() + 2 },
+    ];
+    g.inv['Spa Catfish'] = 1; // already in the bag, so that one can still be handed over
+    g.save(1);
+    const h = fresh();
+    h.load(1);
+    assert.deepEqual(h.requests.map((r: any) => r.item), ['Small Fish', 'Spa Catfish']);
+  });
+});
+
+describe('the camera stays on the map', () => {
+  test('waking at home after collapsing outdoors on a phone-sized screen does not crash', async () => {
+    const g = new Game(new Screen(44, 30), true) as any;
+    g.new_game('Pete', 'Moon');
+    // stand somewhere on the farm where the camera has scrolled a few rows down
+    let found = false;
+    for (let y = 8; y < g.maps.farm.h - 2 && !found; y++) for (let x = 3; x < g.maps.farm.w - 3 && !found; x++) {
+      if (!g.walkable('farm', x, y)) continue;
+      g.warp('farm', x, y);
+      g.render();
+      found = g.cam_y >= 1 && g.cam_y <= 6;
+    }
+    assert.ok(found, 'a scrolled camera position on the farm');
+    for (let i = 0; i < 60; i++) g.scr.pushKey('enter'); // read through the morning report
+    await g.new_day('passout');
+    assert.equal(g.mapname, 'house');
+    assert.doesNotThrow(() => g.render());
+    assert.equal(g.scr.ctx.view.h, g.maps.house.h, 'the whole farmhouse is drawn');
+  });
+});
