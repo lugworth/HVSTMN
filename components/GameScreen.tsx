@@ -137,7 +137,8 @@ export default function GameScreen() {
 
   const [inputMode, setInputMode] = useState<'pending' | 'touch' | 'desktop'>('pending');
   const isTouch = inputMode === 'touch';
-  const [running, setRunning] = useState(true);
+  /** True only when the engine loop threw: quitting returns to the title screen instead of ending. */
+  const [crashed, setCrashed] = useState(false);
   const [ready, setReady] = useState(false);
   const [hud, setHud] = useState<Hud>({ label: 'USE', modal: false, typing: false, tool: '', idle: false, started: false });
   const [compact, setCompact] = useState(false);
@@ -477,7 +478,7 @@ export default function GameScreen() {
           key('diary', 'Diary & pause', 'esc', 'Esc'),
           { id: 'save', label: 'Save (slot 1)', disabled: busy, run: saveNow },
           { id: 'export', label: 'Export save file', disabled: busy, run: () => gameRef.current?.export_save() },
-          key('quit', 'Save & quit', 'Q', 'Shift+Q'),
+          key('quit', 'Save & quit to title', 'Q', 'Shift+Q'),
         ],
       },
       {
@@ -662,10 +663,9 @@ export default function GameScreen() {
     }
 
     let lastDpr = 0;
-    const getRenderDpr = () => {
-      const base = window.devicePixelRatio || 1;
-      return screen.hires ? Math.min(3, Math.max(2, base)) : base;
-    };
+    // The screen's own pixel density. Rendering a normal screen at 2x and letting the browser
+    // shrink it blurred every glyph and pushed textures into their illegible 3x3 level.
+    const getRenderDpr = () => window.devicePixelRatio || 1;
 
     function sizeCanvas(w: number, h: number) {
       if (!canvas || !ctx || !stage) return;
@@ -896,10 +896,7 @@ export default function GameScreen() {
         await game.run();
       } catch (err) {
         console.error('Game error:', err);
-      } finally {
-        if (isMounted) {
-          setRunning(false);
-        }
+        if (isMounted) setCrashed(true);
       }
     })();
 
@@ -1209,20 +1206,18 @@ export default function GameScreen() {
         </>
       )}
 
-      {/* Game Over / Exit Screen */}
-      {!running && (
-        <div className="fixed inset-0 bg-[#000000]/95 flex flex-col items-center justify-center p-6 text-center z-50">
-          <div className="text-[#33ff00] text-xl font-bold mb-4 font-mono">{hud.started ? 'Game Saved' : 'Thanks for Playing'}</div>
+      {/* Only an engine error ends up here. Nothing was saved by it, so say what is still safe. */}
+      {crashed && (
+        <div role="alert" className="fixed inset-0 bg-[#000000]/95 flex flex-col items-center justify-center p-6 text-center z-50">
+          <div className="text-[#ff9900] text-xl font-bold mb-4 font-mono">The game hit an error</div>
           <p className="text-[#c0c0c0] max-w-md mb-6 font-mono text-sm">
-            {hud.started
-              ? 'Thanks for playing HRVSTMN! Your farm has been saved in this browser.'
-              : 'Thanks for playing HRVSTMN!'}
+            Your last save is still in this browser. Reload, then choose Continue to pick up from it.
           </p>
           <button
             onClick={() => window.location.reload()}
             className="bg-[#404040] hover:bg-[#606060] text-[#d0d0d0] border border-[#606060] px-6 py-2.5 rounded-lg font-mono"
           >
-            Play Again
+            Reload
           </button>
         </div>
       )}

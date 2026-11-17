@@ -30,6 +30,9 @@ import {
   getBasketTotal,
   BASKET_CAPACITY,
   rollRegionCatch,
+  regionCatchOdds,
+  valleyCatchOdds,
+  rollCatch,
   rollStoneSkips,
   MAX_STONE_SKIPS,
 } from './rules';
@@ -209,6 +212,46 @@ describe('outer-region fishing and stone skipping', () => {
     assert.notEqual(at('Sunny', 3), 'Storm Marlin', '3% on a fair day');
     assert.equal(at('Rain', 3), 'Storm Marlin', 'tripled in the rain');
     assert.notEqual(at('Rain', 2), 'Storm Marlin', 'needs a Gold rod');
+  });
+
+  test('the odds the game shows are the odds it plays', () => {
+    const near = (a: number, b: number) => Math.abs(a - b) < 0.02;
+    for (const region of ['river', 'point']) {
+      for (const [season, weather, rodLvl] of [[0, 'Sunny', 0], [3, 'Rain', 3], [1, 'Typhoon', 5]] as const) {
+        const ctx = { season, weather, rodLvl };
+        const odds = regionCatchOdds(REGION_CATCH[region], ctx);
+        assert.ok(near(odds.reduce((sum, o) => sum + o[1], 0), 1), 'odds add up to 1');
+        // every pair of rolls on an even grid, which is what two independent draws average out to
+        const n = 120;
+        const seen: Record<string, number> = {};
+        for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) {
+          const rolls = [(a + 0.5) / n, (b + 0.5) / n];
+          const fish = rollRegionCatch(REGION_CATCH[region], ctx, () => rolls.shift() ?? 0);
+          seen[fish] = (seen[fish] || 0) + 1 / (n * n);
+        }
+        for (const [item, chance] of odds) assert.ok(near(seen[item] || 0, chance), `${region} ${item}: ${seen[item]} vs ${chance}`);
+      }
+    }
+  });
+
+  test('valley waters: a basic rod finds plain fish, better rods find the special ones', () => {
+    const of = (map: string, season: number, rodLvl: number) => Object.fromEntries(valleyCatchOdds({ map, season, rodLvl }));
+    const basic = of('farm', 0, 0);
+    assert.deepEqual(Object.keys(basic).sort(), ['Boot', 'Empty Can', 'Large Fish', 'Medium Fish', 'Small Fish']);
+    assert.ok(Math.abs(basic['Large Fish'] - 0.19) < 1e-9 && Math.abs(basic['Small Fish'] - 0.4) < 1e-9);
+    assert.ok(Math.abs(of('mountain', 0, 3)['Carp'] - 0.08) < 1e-9);
+    assert.ok(!('Catfish' in of('mountain', 0, 3)) && 'Catfish' in of('town', 0, 3));
+    assert.ok(Math.abs(of('beach', 0, 4)['Squid'] - 0.12) < 1e-9, 'squid off the beach in spring');
+    assert.ok('Pirate Treasure' in of('beach', 1, 4) && !('Squid' in of('beach', 1, 4)));
+    assert.ok(!('Squid' in of('beach', 0, 3)), 'needs a Mystrile rod');
+    assert.ok(!('Squid' in of('farm', 0, 5)), 'only off the beach');
+    for (const map of ['farm', 'beach', 'mountain']) for (let lvl = 0; lvl <= 7; lvl++) {
+      const odds = valleyCatchOdds({ map, season: 3, rodLvl: lvl });
+      assert.ok(Math.abs(odds.reduce((sum, o) => sum + o[1], 0) - 1) < 1e-9);
+      assert.ok(odds.every((o) => o[1] > 0 && ITEMS[o[0]]), 'only real items with a real chance');
+      assert.equal(rollCatch(odds, 0), odds[0][0]);
+      assert.equal(rollCatch(odds, 0.999999), 'Small Fish');
+    }
   });
 
   test('a better rod shifts the odds toward bigger fish', () => {

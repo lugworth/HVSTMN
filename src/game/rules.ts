@@ -414,6 +414,54 @@ export function rollRegionCatch(
   return pool[pool.length - 1]?.item ?? 'Small Fish';
 }
 
+/** A catch and its chance per landed fish. One water's odds add up to 1. */
+export type CatchOdds = [item: string, chance: number][];
+
+/** The same draw as `rollRegionCatch`, written out as odds, so the game can say what bites where. */
+export function regionCatchOdds(table: CatchTable, ctx: { season: number; weather: string; rodLvl: number }): CatchOdds {
+  let rare = 0;
+  if (ctx.rodLvl >= table.rareRod) {
+    const stormy = ctx.weather === 'Rain' || ctx.weather === 'Typhoon';
+    rare = Math.min(1, (table.rareChance + 0.01 * (ctx.rodLvl - table.rareRod)) * (stormy ? table.stormBoost ?? 1 : 1));
+  }
+  const pool = table.fish.filter((f) => !f.seasons || f.seasons.includes(ctx.season));
+  const weight = (f: CatchEntry) => f.w + (f.rod ?? 0) * ctx.rodLvl;
+  const total = pool.reduce((sum, f) => sum + weight(f), 0);
+  const odds: CatchOdds = rare > 0 ? [[table.rare, rare]] : [];
+  for (const f of pool) odds.push([f.item, ((1 - rare) * weight(f)) / total]);
+  return odds;
+}
+
+/**
+ * Every water without its own table: the farm pond, the town river, Mother's Hill lake, the beach
+ * and the smaller pools. A better rod finds the big fish; the best rods find something special.
+ */
+export function valleyCatchOdds(ctx: { map: string; season: number; rodLvl: number }): CatchOdds {
+  const cuts: [string, number][] = [];
+  if (ctx.map === 'beach' && ctx.rodLvl >= 4) {
+    cuts.push([ctx.season === 1 ? 'Pirate Treasure' : ctx.season === 2 ? 'Fossil of Ancient Fish' : 'Squid', 0.12]);
+  }
+  if (ctx.rodLvl >= 3) cuts.push([ctx.map === 'mountain' ? 'Carp' : 'Catfish', 0.08]);
+  cuts.push(['Boot', 0.03], ['Empty Can', 0.06], ['Large Fish', 0.25 + ctx.rodLvl * 0.08], ['Medium Fish', 0.6], ['Small Fish', 1]);
+  const odds: CatchOdds = [];
+  let at = 0;
+  for (const [item, upTo] of cuts) {
+    if (upTo <= at) continue;
+    odds.push([item, upTo - at]);
+    at = upTo;
+  }
+  return odds;
+}
+
+/** Pick from odds with one number in [0, 1). */
+export function rollCatch(odds: CatchOdds, r: number): string {
+  for (const [item, chance] of odds) {
+    r -= chance;
+    if (r < 0) return item;
+  }
+  return odds[odds.length - 1]?.[0] ?? 'Small Fish';
+}
+
 export const MAX_STONE_SKIPS = 12;
 
 /** Skipping a stone at Willow Bend: each bounce has a fixed chance of another; rain chops the water up. */

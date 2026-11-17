@@ -1,5 +1,45 @@
 # Handoff: HRVSTMN
 
+## Quit safety, fishing, request board and terrain contrast, 2026-11-16
+
+This repository (`lugworth/HVSTMN`, Vercel project `hrvstmnr2`) was rebuilt from
+`lugworth/hrvstmn@497d8a2` plus the AI Studio UI edits. The notes below describe changes made
+here on top of that; the older sections still describe the shared architecture.
+
+- **Leaving the game is deliberate.** The title menu has no Quit entry, and Esc/Q/Backspace do
+  nothing there. In play, Shift+Q and Diary > "Save & Quit to Title" open a prompt whose
+  highlighted answer is "Keep playing" and which has no number shortcuts. Quitting saves slot 1
+  (which also refreshes the Auto-Save slot) and returns to the title screen (`Game.to_title`, looped in `Game.sessions()`, which also does the autosaving); nothing a
+  player presses ends `run()`. Ctrl+C no longer asks to quit. The old "Game Saved / Play Again"
+  overlay is gone; `GameScreen` shows an error overlay only if the engine loop throws.
+- **Camera.** `draw_map` snaps the camera when the map changed (`cam_map`) and clamps it to the
+  map. Before this, waking at home after collapsing outdoors could read past the farmhouse rows
+  and crash the engine, most often on phone-sized screens.
+- **Fishing.** `valleyCatchOdds` / `regionCatchOdds` / `rollCatch` in `rules.ts` are the odds
+  for every water; `Game.catch_odds(map)` and `Game.fishing_guide()` expose them. `fish()`
+  ignores the still-held cast key (and its auto-repeats) and any non-action key, so only a
+  fresh Space/Z/X/E/Enter reels in.
+- **Request board.** `request_pool()` only offers what can be had today: fish from
+  `fishing_guide()` with at least a 10% chance per catch (one at a time below 20%), forage in
+  season somewhere, and in-season crops that are planted or in the rucksack. The board shows
+  how many you hold and where the item comes from (`request_source`). `prune_requests()` drops
+  unfillable requests from older saves on load. Monkfish and Spa Catfish are still items with
+  no way to catch them; Coelacanth only bites on Lake Mine floor 9. None of the three is ever
+  requested.
+- **Black-and-white terrain.** In the mono and duotone palettes `contourTile` grades ground by
+  value (`MONO_GROUND`: pale combed sand with its own `sand` contour texture, mid-grey meadow,
+  dark quiet field), lifts water and its ripples and `monochrome()` gives water the cool tone,
+  and field objects are brightened (`MONO_OBJECT_LIFT`). Winter ground is paler. The full
+  Isotope palette is unchanged.
+- **High-res detail.** `GameScreen` renders at the screen's real `devicePixelRatio` (it used to
+  force at least 2x, which blurred 1x screens). `hiresLevel` never returns 3: the 3x3 grid of
+  third-size glyphs read as static, and a 19px desktop font always got it. Cells with vector
+  micro-detail skip the tiny-glyph texture on top. Roof outlines (`╱╲─`, which contourTile
+  makes from `◢◣▄`) are `roof_edge` micro and stay drawn. See `docs/hires-before-after.png`.
+- Validation: 326 tests pass, TypeScript is clean, production build passes. A random-key fuzz
+  of the engine (several screen sizes, about 120k keys per run) found the camera crash and no
+  other exception.
+
 ## Experimental UI integration, 2026-11-05
 
 `expirimental-ui` includes `main` through `d39de25` via merge `678bce3`. The user asked
@@ -122,7 +162,7 @@ Inside `computeFrame`: style each tagged cell -> Isotope neon-on-black pass -> g
 5. **Reuse existing passes.** Don't add a parallel system when a pass already does the job.
 6. **The renderer is pure presentation.** `enhanced.ts` must never change game state.
 7. **Every visual feature gets a `computeFrame` test**, including negative cases. Engine bugs get a regression test.
-8. **Hotkeys:** arrows/WASD/hjkl move; `space/z` use tool; `x/e/enter` interact; `tab`/Shift+Tab cycle tools; `1-6` pick tools; `i` rucksack; `m` memo; `y` Today; `n` minimap; `r` Villager Notes; `H` horse whistle; `b` bell; `t` teleport stone if owned; `p` status panel overlay (compact layout only); `?` help; `esc` diary/pause; `Q` quit. `v` is intentionally unbound now that styles are fixed.
+8. **Hotkeys:** arrows/WASD/hjkl move; `space/z` use tool; `x/e/enter` interact; `tab`/Shift+Tab cycle tools; `1-6` pick tools; `i` rucksack; `m` memo; `y` Today; `n` minimap; `r` Villager Notes; `H` horse whistle; `b` bell; `t` teleport stone if owned; `p` status panel overlay (compact layout only); `?` help; `esc` diary/pause; `Q` (Shift+Q) save and quit to the title, behind a prompt that defaults to "Keep playing". `v` is intentionally unbound now that styles are fixed.
 9. **Commit/PR style:** conventional lower-case titles (`feat: ...`, `fix: ...`), PR title = commit title, bullet body describing player-visible changes.
 10. **Compact layout:** anything new drawn by the engine must also work at 50 columns (`isCompact(W)`); wrap rather than truncate there, and keep desktop (>= 80 columns) output unchanged.
 
