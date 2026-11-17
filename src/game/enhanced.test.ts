@@ -32,6 +32,13 @@ function scene(over: Partial<RenderCtx> = {}): Screen {
   return s;
 }
 
+/** The same scene with the dormant high-res renderer switched on (the game itself never does). */
+function hiresScene(over: Partial<RenderCtx> = {}): Screen {
+  const s = scene(over);
+  s.hires = true;
+  return s;
+}
+
 describe('skyFor', () => {
   test('midday outdoors is fully lit, night is dark and blue-tinted', () => {
     const noon = skyFor({ minutes: 12 * 60, indoor: false, mapName: 'farm', weather: 'Sunny' });
@@ -1178,7 +1185,7 @@ describe('Contour metadata with incremental repainting', () => {
 
   test('a blank full-size glyph still paints its smaller contour strokes', () => {
     // a meadow cell whose micro-detail seed always paints its turf patch (0.35..0.72)
-    const terrain = computeFrame(scene({ reducedMotion: true }), 0).flat().find((o) =>
+    const terrain = computeFrame(hiresScene({ reducedMotion: true }), 0).flat().find((o) =>
       o.texture?.kind === 'ground' && o.ch === ' ' && subPattern(o, 16, 2)?.trim() &&
       o.micro && o.micro.seed > 0.36 && o.micro.seed < 0.71);
     assert.ok(terrain, 'scene contains sub-cell detail on a blank terrain glyph');
@@ -1655,7 +1662,7 @@ describe('high-resolution world micro-detail', () => {
   });
 
   test('a cell with vector micro-detail is not also covered in a grid of tiny glyphs', () => {
-    const s = scene({ palette: 'mono' });
+    const s = hiresScene({ palette: 'mono' });
     const frame = computeFrame(s, 0);
     const grass = frame.flat().filter((o) => o.micro?.kind === 'grass' && o.texture && o.ch !== ' ');
     assert.ok(grass.length > 20, 'meadow cells carry micro-detail and a contour glyph');
@@ -1669,7 +1676,7 @@ describe('high-resolution world micro-detail', () => {
   test('micro-detail colors stay in Isotope ramps across modes and stay pure grey in mono on non-accents', () => {
     const allowed = new Set(isotopeRamps().map((c) => rgbToHex(c)));
     const isGrey = (h: string) => { const [r, g, b] = hexToRgb(h); return r === g && g === b; };
-    const s = scene({ palette: 'mono', season: 0 });
+    const s = hiresScene({ palette: 'mono', season: 0 });
     for (let x = 10; x < 16; x++) {
       s.put(x, 6, '=', '09', '00');
       s.tag(x, 6, { t: 'field', wx: x, wy: 6, k: x % 2 ? 'soil:wet' : 'soil' });
@@ -1710,7 +1717,7 @@ describe('high-resolution world micro-detail', () => {
   });
 
   test('drawFrame paints rich sub-cell geometry when hires=true and omits it when hires=false', () => {
-    const s = scene({ palette: 'isotope' });
+    const s = hiresScene({ palette: 'isotope' });
     for (let x = 10; x < 14; x++) {
       s.put(x, 8, '.', '04', '00');
       s.tag(x, 8, { t: 'path', wx: x, wy: 8 });
@@ -1729,6 +1736,21 @@ describe('high-resolution world micro-detail', () => {
     const hi = countRects(true);
     const lo = countRects(false);
     assert.ok(hi > lo + 80, `expected sub-cell rects when hires=true (${hi} vs ${lo})`);
+  });
+
+  test('high-res is off for good: a new screen computes no micro-detail and paints no half-size glyphs', () => {
+    const s = scene({ palette: 'mono' });
+    assert.equal(s.hires, false);
+    assert.equal(typeof (s as any).setHires, 'undefined', 'no switch to turn it on');
+    const frame = computeFrame(s, 0);
+    assert.ok(frame.flat().every((o) => !o.micro), 'no micro-detail computed');
+    const fonts = new Set<string>();
+    const canvas = new Proxy({}, {
+      get: () => () => {},
+      set: (_t, k, v) => { if (k === 'font') fonts.add(v); return true; },
+    }) as unknown as CanvasRenderingContext2D;
+    drawFrame(canvas, frame, { cw: 11, ch: 23, fontPx: 19, font: 'monospace', dpr: 2, hires: s.hires });
+    for (const f of fonts) assert.match(f, /^(bold )?19px /, `only full-size glyphs (${f})`);
   });
 
   test('micro changes invalidate both frameSignature and frameDirtyRect', () => {
