@@ -99,16 +99,16 @@ describe('engine regressions', () => {
   test('barn animals and once-per-day flags survive save/load', () => {
     const a = fresh();
     a.animals = [{ kind: 'cow', name: 'Bess', aff: 40 }];
-    a.talked = ['Ann'];
-    a.gifted = ['Ann'];
+    a.talked = new Set(['Ann']);
+    a.gifted = new Set(['Ann']);
     a.honey_picked = true;
     a.prayed = true;
     a.save(2);
     const b = new Game(new Screen(132, 30), true) as any;
     b.load(2);
     assert.deepEqual(b.animals, a.animals);
-    assert.deepEqual(b.gifted, ['Ann']);
-    assert.deepEqual(b.talked, ['Ann']);
+    assert.ok(b.gifted instanceof Set && b.gifted.has('Ann'));
+    assert.ok(b.talked instanceof Set && b.talked.has('Ann'));
     assert.equal(b.honey_picked, true);
     assert.equal(b.prayed, true);
   });

@@ -454,8 +454,10 @@ export default function GameScreen() {
   const saveNow = useCallback(() => {
     const game = gameRef.current;
     if (!game) return;
-    game.save(1);
-    game.msg('Saved game in Diary Slot 1.', '0B');
+    if (game.save(1)) game.msg('Saved game in Diary Slot 1.', '0B');
+    else game.msg('Could not write save to browser storage.', '08');
+    game.render();
+    screenRef.current?.onRender?.();
   }, []);
 
   /** Everything the menu offers, built from live state each time it opens. */
@@ -857,7 +859,26 @@ export default function GameScreen() {
       const modal = game.modal_depth > 0;
       const next: Hud = { label: a.label, modal, typing: game.typing, tool: game.tool, idle: game.started && !modal, started: game.started };
       setHud((prev) => (sameHud(prev, next) ? prev : next));
+      if (canvas && game.started) {
+        canvas.dataset.map = game.mapname;
+        canvas.dataset.pos = `${game.px},${game.py}`;
+        canvas.dataset.day = `${game.season_name} ${game.day} Y${game.year}`;
+        canvas.dataset.gold = String(game.gold);
+        canvas.dataset.items = String(Object.keys(game.inv).length);
+        canvas.dataset.crops = String(Object.keys(game.crops).length);
+        canvas.dataset.tilled = String(game.tilled.size);
+      }
     }, 200);
+
+    const flushSave = () => {
+      game.flushAutosave();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushSave();
+    };
+    window.addEventListener('pagehide', flushSave);
+    window.addEventListener('beforeunload', flushSave);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Start game loop in background
     let isMounted = true;
@@ -876,9 +897,13 @@ export default function GameScreen() {
     const dpadState = dpad.current;
     return () => {
       isMounted = false;
+      game.flushAutosave();
       game.running = false;
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('pagehide', flushSave);
+      window.removeEventListener('beforeunload', flushSave);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       observer?.disconnect();
       document.removeEventListener('gesturestart', noDefault);
       document.removeEventListener('touchmove', noDefault);
@@ -1178,9 +1203,11 @@ export default function GameScreen() {
       {/* Game Over / Exit Screen */}
       {!running && (
         <div className="fixed inset-0 bg-[#000000]/95 flex flex-col items-center justify-center p-6 text-center z-50">
-          <div className="text-[#33ff00] text-xl font-bold mb-4 font-mono">Game Saved</div>
+          <div className="text-[#33ff00] text-xl font-bold mb-4 font-mono">{hud.started ? 'Game Saved' : 'Thanks for Playing'}</div>
           <p className="text-[#c0c0c0] max-w-md mb-6 font-mono text-sm">
-            Thanks for playing HRVSTMN! Your farm has been saved in this browser.
+            {hud.started
+              ? 'Thanks for playing HRVSTMN! Your farm has been saved in this browser.'
+              : 'Thanks for playing HRVSTMN!'}
           </p>
           <button
             onClick={() => window.location.reload()}

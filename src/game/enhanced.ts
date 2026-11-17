@@ -51,6 +51,8 @@ export type OutCell = {
   textureGlyph?: string;
   label?: HudLabel;
   meter?: boolean;
+  /** Thin bottom-edge progress rule along a panel row (e.g. Tool XP). */
+  subBar?: { frac: number; pos: number; len: number; col: string; track: string };
 };
 
 // ---------------------------------------------------------------- colour math
@@ -160,6 +162,7 @@ function snapFrame(frame: OutCell[][]) {
       if (o.plotCol) o.plotCol = toIsotope(o.plotCol);
       if (o.aoeCol) o.aoeCol = toIsotope(o.aoeCol);
       if (o.detail) o.detail = { ch: o.detail.ch, fg: toIsotope(o.detail.fg) };
+      if (o.subBar) o.subBar = { ...o.subBar, col: toIsotope(o.subBar.col), track: toIsotope(o.subBar.track) };
     }
   }
 }
@@ -366,7 +369,7 @@ export const THEMES: Theme[] = [
     // Spring
     grassBg: '#0c1f0b', grassBg2: '#11290f', grassDetail: '#2c6e1e', tuft: '#4fc12c',
     trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606', treeGlyphs: ['♣', '♠'],
-    soilBg: '#1d150e', soilDot: '#4a3826', weed: '#3fa52a',
+    soilBg: '#231910', soilDot: '#4a3826', weed: '#3fa52a',
     waterBg: '#03204e', waterBg2: '#062c66', waterFg: '#3d8cff',
     blossom: ['#ffa8d8', '#ffd0ec', '#ff80c0'], wildflowers: ['#ffe27a', '#ff9ad0', '#ffffff', '#b8a0ff'],
   },
@@ -582,7 +585,7 @@ function groundBg(F: Frame, tag: CellTag): string {
   const wy = tag.wy ?? 0;
   switch (tag.t) {
     case 'field':
-      return mix(F.theme.soilBg, '#000000', mottle(wx, wy, 5) * 0.35);
+      return mix(F.theme.soilBg, '#000000', mottle(wx, wy, 5) * 0.14);
     case 'path':
       return mix('#2a2622', '#34302a', hash(wx, wy, 6));
     case 'sand':
@@ -915,21 +918,38 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       if (open) return { ch: '▯', fg: '#ffb050', bg: '#1a0e06', bold: true, glow: '#ffb050', glowR: 6, accent: true };
       return { ch: '▮', fg: '#d08a3a', bg: '#3a2818', bold: true, accent: true };
     }
-    case 'iwall':
+    case 'iwall': {
+      if (tag.k === 'deco' && tag.dch === '=') {
+        return { ch: '▦', fg: '#7fe8ff', bg: '#3a2818', bold: true, glow: '#5fd8ff', glowR: 4, accent: true };
+      }
+      const up = F.tags[y - 1]?.[x];
+      const dn = F.tags[y + 1]?.[x];
+      const lf = F.tags[y]?.[x - 1];
+      const rt = F.tags[y]?.[x + 1];
+      // North wall with timber wainscoting above the floor; corners & side masonry keep warm framing
+      if ((!up || up.t !== 'iwall') && dn && dn.t === 'floor') {
+        return { ch: '▄', fg: '#7c5634', bg: '#4e3f30', bold: false };
+      }
+      if ((!lf || lf.t !== 'iwall') || (!rt || rt.t !== 'iwall')) {
+        return { ch: '▓', fg: '#745c44', bg: '#3e3022', bold: false };
+      }
       return { ch: '▒', fg: '#6a5844', bg: '#4a3c2e', bold: false };
+    }
     case 'mwall':
       if (isTorch(F, x, y, tag)) return { ch: '†', fg: '#ff9900', bg: '#2e2924', bold: true, glow: '#ff9900', glowR: 9, accent: true };
       return { ch: hs < 0.5 ? '▓' : '▒', fg: '#4a423a', bg: '#2e2924', bold: false };
     case 'floor': {
       const nearTable = [[-2, 0], [2, 0], [0, -1], [0, 1], [-2, 1], [2, 1], [-2, -1], [2, -1]].some(([dx, dy]) => F.tags[y + dy]?.[x + dx]?.t === 'table');
       if (nearTable) return { ch: '░', fg: mix('#ff0099', '#000000', 0.45), bg: mix(groundBg(F, tag), '#ff0099', 0.1), bold: false }; // rug
-      return { ch: wy % 2 ? '─' : ' ', fg: '#4a3622', bg: groundBg(F, tag), bold: false };
+      return { ch: hs < 0.08 ? '·' : wy % 2 ? '─' : ' ', fg: '#523b26', bg: groundBg(F, tag), bold: false };
     }
     case 'mfloor':
       if (hash(wx * 2, wy, 67) < 0.012) return { ch: '✦', fg: '#00ffff', bg: groundBg(F, tag), bold: false, glow: '#00ffff', glowR: 4, accent: true }; // ore glint
       return { ch: hs < 0.3 ? '·' : ' ', fg: '#4a4038', bg: groundBg(F, tag), bold: false };
-    case 'fireplace':
-      return { ch: g, fg: '#ff7a30', bg: '#3a1a0a', bold: true, glow: '#ff7a30', glowR: 8, accent: true };
+    case 'fireplace': {
+      const flame = F.t > 0 ? pick(['▲', '∧', '^'], hash(Math.floor(F.t * 4), wx, 63)) : '^';
+      return { ch: flame, fg: '#ff8a38', bg: '#3a1a0a', bold: true, glow: '#ff7a30', glowR: 8, accent: true };
+    }
     // ---- furniture
     case 'bed': {
       const left = F.tags[y][x - 1];
@@ -938,9 +958,9 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       return { ch: hs < 0.5 ? '░' : '▒', fg: '#6a82d0', bg: '#3a4f9a', bold: false };
     }
     case 'tv':
-      return { ch: '▓', fg: '#6ae0ff', bg: '#141418', bold: false, glow: '#4ac8ff', glowR: 6, accent: true };
+      return { ch: '▣', fg: '#6ae0ff', bg: '#161b24', bold: true, glow: '#4ac8ff', glowR: 6, accent: true };
     case 'cal':
-      return { ch: '▤', fg: '#f4ead8', bg: '#3a2818', bold: false };
+      return { ch: '▤', fg: '#f4ead8', bg: '#3a2818', bold: false, detail: { ch: '▪', fg: '#ff4a6a' }, accent: true };
     case 'table':
       return { ch: '▀', fg: '#b07840', bg: groundBg(F, { ...tag, t: 'floor' }), bold: false };
     case 'counter':
@@ -1360,6 +1380,18 @@ export function computeFrame(
           else o.label = label;
         }
         if (k.startsWith('hud:meter')) o = { ...o, ch: '━', meter: true };
+        if (tag.subBar) {
+          o = {
+            ...o,
+            subBar: {
+              frac: tag.subBar.frac,
+              pos: tag.subBar.pos,
+              len: tag.subBar.len,
+              col: pal(tag.subBar.col, '#00ffff'),
+              track: pal(tag.subBar.track, '#404040'),
+            },
+          };
+        }
       } else {
         o = { ch: cell[0], fg: pal(cell[1]), bg: pal(cell[2], '#000000'), bold: cell[3] };
       }
@@ -1876,7 +1908,7 @@ function shoreFoam(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['v
       // the foam laps: each stretch of shore brightens, fades and breaks on its own beat,
       // so the waterline reads as moving foam rather than a stone kerb
       const lap = 0.5 + 0.5 * Math.sin(T * 2.2 + (tg.wx ?? x) * 0.8 + (tg.wy ?? y) * 1.3);
-      if (lap < 0.22) continue;
+      if (lap < 0.16) continue;
       const o = out[y][x];
       o.foam = m;
       o.foamCol = mix(o.bg, '#ffffff', 0.16 + 0.26 * lap);
@@ -2020,13 +2052,15 @@ function reflections(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx[
       const o = out[y][x];
       if (src.ch === ' ') continue;
       if (hash((tag.wx ?? x) * 2, tag.wy ?? y, 120 + (f % 31)) < 0.22) continue; // ripple break-up
+      const treeSrc = st.t === 'tree';
       out[y][x] = {
         ch: MIRROR[src.ch] ?? src.ch,
-        fg: mix(src.fg, o.bg, 0.5 + 0.1 * k),
+        fg: mix(src.fg, o.bg, (treeSrc ? 0.58 : 0.5) + 0.1 * k),
         bg: o.bg,
         bold: false,
-        accent: src.accent,
-        glow: src.accent && src.glow ? mix(src.glow, '#000000', 0.5) : undefined,
+        plain: true,
+        accent: treeSrc ? false : src.accent,
+        glow: !treeSrc && src.accent && src.glow ? mix(src.glow, '#000000', 0.5) : undefined,
         glowR: 4,
       };
     }
@@ -2220,6 +2254,33 @@ function critters(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
       accent: true,
     };
   }
+  // Gentle drifting sakura petals on sunny Spring days
+  if (season === 0 && day && weather === 'Sunny') {
+    const petalCount = Math.max(3, Math.round((v.w * v.h) / 420));
+    const pCols = ['#ffa8d8', '#ffd0ec', '#ff9ad0'];
+    for (let i = 0; i < petalCount; i++) {
+      const a = hash(i, 3, 109);
+      const b = hash(i, 4, 110);
+      const px = a * v.w + Math.sin(t * 0.8 + i * 1.4) * 2.5 + t * 0.9;
+      const py = b * v.h + t * (0.55 + b * 0.35);
+      const x = v.x + (((Math.round(px) % v.w) + v.w) % v.w);
+      const y = v.y + (((Math.round(py) % v.h) + v.h) % v.h);
+      if (y >= H || x >= W) continue;
+      const tg = tags[y][x];
+      if (!tg || tg.t === 'ui' || tg.ent) continue;
+      if (!(GROUND.has(tg.t) || WATERY.has(tg.t) || (tg.k || '').startsWith('soil'))) continue;
+      const o = out[y][x];
+      out[y][x] = {
+        ...o,
+        ch: (i + Math.floor(t * 2)) % 2 === 0 ? '✿' : '·',
+        fg: pCols[i % pCols.length],
+        bold: false,
+        glow: undefined,
+        accent: true,
+        plain: true,
+      };
+    }
+  }
 }
 
 /** Reeds and lily pads: small signs that the water is alive. */
@@ -2386,6 +2447,12 @@ function titleScene(out: OutCell[][], buf: Cell[][], tags: (CellTag | null)[][],
         out[y][x] = { ch: '☾', fg: '#fff4d0', bg, bold: true, glow: '#fff4d0', glowR: 12, accent: true, ui: true, plain: true };
         continue;
       }
+      const nearCap = !hillNear && near(x) - fromBottom > -0.5;
+      const farCap = !hillNear && !hillFar && !nearCap && far(x) - fromBottom > -0.5;
+      if (nearCap || farCap) {
+        out[y][x] = { ch: '▄', fg: nearCap ? '#071208' : '#0c1a22', bg: nearCap && hillFar ? '#0c1a22' : skyBg, bold: false, ui: true, plain: true };
+        continue;
+      }
       if (!hillNear && !hillFar && y < H * 0.7) {
         const h = hash(x, y, 5);
         if (h < 0.032) {
@@ -2470,10 +2537,8 @@ function indoorAtmosphere(
         if (!tg) continue;
         const wx = tg.wx ?? x;
         if (tg.dch === '=') origins.push([x, y, 1]);
-        else if (tg.t === 'iwall' && tags[y + 1]?.[x]?.t === 'floor' && (wx % 6 === 2 || wx % 6 === 3)) {
+        else if (tg.t === 'iwall' && tags[y + 1]?.[x]?.t === 'floor' && wx % 6 === 2) {
           origins.push([x, y, 1]);
-        } else if (tg.t === 'exit' || tg.t === 'door') {
-          origins.push([x, y, -1]);
         }
       }
     }
@@ -2485,7 +2550,7 @@ function indoorAtmosphere(
         if (by < v.y || by >= v.y + v.h || bx < v.x || bx >= v.x + v.w || by >= H || bx >= W) continue;
         const tg = tags[by][bx];
         if (!tg || tg.t !== 'floor') break;
-        const k = (1 - (step - 1) / 3.2) * 0.28;
+        const k = (1 - (step - 1) / 3.2) * 0.18;
         const o = out[by][bx];
         o.bg = mix(o.bg, '#ffe8b0', k);
         if (!tg.ent && o.ch === ' ' && hash((tg.wx ?? bx) + moteTick, tg.wy ?? by, 241) < 0.22) {
@@ -2761,7 +2826,9 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.texture?.kind !== n.texture?.kind || p.texture?.x !== n.texture?.x || p.texture?.y !== n.texture?.y ||
         p.textureGlyph !== n.textureGlyph || p.meter !== n.meter ||
         p.label?.text !== n.label?.text || p.label?.scale !== n.label?.scale ||
-        p.label?.w !== n.label?.w || p.label?.h !== n.label?.h
+        p.label?.w !== n.label?.w || p.label?.h !== n.label?.h ||
+        p.subBar?.frac !== n.subBar?.frac || p.subBar?.pos !== n.subBar?.pos ||
+        p.subBar?.col !== n.subBar?.col || p.subBar?.track !== n.subBar?.track
       ) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -3150,15 +3217,27 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
   const fw = Math.max(2 / (m.dpr ?? 1), Math.round(ch / 12));
   const pw = Math.max(1.5 / (m.dpr ?? 1), Math.round(ch / 14));
   const aw = Math.max(1.5 / (m.dpr ?? 1), Math.round(ch / 13));
+  const bh = Math.max(2 / (m.dpr ?? 1), Math.round(ch / 10));
   for (let y = Y0; y < Y1; y++) {
     const row = frame[y];
     for (let x = X0; x < X1; x++) {
       const o = row[x];
-      if (!o.foam && !o.plot && !o.aoe && !o.aoePrimary) continue;
+      if (!o.foam && !o.plot && !o.aoe && !o.aoePrimary && !o.subBar) continue;
       const X = Math.floor(x * cw);
       const Y = Math.floor(y * ch);
       const Wc = Math.ceil(cw);
       const Hc = Math.ceil(ch);
+      if (o.subBar) {
+        const { frac, pos, len, col, track } = o.subBar;
+        const barY = Y + Hc - bh;
+        g.fillStyle = track;
+        g.fillRect(X, barY, Wc, bh);
+        const fillW = Math.max(0, Math.min(Wc, Math.round(frac * len * cw - pos * cw)));
+        if (fillW > 0) {
+          g.fillStyle = col;
+          g.fillRect(X, barY, fillW, bh);
+        }
+      }
       if (o.foam) {
         g.fillStyle = o.foamCol ?? '#c0c0c0';
         if (o.foam & 1) g.fillRect(X, Y, Wc, fw);
@@ -3221,6 +3300,6 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.meter ? 'm' : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.meter ? 'm' : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '');
   return s;
 }

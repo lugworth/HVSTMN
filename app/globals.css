@@ -211,7 +211,8 @@ html, body {
   border-color: var(--base0C);
   color: var(--base0C);
 }
-.game-control:focus-visible, .pad-btn:focus-visible, .menu-item:focus-visible, #term:focus-visible { outline: 2px solid var(--base0C); outline-offset: 2px; }
+.game-control:focus-visible, .pad-btn:focus-visible, .menu-item:focus-visible { outline: 2px solid var(--base0C); outline-offset: 2px; }
+#term:focus-visible { outline: 1px solid var(--fence-post); outline-offset: -1px; }
 
 /* ---- Game menu: section columns above the desktop toolbar; on touch, a sheet over the map. */
 .game-menu {

@@ -1537,3 +1537,68 @@ describe('late-season blending, hot-spring steam, hearth embers and CRT scanline
     assert.ok(rows.every((y) => y % 2 === 0), 'every other pixel row');
   });
 });
+
+describe('visual polish pass', () => {
+  test('water tree reflections stay plain glyphs rather than 2x2 mini-tree tiles', () => {
+    const s = scene({ weather: 'Sunny' });
+    for (let x = 15; x < 35; x++) {
+      for (let y = 2; y < 6; y++) { s.put(x, y, 'T', '0B', '00', true); s.tag(x, y, { t: 'tree', wx: x, wy: y }); }
+      for (let y = 6; y < 10; y++) { s.put(x, y, '~', '0D', '00'); s.tag(x, y, { t: 'water', wx: x, wy: y }); }
+    }
+    const out = computeFrame(s, 0);
+    const reflected = out[6].slice(15, 35).filter((o) => '♣♠'.includes(o.ch));
+    assert.ok(reflected.length > 5);
+    for (const o of reflected) {
+      assert.equal(o.plain, true, 'reflections remain calm single glyphs');
+      assert.equal(subPattern(o, 16, 2), null, 'reflections are not tiled as 2x2 sub-sprites');
+    }
+  });
+
+  test('title screen smooths hills with half-row ridge caps inside Isotope ramps', () => {
+    const allowed = new Set(isotopeRamps().map((c) => rgbToHex(c)));
+    const s = new Screen(100, 30);
+    s.scene = 'title';
+    const out = computeFrame(s, 0);
+    assert.ok(out.flat().some((o) => o.ch === '▄'), 'half-row ridge caps smooth hillside silhouettes');
+    for (const o of out.flat()) assert.ok(allowed.has(o.fg) && allowed.has(o.bg), `${o.fg} / ${o.bg}`);
+  });
+
+  test('indoor exits do not cast upward floor stripes while north windows still warm the floor', () => {
+    const s = scene({ indoor: true, mapName: 'house', minutes: 10 * 60, weather: 'Sunny' });
+    for (let y = 2; y < 14; y++) {
+      for (let x = 4; x < 24; x++) {
+        const wall = y === 2 || y === 13 || x === 4 || x === 23;
+        s.put(x, y, wall ? '#' : '.', '02', '00');
+        s.tag(x, y, { t: wall ? 'iwall' : 'floor', wx: x, wy: y });
+      }
+    }
+    s.put(14, 13, '+', '09', '00');
+    s.tag(14, 13, { t: 'exit', wx: 14, wy: 13 });
+    const out = computeFrame(s, 0);
+    assert.equal(out[11][14].bg, out[11][18].bg, 'exit door does not beam light upward over the floor');
+  });
+
+  test('subBar changes invalidate frameSignature and frameDirtyRect and paint cleanly in drawFrame', () => {
+    const make = (frac: number): OutCell[][] => [[
+      { ch: 'B', fg: '#c0c0c0', bg: '#000000', bold: false, ui: true, subBar: { frac, pos: 0, len: 2, col: '#00ffff', track: '#404040' } },
+      { ch: 'a', fg: '#c0c0c0', bg: '#000000', bold: false, ui: true, subBar: { frac, pos: 1, len: 2, col: '#00ffff', track: '#404040' } },
+    ]];
+    const a = make(0);
+    const b = make(0.75);
+    assert.notEqual(frameSignature(a), frameSignature(b));
+    assert.ok(frameDirtyRect(a, b) !== null);
+
+    const rects: { style: string; w: number; h: number }[] = [];
+    let style = '';
+    const canvas = new Proxy({
+      fillRect: (_x: number, _y: number, w: number, h: number) => rects.push({ style, w, h }),
+    }, {
+      get: (t, k) => (k === 'fillStyle' ? style : k in t ? t[k as keyof typeof t] : () => {}),
+      set: (t, k, v) => { if (k === 'fillStyle') style = v; else (t as any)[k] = v; return true; },
+    }) as unknown as CanvasRenderingContext2D;
+    drawFrame(canvas, b, { cw: 10, ch: 20, fontPx: 16, font: 'monospace', dpr: 1 });
+    assert.ok(rects.some((r) => r.style === '#00ffff' && r.h === 2), 'subBar paints cyan progress rule');
+    assert.ok(rects.some((r) => r.style === '#404040' && r.h === 2), 'subBar paints track rule');
+  });
+});
+

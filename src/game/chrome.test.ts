@@ -313,3 +313,27 @@ describe('chrome colours', () => {
     assert.match(css, /\.game-sep::before \{ content: "╪"/);
   });
 });
+
+describe('tool XP sub-bar', () => {
+  test('desktop: upgradable tool level row carries a snapped cyan subBar that tracks tool_exp', () => {
+    const allowed = new Set(isotopeRamps().map((c) => rgbToHex(c)));
+    const { s, out } = farm(80, 24, (g) => {
+      g.tool = 'Hoe';
+      g.tool_exp['Hoe'] = 45;
+    });
+    const { divX, divY } = s.ctx!;
+    const bars = out.slice(0, divY).flatMap((r) => r.slice(divX + 1)).filter((o) => o.subBar);
+    assert.equal(bars.length, 19);
+    assert.ok(bars.every((o, i) => o.subBar!.pos === i && o.subBar!.len === 19));
+    assert.ok(Math.abs(bars[0].subBar!.frac - 0.45) < 1e-6);
+    assert.ok(allowed.has(bars[0].subBar!.col) && allowed.has(bars[0].subBar!.track));
+    assert.ok(bars.every((o) => o.bg !== FARM_CHROME.board), 'subBar sits below the sign, never on it');
+
+    const seeds = farm(80, 24, (g) => {
+      g.tool = 'Turnip Seeds';
+      g.inv['Turnip Seeds'] = 2;
+    });
+    assert.equal(seeds.out.flat().filter((o) => o.subBar).length, 0, 'seed bags have no XP bar');
+  });
+});
+

@@ -163,6 +163,24 @@ import {
   worksNeeds,
   worksSummary,
 } from './rules';
+import {
+  SAVE_VERSION,
+  type SaveSlot,
+  type SaveSummary,
+  cloneSaveValue,
+  deleteSaveSlot,
+  formatSaveLine,
+  formatSaveStatsLine,
+  formatSlotBadge,
+  getBrowserStorage,
+  isValidSavePayload,
+  listSaveSlots,
+  readSaveSlot,
+  sanitizeCrops,
+  sanitizeMapStringRecords,
+  sanitizeStringRecordNumber,
+  writeSaveSlot,
+} from './save';
 
 type HudSpan = { text: string; fg?: string; bold?: boolean };
 type HudPageLine =
@@ -457,16 +475,20 @@ export class Game {
   /** Task 34: shortcuts opened for good (ids from SHORTCUT_IDS, e.g. 'hollow_gate'), carved after the maps are built. */
   shortcuts: string[] = [];
 
+  private _hydrating: boolean = false;
+  private _saveDirty: boolean = false;
+  private _lastAutosaveAt: number = 0;
+
   SAVE_FIELDS = [
     'name', 'farm', 'year', 'season', 'day', 'minutes', 'weather', 'tomorrow', 'gold',
     'stamina', 'max_stamina', 'fatigue', 'power_berries', 'berry_sources', 'has_mystic_berry',
     'inv', 'held', 'tool', 'favorite_seed', 'previous_tool', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
     'water', 'upgrading', 'bin', 'basket', 'shipped_counts', 'chickens', 'chicken_aff', 'chicken_fest_won',
     'outdoor_hours', 'animals_grazing', 'incubator_days', 'fed', 'eggs', 'dog_aff', 'dog_frisbee_dist',
-    'horse_aff', 'horse_grown', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
+    'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
     'heart_events_seen', 'rival_events_seen', 'married', 'marriage_day', 'child_name', 'child_days',
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
-    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'makers',
+    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers',
     'museum', 'museum_rewards',
     'requests', 'next_request_id', 'requests_done',
     'mastery_xp', 'mastery_claimed',
@@ -479,8 +501,10 @@ export class Game {
     'inn_scenes_seen', 'inn_evening_day',
     'stall', 'stall_last', 'stall_earned',
     'gray_quest', 'gray_note_level',
-    'map_pin', 'public_works',
-    'map_pin', 'shortcuts',
+    'map_pin', 'public_works', 'shortcuts',
+    // player position, map, and world state
+    'mapname', 'px', 'py', 'face', 'show_minimap', 'wetness',
+    'mine_type', 'mine_floor', 'ladder',
   ];
 
   constructor(scr: Screen, autostart: boolean = false) {
@@ -504,6 +528,17 @@ export class Game {
   }
 
   new_game(name: string, farm: string): void {
+    const wasHydrating = this._hydrating;
+    this._hydrating = true;
+    try {
+      this._init_new_game(name, farm);
+    } finally {
+      this._hydrating = wasHydrating;
+      this._saveDirty = false;
+    }
+  }
+
+  private _init_new_game(name: string, farm: string): void {
     this.name = name;
     this.farm = farm;
     this.year = 1;
@@ -706,11 +741,13 @@ export class Game {
   }
 
   give(item: string, n: number = 1): void {
+    if (n <= 0) return;
     this.inv[item] = (this.inv[item] || 0) + n;
+    this.markDirty(false);
   }
 
   take(item: string, n: number = 1): void {
-    if (!this.inv[item]) return;
+    if (!this.inv[item] || n <= 0) return;
     this.inv[item] -= n;
     if (this.inv[item] <= 0) {
       delete this.inv[item];
@@ -718,6 +755,7 @@ export class Game {
         this.held = null;
       }
     }
+    this.markDirty(false);
   }
 
   give_power_berry(source: string): boolean {
@@ -751,30 +789,73 @@ export class Game {
     return true;
   }
 
+  markDirty(immediate: boolean = false): void {
+    if (this._hydrating || !this.started) return;
+    this._saveDirty = true;
+    if (immediate) {
+      this.autosave(true);
+    }
+  }
+
+  hasSave(slot: SaveSlot = 'auto'): boolean {
+    return Boolean(readSaveSlot(getBrowserStorage(), slot));
+  }
+
+  autosave(force: boolean = false): boolean {
+    if (this._hydrating || !this.started) return false;
+    const now = Date.now();
+    if (!force && (!this._saveDirty || now - this._lastAutosaveAt < 1500)) {
+      return false;
+    }
+    const res = writeSaveSlot(getBrowserStorage(), 'auto', this.snapshot());
+    if (res.ok) {
+      this._saveDirty = false;
+      this._lastAutosaveAt = now;
+    }
+    return res.ok;
+  }
+
+  flushAutosave(): void {
+    if (this._hydrating || !this.started) return;
+    this._saveDirty = true;
+    this.autosave(true);
+  }
+
   snapshot(): Record<string, any> {
-    const d: Record<string, any> = {};
+    const d: Record<string, any> = {
+      _v: SAVE_VERSION,
+      savedAt: Date.now(),
+    };
     for (const k of this.SAVE_FIELDS) {
-      d[k] = (this as any)[k];
+      const val = (this as any)[k];
+      d[k] = val instanceof Set ? Array.from(val) : cloneSaveValue(val);
     }
     d['tilled'] = Array.from(this.tilled);
     d['wet'] = Array.from(this.wet);
-    d['crops'] = { ...this.crops };
-    d['objs'] = { ...this.objs.farm };
-    d['hp'] = { ...this.hp };
-    d['forage'] = { ...this.forage };
+    d['talked'] = Array.from(this.talked || []);
+    d['gifted'] = Array.from(this.gifted || []);
+    d['crops'] = sanitizeCrops(this.crops);
+    d['objs'] = { ...(this.objs.farm || {}) };
+    d['map_objs'] = sanitizeMapStringRecords(this.objs);
+    d['hp'] = sanitizeStringRecordNumber(this.hp);
+    d['forage'] = sanitizeMapStringRecords(this.forage);
     return d;
   }
 
-  save(slot: number = 1): void {
+  save(slot: SaveSlot = 1): boolean {
     const d = this.snapshot();
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const key = slot === 2 ? `${SAVE_KEY}-2` : SAVE_KEY;
-        localStorage.setItem(key, JSON.stringify(d));
-      }
-    } catch (e) {
-      console.error('Save failed', e);
+    const storage = getBrowserStorage();
+    const res = writeSaveSlot(storage, slot, d);
+    if (!res.ok) {
+      console.error('Save failed:', res.error);
+      return false;
     }
+    if (slot !== 'auto') {
+      writeSaveSlot(storage, 'auto', d);
+    }
+    this._saveDirty = false;
+    this._lastAutosaveAt = Date.now();
+    return true;
   }
 
   export_save(): void {
@@ -813,7 +894,7 @@ export class Game {
     if (!file) return;
     try {
       const d = JSON.parse(await file.text());
-      if (!d || typeof d !== 'object' || typeof d.name !== 'string' || !Array.isArray(d.tilled)) {
+      if (!isValidSavePayload(d)) {
         throw new Error('That does not look like an HRVSTMN save file.');
       }
       this.applySaveData(d);
@@ -825,64 +906,131 @@ export class Game {
   }
 
   applySaveData(d: Record<string, any>): void {
-    this.new_game(d.name || 'Pete', d.farm || 'Moon');
-    for (const k of this.SAVE_FIELDS) {
-      if (k in d) {
-        (this as any)[k] = d[k];
+    this._hydrating = true;
+    try {
+      const farmer = typeof d.name === 'string' && d.name.trim() ? d.name : 'Pete';
+      const farmName = typeof d.farm === 'string' && d.farm.trim() ? d.farm : 'Moon';
+      this._init_new_game(farmer, farmName);
+      for (const k of this.SAVE_FIELDS) {
+        if (k in d && d[k] !== undefined) {
+          (this as any)[k] = cloneSaveValue(d[k]);
+        }
       }
+      this.inv = sanitizeStringRecordNumber(this.inv);
+      this.bin = sanitizeStringRecordNumber(this.bin);
+      this.basket = sanitizeStringRecordNumber(this.basket);
+      this.shipped_counts = sanitizeStringRecordNumber(this.shipped_counts);
+      this.fish_caught = sanitizeStringRecordNumber(this.fish_caught);
+      if (this.held && !this.inv[this.held]) {
+        this.held = null;
+      }
+      for (const n of Object.keys(NPCS)) {
+        if (!(n in this.friend)) {
+          this.friend[n] = 0;
+        }
+      }
+      for (const s of SPRITES) {
+        if (!(s.name in this.sprite_aff)) {
+          this.sprite_aff[s.name] = 15;
+        }
+        if (!(s.name in this.sprite_jobs)) {
+          this.sprite_jobs[s.name] = { task: 'none', days: 0, skill: 10 };
+        }
+      }
+      this.tilled = new CoordSet(Array.isArray(d.tilled) ? d.tilled : []);
+      this.wet = new CoordSet(Array.isArray(d.wet) ? d.wet : []);
+      this.talked = new Set(Array.isArray(d.talked) ? d.talked.filter((x: unknown) => typeof x === 'string') : []);
+      this.gifted = new Set(Array.isArray(d.gifted) ? d.gifted.filter((x: unknown) => typeof x === 'string') : []);
+      this.crops = sanitizeCrops(d.crops);
+      if (d.map_objs && typeof d.map_objs === 'object') {
+        const restored = sanitizeMapStringRecords(d.map_objs);
+        this.objs = { farm: {}, mine: {}, ...restored };
+      } else {
+        this.objs = { farm: { ...(d.objs || {}) }, mine: {} };
+      }
+      this.hp = sanitizeStringRecordNumber('hp' in d ? d.hp : this.hp);
+      this.forage = { mountain: {}, beach: {}, ...sanitizeMapStringRecords(d.forage) };
+      this.wetness = {
+        ...Object.fromEntries(OUTDOOR_MAPS.map((m) => [m, 0])),
+        ...(typeof d.wetness === 'object' && d.wetness !== null ? d.wetness : {}),
+      };
+      this.public_works = worksState(d.public_works);
+      this.apply_public_works();
+      this.shortcuts = Array.isArray(this.shortcuts) ? this.shortcuts.filter((id) => SHORTCUT_IDS.includes(id)) : [];
+      for (const id of this.shortcuts) open_shortcut(this.maps, id);
+      this.prune_forage();
+      this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
+      this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
+
+      if (this.mapname === 'mine') {
+        this.mine_type = this.mine_type === 'lake' ? 'lake' : 'spring';
+        this.mine_floor = Math.max(1, Math.min(255, Math.floor(Number(this.mine_floor) || 1)));
+        const savedMineObjs = this.objs.mine ? { ...this.objs.mine } : null;
+        const mineMap = build_mine(this.mine_floor, this.objs, this.mine_type);
+        this.maps['mine'] = mineMap;
+        if (savedMineObjs && Object.keys(savedMineObjs).length > 0) {
+          this.objs.mine = savedMineObjs;
+        }
+        if (Array.isArray(this.ladder) && this.ladder.length === 2) {
+          const [lx, ly] = this.ladder;
+          for (let y = 0; y < mineMap.h; y++) {
+            for (let x = 0; x < mineMap.w; x++) {
+              if (mineMap.t[y][x] === 'down') mineMap.t[y][x] = 'mfloor';
+            }
+          }
+          if (mineMap.inside(lx, ly) && !this.objs.mine[pkey(lx, ly)]) {
+            mineMap.set(lx, ly, 'down');
+          }
+        }
+      }
+      const targetMap = this.maps[this.mapname];
+      if (!targetMap || !targetMap.inside(this.px, this.py)) {
+        this.mapname = 'house';
+        [this.px, this.py] = HOUSE_WAKE;
+        this.face = [0, -1];
+      }
+      if (this.mapname !== 'farm') {
+        this.riding_horse = false;
+      }
+      if (!Array.isArray(this.face) || this.face.length !== 2) {
+        this.face = [0, -1];
+      }
+      this.rebuild_house();
+      this.cam_x = null;
+      this.cam_y = null;
+      this._saveDirty = false;
+      this.setBodyState('playing');
+    } finally {
+      this._hydrating = false;
     }
-    for (const n of Object.keys(NPCS)) {
-      if (!(n in this.friend)) {
-        this.friend[n] = 0;
-      }
-    }
-    for (const s of SPRITES) {
-      if (!(s.name in this.sprite_aff)) {
-        this.sprite_aff[s.name] = 15;
-      }
-      if (!(s.name in this.sprite_jobs)) {
-        this.sprite_jobs[s.name] = { task: 'none', days: 0, skill: 10 };
-      }
-    }
-    this.tilled = new CoordSet(d.tilled || []);
-    this.wet = new CoordSet(d.wet || []);
-    this.crops = { ...(d.crops || {}) };
-    this.objs.farm = { ...(d.objs || {}) };
-    this.hp = { ...(d.hp || {}) };
-    this.forage = { mountain: {}, beach: {}, ...(d.forage || {}) };
-    this.public_works = worksState(d.public_works);
-    this.apply_public_works();
-    this.shortcuts = Array.isArray(this.shortcuts) ? this.shortcuts.filter((id) => SHORTCUT_IDS.includes(id)) : [];
-    for (const id of this.shortcuts) open_shortcut(this.maps, id);
-    this.prune_forage();
-    this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
-    this.stamina = Math.min(this.max_stamina, d.stamina ?? this.max_stamina);
-    this.rebuild_house();
-    this.cam_x = null;
-    this.cam_y = null;
-    this.setBodyState('playing');
   }
 
-  load(slot: number = 1): void {
-    let jsonStr = '';
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const key = slot === 2 ? `${SAVE_KEY}-2` : SAVE_KEY;
-        jsonStr = localStorage.getItem(key) || '';
-      }
-    } catch (e) {
-      console.error('Load failed', e);
+  load(slot: SaveSlot = 1): void {
+    const data = readSaveSlot(getBrowserStorage(), slot);
+    if (!data) {
+      const label = slot === 'auto' ? 'Auto-Save' : `Slot ${slot}`;
+      throw new Error(`No save file in ${label}`);
     }
-    if (!jsonStr) {
-      throw new Error(`No save file in Slot ${slot}`);
-    }
-    this.applySaveData(JSON.parse(jsonStr));
+    this.applySaveData(data);
   }
 
   async run(): Promise<void> {
     if (this.autostart) {
-      this.new_game('Pete', 'Moon');
-      this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+      if (this.hasSave('auto')) {
+        try {
+          this.load('auto');
+          this.update_npcs();
+          this.msg(`Resumed ${this.farm} Farm (${this.date_str()}).`, '0B');
+        } catch {
+          this.new_game('Pete', 'Moon');
+          this.autosave(true);
+          this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+        }
+      } else {
+        this.new_game('Pete', 'Moon');
+        this.autosave(true);
+        this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+      }
       this.render();
       this.scr.flush();
     } else {
@@ -893,10 +1041,20 @@ export class Game {
     while (this.running) {
       let k = await this.scr.getKey(1 / 20);
       while (k && this.running) {
+        const prevMap = this.mapname;
         await this.handle(k);
+        if (this.started && this.running) {
+          if (k in DIRS && this.mapname === prevMap) {
+            this.markDirty(false);
+            this.autosave(false);
+          } else {
+            this.autosave(true);
+          }
+        }
         k = await this.scr.getKey(0);
       }
       await this.update();
+      this.autosave(false);
       this.render();
       this.scr.flush();
     }
@@ -932,6 +1090,7 @@ export class Game {
       this.gold += total;
       this.shipped_total += total;
       this.bin = {};
+      this.markDirty(false);
     }
     return total;
   }
@@ -939,6 +1098,7 @@ export class Game {
   async advance(mins: number): Promise<void> {
     const before = this.minutes;
     this.minutes += mins;
+    this.markDirty(false);
     if (this.stall) await this.stall_tick(before);
 
     // Equipped Gem of the Goddess / Gem of the Kappa passive regeneration
@@ -1096,6 +1256,7 @@ export class Game {
     const achList = this.achievement_list();
     const achDone = achList.filter((a) => a.done).length;
     const bagKinds = Object.keys(this.inv).length;
+    const slots = listSaveSlots(getBrowserStorage());
     const entries: (HudMenuEntry & { key: string; raw: string })[] = [
       { key: 'resume', raw: 'Resume', label: 'Resume', icon: '↩', iconCol: '0C', right: '[ESC]', rightCol: '0C' },
       { key: 'today', raw: 'Today’s Plan (y)', label: "Today's Plan", icon: '☀', iconCol: '09', right: '[Y]', rightCol: '0C', hotkey: 'y' },
@@ -1121,10 +1282,13 @@ export class Game {
         rightCol: achDone > 0 ? '0B' : '04',
       },
       { key: 'mastery', raw: 'Farm Mastery', label: 'Farm Mastery', icon: '★', iconCol: '0B', right: 'Ranks', rightCol: '04' },
-      { key: 'save1', raw: 'Save Diary — Slot 1', label: 'Save Diary — Slot 1', icon: '❧', iconCol: '0B', right: 'Slot 1', rightCol: '04' },
-      { key: 'save2', raw: 'Save Diary — Slot 2', label: 'Save Diary — Slot 2', icon: '❧', iconCol: '0B', right: 'Slot 2', rightCol: '04' },
-      { key: 'load1', raw: 'Load Diary — Slot 1', label: 'Load Diary — Slot 1', icon: '◈', iconCol: '0D', right: 'Slot 1', rightCol: '04' },
-      { key: 'load2', raw: 'Load Diary — Slot 2', label: 'Load Diary — Slot 2', icon: '◈', iconCol: '0D', right: 'Slot 2', rightCol: '04' },
+      { key: 'save1', raw: 'Save Diary — Slot 1', label: 'Save Diary — Slot 1', icon: '❧', iconCol: '0B', right: formatSlotBadge(slots.slot1), rightCol: slots.slot1 ? '0B' : '04' },
+      { key: 'save2', raw: 'Save Diary — Slot 2', label: 'Save Diary — Slot 2', icon: '❧', iconCol: '0B', right: formatSlotBadge(slots.slot2), rightCol: slots.slot2 ? '0B' : '04' },
+      { key: 'load1', raw: 'Load Diary — Slot 1', label: 'Load Diary — Slot 1', icon: '◈', iconCol: '0D', right: formatSlotBadge(slots.slot1), rightCol: slots.slot1 ? '0D' : '03' },
+      { key: 'load2', raw: 'Load Diary — Slot 2', label: 'Load Diary — Slot 2', icon: '◈', iconCol: '0D', right: formatSlotBadge(slots.slot2), rightCol: slots.slot2 ? '0D' : '03' },
+      ...(slots.auto
+        ? [{ key: 'loadauto', raw: 'Load Auto-Save', label: 'Load Auto-Save', icon: '◈', iconCol: '0C', right: formatSlotBadge(slots.auto), rightCol: '0C' }]
+        : []),
       {
         key: 'hires',
         raw: `Graphics: High-res Detail ${this.scr.hires ? 'On' : 'Off'}`,
@@ -1189,14 +1353,15 @@ export class Game {
     } else if (key === 'mastery') {
       await this.mastery_page();
     } else if (key === 'save1') {
-      this.save(1);
-      this.msg('Saved game in Diary Slot 1.', '0B');
+      if (this.save(1)) this.msg('Saved game in Diary Slot 1.', '0B');
+      else this.msg('Could not write save to browser storage.', '08');
     } else if (key === 'save2') {
-      this.save(2);
-      this.msg('Saved game in Diary Slot 2.', '0B');
+      if (this.save(2)) this.msg('Saved game in Diary Slot 2.', '0B');
+      else this.msg('Could not write save to browser storage.', '08');
     } else if (key === 'load1') {
       try {
         this.load(1);
+        this.update_npcs();
         this.msg('Loaded Diary Slot 1.', '0C');
       } catch (e: any) {
         await this.say(e.message || 'No save in Slot 1.');
@@ -1204,9 +1369,18 @@ export class Game {
     } else if (key === 'load2') {
       try {
         this.load(2);
+        this.update_npcs();
         this.msg('Loaded Diary Slot 2.', '0C');
       } catch (e: any) {
         await this.say(e.message || 'No save in Slot 2.');
+      }
+    } else if (key === 'loadauto') {
+      try {
+        this.load('auto');
+        this.update_npcs();
+        this.msg('Loaded Auto-Save.', '0C');
+      } catch (e: any) {
+        await this.say(e.message || 'No Auto-Save found.');
       }
     } else if (key === 'export') {
       this.export_save();
@@ -1450,6 +1624,7 @@ export class Game {
     if (!this.map.indoor) {
       this.msg(`~ ${this.map.title} ~`, '0C');
     }
+    this.markDirty(false);
   }
 
   async enter(door: string): Promise<void> {
@@ -6284,9 +6459,19 @@ export class Game {
     y++;
     if (UPGRADABLE.includes(tool)) {
       const level = this.levels[tool] || 0;
-      const detail = `${LEVELS[level]} / ${this.tool_exp[tool] || 0}%`;
+      const exp = clamp(this.tool_exp[tool] || 0, 0, 100);
+      const detail = `${LEVELS[level]} / ${exp}%`;
       if (tool === 'Watering Can') pair(y, detail, `${this.water}/${CAN_CAP[level]}`, '0C');
       else line(y, detail, '04');
+      if (y < end) {
+        for (let i = 0; i < w; i++) {
+          const prev = s.tags[y]?.[x + i];
+          s.tag(x + i, y, {
+            ...(prev ?? { t: 'ui' }),
+            subBar: { frac: exp / 100, pos: i, len: w, col: '0C', track: '01' },
+          });
+        }
+      }
     } else if (tool.endsWith(' Seeds')) {
       const crop = tool.slice(0, -6);
       const inSeason = crop === 'Grass' || CROPS[crop]?.[0] === this.season_name;
@@ -7396,43 +7581,43 @@ export class Game {
     const n = opts.length;
     if (n === 0) return null;
     while (true) {
-      const [W, H] = [this.scr.w, this.scr.h];
-      const info_raw = typeof info === 'function' ? info(sel) : info || [];
-      const info_lines = isCompact(W) ? wrapLines(info_raw, W - 6) : info_raw;
-      const hasBanner = !!cfg?.banner;
-      const hasFooter = !!cfg?.footerHint;
-      const bannerRows = hasBanner ? 2 : 0;
-      const footerRows = hasFooter ? 2 : 0;
-      const maxvis = Math.max(3, H - 6 - bannerRows - footerRows - (info_lines.length ? info_lines.length + 1 : 0));
-      const vis = Math.min(n, maxvis);
-      const top = clamp(sel - Math.floor(vis / 2), 0, Math.max(0, n - vis));
-      const divX = this.scr.ctx?.divX ?? W;
-      const mapLimit = cfg?.alignToMap && !isCompact(W) && divX < W ? divX - 2 : W - 2;
-      const bannerData = cfg?.banner ? cfg.banner() : null;
-      const entryW = cfg?.entries
-        ? Math.max(...cfg.entries.map((e) => (e.icon ? 2 : 0) + e.label.length + (e.right ? e.right.length + 4 : 0) + 7))
-        : 0;
-      const bannerW = bannerData ? bannerData.left.length + (bannerData.right?.length || 0) + 7 : 0;
-      const footerW = cfg?.footerHint ? cfg.footerHint.length + 6 : 0;
-      const w = Math.min(
-        mapLimit,
-        Math.max(
-          title.length + 8,
-          entryW,
-          bannerW,
-          footerW,
-          ...opts.map((o) => o.length + 7),
-          ...info_lines.map((ln) => ln.length + 4)
-        )
-      );
-      const bh = vis + 2 + bannerRows + footerRows + (info_lines.length ? info_lines.length + 1 : 0);
       const boxStyle: BoxStyle = cfg?.style ?? { kind: 'hud', accent: '09' };
       const isHud = boxStyle.kind === 'hud';
-      const enhanced = this.scr.style === 'enhanced';
       const draw = () => {
+        const [W, H] = [this.scr.w, this.scr.h];
+        const info_raw = typeof info === 'function' ? info(sel) : info || [];
+        const info_lines = isCompact(W) ? wrapLines(info_raw, W - 6) : info_raw;
+        const hasBanner = !!cfg?.banner;
+        const hasFooter = !!cfg?.footerHint;
+        const bannerRows = hasBanner ? 2 : 0;
+        const footerRows = hasFooter ? 2 : 0;
+        const maxvis = Math.max(3, H - 6 - bannerRows - footerRows - (info_lines.length ? info_lines.length + 1 : 0));
+        const vis = Math.min(n, maxvis);
+        const top = clamp(sel - Math.floor(vis / 2), 0, Math.max(0, n - vis));
+        const divX = this.scr.ctx?.divX ?? W;
+        const mapLimit = cfg?.alignToMap && !isCompact(W) && divX < W ? divX - 2 : W - 2;
+        const bannerData = cfg?.banner ? cfg.banner() : null;
+        const entryW = cfg?.entries
+          ? Math.max(...cfg.entries.map((e) => (e.icon ? 2 : 0) + e.label.length + (e.right ? e.right.length + 4 : 0) + 7))
+          : 0;
+        const bannerW = bannerData ? bannerData.left.length + (bannerData.right?.length || 0) + 7 : 0;
+        const footerW = cfg?.footerHint ? cfg.footerHint.length + 6 : 0;
+        const w = Math.min(
+          mapLimit,
+          Math.max(
+            title.length + 8,
+            entryW,
+            bannerW,
+            footerW,
+            ...opts.map((o) => o.length + 7),
+            ...info_lines.map((ln) => ln.length + 4)
+          )
+        );
+        const bh = vis + 2 + bannerRows + footerRows + (info_lines.length ? info_lines.length + 1 : 0);
+        const enhanced = this.scr.style === 'enhanced';
         const [bx, by] = cfg?.alignToMap
           ? this.hud_rect(w, bh, true, y)
-          : [Math.floor((W - w) / 2), y !== null ? y : Math.max(1, Math.floor((H - bh) / 2))];
+          : [Math.floor((W - w) / 2), y !== null ? Math.min(y, Math.max(1, H - bh)) : Math.max(1, Math.floor((H - bh) / 2))];
         this.scr.box(bx, by, w, bh, isHud ? '09' : '0D', '00', title, '07', boxStyle);
         if (bannerData) {
           const bRight = bannerData.right || '';
@@ -7605,26 +7790,95 @@ export class Game {
     }
   }
 
+  async manage_saves_menu(): Promise<void> {
+    while (true) {
+      const storage = getBrowserStorage();
+      const slots = listSaveSlots(storage);
+      const entries: { label: string; slot?: SaveSlot; action?: 'clear_all' }[] = [];
+      if (slots.auto) entries.push({ label: `Delete Auto-Save (${formatSlotBadge(slots.auto)})`, slot: 'auto' });
+      if (slots.slot1) entries.push({ label: `Delete Diary Slot 1 (${formatSlotBadge(slots.slot1)})`, slot: 1 });
+      if (slots.slot2) entries.push({ label: `Delete Diary Slot 2 (${formatSlotBadge(slots.slot2)})`, slot: 2 });
+      if (entries.length > 1) entries.push({ label: 'Delete All Browser Saves', action: 'clear_all' });
+      entries.push({ label: 'Back' });
+      const sel = await this.menu('Manage Saves', entries.map((e) => e.label), 0, null, 13);
+      if (sel === null || entries[sel].label === 'Back') return;
+      const picked = entries[sel];
+      if (picked.action === 'clear_all') {
+        if (await this.confirm('Delete ALL saved farms in this browser?')) {
+          deleteSaveSlot(storage, 'auto');
+          deleteSaveSlot(storage, 1);
+          deleteSaveSlot(storage, 2);
+          await this.say('All browser save data cleared.', null);
+          return;
+        }
+      } else if (picked.slot !== undefined) {
+        const slotName = picked.slot === 'auto' ? 'Auto-Save' : `Diary Slot ${picked.slot}`;
+        if (await this.confirm(`Delete ${slotName}?`)) {
+          deleteSaveSlot(storage, picked.slot);
+          await this.say(`${slotName} deleted.`, null);
+        }
+      }
+    }
+  }
+
   async title(): Promise<void> {
     while (true) {
-      const has_save1 = Boolean(typeof localStorage !== 'undefined' && localStorage.getItem(SAVE_KEY));
-      const has_save2 = Boolean(typeof localStorage !== 'undefined' && localStorage.getItem(`${SAVE_KEY}-2`));
+      const storage = getBrowserStorage();
+      const slots = listSaveSlots(storage);
       const opts: string[] = [];
-      if (has_save1) opts.push('Continue (Diary Slot 1)');
-      if (has_save2) opts.push('Continue (Diary Slot 2)');
-      opts.push('New Game', 'Quit');
-      const sel = await this.menu('Menu', opts, 0, null, 15);
+      const meta: (SaveSummary | null)[] = [];
+      if (slots.auto) {
+        opts.push('Continue (Auto-Save)');
+        meta.push(slots.auto);
+      }
+      if (slots.slot1) {
+        opts.push('Continue (Diary Slot 1)');
+        meta.push(slots.slot1);
+      }
+      if (slots.slot2) {
+        opts.push('Continue (Diary Slot 2)');
+        meta.push(slots.slot2);
+      }
+      const hasAny = opts.length > 0;
+      opts.push('New Game');
+      meta.push(null);
+      if (hasAny) {
+        opts.push('Manage Saves');
+        meta.push(null);
+      }
+      opts.push('Quit');
+      meta.push(null);
+
+      const info = (sIdx: number) => {
+        const s = meta[sIdx];
+        if (s) {
+          return this.scr.h < 27
+            ? [`${s.farmer} · ${s.farm} Farm · ${s.seasonName} ${s.day}, Yr ${s.year} · ${s.gold}G · ${s.itemKinds} items`]
+            : [formatSaveLine(s), formatSaveStatsLine(s)];
+        }
+        if (opts[sIdx] === 'New Game') {
+          return hasAny
+            ? ['Start a new farm (Auto-Save will update once you begin).']
+            : ['Start your new life in Mineral Town.'];
+        }
+        if (opts[sIdx] === 'Manage Saves') {
+          return ['Inspect or remove saved farms stored in localStorage.'];
+        }
+        return [];
+      };
+
+      const sel = await this.menu('Menu', opts, 0, info, 13);
       const choice = sel !== null ? opts[sel] : 'Quit';
       if (choice === 'Quit') {
         this.running = false;
         return;
       }
       if (choice.startsWith('Continue')) {
-        const slot = choice.includes('Slot 2') ? 2 : 1;
+        const slot: SaveSlot = choice.includes('Auto-Save') ? 'auto' : choice.includes('Slot 2') ? 2 : 1;
         try {
           this.load(slot);
         } catch (e: any) {
-          await this.say(`Couldn't load the save file: ${e}`, null);
+          await this.say(`Couldn't load the save file: ${e?.message || e}`, null);
           this.started = false;
           continue;
         }
@@ -7632,13 +7886,18 @@ export class Game {
         await this.say(`Welcome back! ${this.date_str()}.  Weather: ${this.weather}.`, null);
         return;
       }
-      if (has_save1 && !(await this.confirm('Start a New Game?'))) {
+      if (choice === 'Manage Saves') {
+        await this.manage_saves_menu();
+        continue;
+      }
+      if (hasAny && !(await this.confirm('Start a New Game?'))) {
         continue;
       }
       const name = await this.text_input("What's your name?", 'Pete');
       const farm = await this.text_input('Name your farm:', 'Moon');
       this.new_game(name, farm);
       await this.intro();
+      this.autosave(true);
       return;
     }
   }

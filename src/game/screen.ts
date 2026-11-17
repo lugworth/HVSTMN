@@ -55,6 +55,8 @@ export type CellTag = {
   riding?: boolean;
   /** A heading anchored in this UI cell; its reserved rectangle contains no other text. */
   label?: HudLabel;
+  /** Thin bottom-edge progress rule (e.g. Tool XP bar in the right-side HUD). */
+  subBar?: { frac: number; pos: number; len: number; col: string; track: string };
 };
 
 export type FxKind = 'dust' | 'sparkle' | 'splash' | 'coin' | 'swing' | 'flash' | 'debris' | 'text' | 'emote';
