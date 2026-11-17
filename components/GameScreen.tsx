@@ -663,10 +663,9 @@ export default function GameScreen() {
     }
 
     let lastDpr = 0;
-    const getRenderDpr = () => {
-      const base = window.devicePixelRatio || 1;
-      return screen.hires ? Math.min(3, Math.max(2, base)) : base;
-    };
+    // The screen's own pixel density. Rendering a normal screen at 2x and letting the browser
+    // shrink it blurred every glyph and pushed textures into their illegible 3x3 level.
+    const getRenderDpr = () => window.devicePixelRatio || 1;
 
     function sizeCanvas(w: number, h: number) {
       if (!canvas || !ctx || !stage) return;

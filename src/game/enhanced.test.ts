@@ -642,13 +642,13 @@ describe('computeFrame', () => {
     assert.equal(out[10][20].foam, undefined, 'open water has none');
   });
 
-  test('detail level: 3x3 on sharp screens, 2x2 on ordinary ones, plain when tiny', () => {
-    assert.equal(hiresLevel(16, 2), 3);
-    assert.equal(hiresLevel(16, 1), 2);
-    assert.equal(hiresLevel(13, 3), 2, 'needs a 14px font for 3x3');
+  test('detail level: 2x2 wherever half-size glyphs are legible, plain when tiny, never 3x3', () => {
+    for (const [font, dpr] of [[16, 1], [16, 2], [19, 1], [26, 1], [16, 3], [13, 3]]) {
+      assert.equal(hiresLevel(font, dpr), 2, `${font}px @${dpr}x`);
+    }
     assert.equal(hiresLevel(8, 3), 1);
     assert.equal(effectiveHiresLevel(16, 2, false), 1, 'player preference can turn high-res detail off');
-    assert.equal(effectiveHiresLevel(16, 2, true), 3);
+    assert.equal(effectiveHiresLevel(19, 2, true), 2);
   });
 
   test('3x3 patterns: nine glyphs drawn from the texture pool, deterministic, density kept', () => {
@@ -1177,15 +1177,26 @@ describe('Contour metadata with incremental repainting', () => {
   });
 
   test('a blank full-size glyph still paints its smaller contour strokes', () => {
+    // a meadow cell whose micro-detail seed always paints its turf patch (0.35..0.72)
     const terrain = computeFrame(scene({ reducedMotion: true }), 0).flat().find((o) =>
-      o.texture?.kind === 'ground' && o.ch === ' ' && subPattern(o, 16, 2)?.trim());
+      o.texture?.kind === 'ground' && o.ch === ' ' && subPattern(o, 16, 2)?.trim() &&
+      o.micro && o.micro.seed > 0.36 && o.micro.seed < 0.71);
     assert.ok(terrain, 'scene contains sub-cell detail on a blank terrain glyph');
     const painted: string[] = [];
-    const canvas = new Proxy({ fillText: (text: string) => painted.push(text) }, {
+    let rects = 0;
+    const canvas = new Proxy({ fillText: (text: string) => painted.push(text), fillRect: () => { rects++; } }, {
       get: (target, key) => key in target ? target[key as keyof typeof target] : () => {},
     }) as unknown as CanvasRenderingContext2D;
-    drawFrame(canvas, [[terrain]], { cw: 10, ch: 20, fontPx: 16, font: 'monospace', dpr: 1 });
+    // without vector micro-detail, the finer contour strokes stand in for the blank glyph
+    drawFrame(canvas, [[{ ...terrain!, micro: undefined }]], { cw: 10, ch: 20, fontPx: 16, font: 'monospace', dpr: 1 });
     assert.ok(painted.some((text) => text.trim()), 'contour strokes reach the canvas');
+    // with it, the micro-detail is the cell's high-res texture (not a second layer of tiny glyphs)
+    assert.ok(terrain!.micro, 'meadow carries micro-detail');
+    painted.length = 0;
+    const before = rects;
+    drawFrame(canvas, [[terrain!]], { cw: 10, ch: 20, fontPx: 16, font: 'monospace', dpr: 1 });
+    assert.ok(rects > before + 1, 'micro-detail painted');
+    assert.ok(!painted.some((text) => text.trim()), 'no tiny texture glyphs on top of it');
   });
 });
 
@@ -1603,9 +1614,56 @@ describe('visual polish pass', () => {
 });
 
 describe('high-resolution world micro-detail', () => {
-  test('desktop 18px fonts unlock 3x3 contour patterns even at dpr=1 while keeping 16px at 2x2', () => {
-    assert.equal(hiresLevel(18, 1), 3);
-    assert.equal(hiresLevel(16, 1), 2);
+  test('desktop fonts (18-26px) stay at 2x2: a 3x3 grid of third-size glyphs reads as static', () => {
+    assert.equal(hiresLevel(18, 1), 2);
+    assert.equal(hiresLevel(19, 1), 2);
+    assert.equal(hiresLevel(26, 2), 2);
+  });
+
+  /** Everything drawFrame paints: rectangles and text, in order. */
+  const paintLog = (frame: OutCell[][], hires: boolean, fontPx = 19) => {
+    const ops: { op: 'rect' | 'text'; text?: string; x: number; y: number; font?: string }[] = [];
+    let font = '';
+    const canvas = new Proxy(
+      {
+        fillRect: (x: number, y: number) => { ops.push({ op: 'rect', x, y }); },
+        fillText: (text: string, x: number, y: number) => { ops.push({ op: 'text', text, x, y, font }); },
+      },
+      {
+        get: (t, k) => (k in t ? t[k as keyof typeof t] : () => {}),
+        set: (_t, k, v) => { if (k === 'font') font = v; return true; },
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    drawFrame(canvas, frame, { cw: 11, ch: 23, fontPx, font: 'monospace', dpr: 1, hires });
+    return ops;
+  };
+
+  test('roof outlines stay drawn in high-res: the eaves are what make a building read', () => {
+    const s = scene({ palette: 'mono' });
+    // a small gable: /####\ over a wall
+    s.put(10, 5, '/', '08', '00'); s.tag(10, 5, { t: 'roof', wx: 10, wy: 5, dch: '/', dfg: '08' });
+    for (let x = 11; x < 15; x++) { s.put(x, 5, '^', '08', '00'); s.tag(x, 5, { t: 'roof', wx: x, wy: 5, dch: '^', dfg: '08' }); }
+    s.put(15, 5, '\\', '08', '00'); s.tag(15, 5, { t: 'roof', wx: 15, wy: 5, dch: '\\', dfg: '08' });
+    for (let x = 10; x < 16; x++) { s.put(x, 6, '#', '08', '00'); s.tag(x, 6, { t: 'wall', wx: x, wy: 6 }); }
+    const frame = computeFrame(s, 0);
+    const [left, right] = [frame[5][10], frame[5][15]];
+    assert.ok('╱◢'.includes(left.ch) && '╲◣'.includes(right.ch), `eaves glyphs ${left.ch} ${right.ch}`);
+    for (const hires of [false, true]) {
+      const texts = paintLog(frame, hires).filter((o) => o.op === 'text').map((o) => o.text);
+      if (left.ch === '╱') assert.ok(texts.includes('╱') && texts.includes('╲'), `outline drawn with hires=${hires}`);
+    }
+  });
+
+  test('a cell with vector micro-detail is not also covered in a grid of tiny glyphs', () => {
+    const s = scene({ palette: 'mono' });
+    const frame = computeFrame(s, 0);
+    const grass = frame.flat().filter((o) => o.micro?.kind === 'grass' && o.texture && o.ch !== ' ');
+    assert.ok(grass.length > 20, 'meadow cells carry micro-detail and a contour glyph');
+    const ops = paintLog(frame, true);
+    const fullSize = ops.filter((o) => o.op === 'text' && o.font?.startsWith('19px'));
+    const tiny = ops.filter((o) => o.op === 'text' && o.font && !o.font.startsWith('19px') && !o.font.startsWith('bold 19px'));
+    assert.ok(fullSize.length >= grass.length, `meadow glyphs drawn full size (${fullSize.length})`);
+    assert.equal(tiny.length, 0, 'no half-size texture glyphs over micro-detail');
   });
 
   test('micro-detail colors stay in Isotope ramps across modes and stay pure grey in mono on non-accents', () => {

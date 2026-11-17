@@ -2952,7 +2952,9 @@ function worldMicroDetail(
         }
         case 'roof': {
           const edge = sideMask(x, y, (n) => !n || n.t !== 'roof');
-          const sloped = o.ch === '◢' || o.ch === '◣' || o.ch === '▄';
+          // the roof outline: contourTile has already turned the solid ◢◣▄ eaves into ╱╲─ lines,
+          // and those must stay drawn (they are what makes a building read as a building)
+          const sloped = '◢◣▄╱╲─'.includes(o.ch);
           o.micro = {
             kind: sloped ? 'roof_edge' : 'roof',
             seed,
@@ -3427,11 +3429,11 @@ export const HIRES_MIN_FONT = 12;
 const SUBPOOL: Record<string, string[]> = Object.fromEntries(Object.entries(SUBPIX).map(([k, v]) => [k, [...v.join('')]]));
 
 /**
- * Texture detail level for a font size and device pixel ratio: 3 (3x3 glyphs) on sharp
- * screens, 2 (2x2) where half-size glyphs are still legible, otherwise 1 (plain glyph).
+ * Texture detail level for a font size: 2 (2x2 half-size glyphs) where those are still legible,
+ * otherwise 1 (plain glyph). The pixel ratio is accepted but no longer raises it: a 3x3 grid of
+ * third-size glyphs read as static on every screen, even at 2x and 3x, so it is not used.
  */
-export function hiresLevel(fontPx: number, dpr = 1): number {
-  if (fontPx >= 18 || (fontPx >= 14 && fontPx * dpr >= 28)) return 3;
+export function hiresLevel(fontPx: number, _dpr = 1): number {
   return fontPx >= HIRES_MIN_FONT ? 2 : 1;
 }
 
@@ -3650,7 +3652,9 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         }
         if (!SPRITE_KEEP.has(o.ch)) continue; // obstacles also draw their full-size glyph below
       }
-      const pat = spr ? null : subPattern(o, fontPx, level);
+      // A cell with vector micro-detail already has its high-res texture; a grid of tiny glyphs on
+      // top of it turns into noise, so it keeps its one full-size glyph instead.
+      const pat = spr || (hiresMicro && o.micro) ? null : subPattern(o, fontPx, level);
       if (pat) {
         if (level === 2) {
           for (let k = 0; k < 4; k++) {
