@@ -53,6 +53,49 @@ export type OutCell = {
   meter?: boolean;
   /** Thin bottom-edge progress rule along a panel row (e.g. Tool XP). */
   subBar?: { frac: number; pos: number; len: number; col: string; track: string };
+  /** Sub-cell high-resolution architectural & terrain micro-detail (strictly inside the cell). */
+  micro?: MicroDetail;
+};
+
+export type MicroKind =
+  | 'grass'
+  | 'flower'
+  | 'field'
+  | 'soil'
+  | 'soil_wet'
+  | 'crop'
+  | 'path'
+  | 'sand'
+  | 'bridge'
+  | 'water'
+  | 'roof'
+  | 'roof_edge'
+  | 'wall'
+  | 'window'
+  | 'door'
+  | 'cliff'
+  | 'mwall'
+  | 'floor'
+  | 'rug'
+  | 'mfloor'
+  | 'iwall'
+  | 'bed'
+  | 'table'
+  | 'counter'
+  | 'fireplace'
+  | 'bookcase'
+  | 'shelf'
+  | 'bath'
+  | 'dock_step';
+
+export type MicroDetail = {
+  kind: MicroKind;
+  seed: number;
+  mask?: number;
+  hi: string;
+  lo: string;
+  acc?: string;
+  v?: number;
 };
 
 // ---------------------------------------------------------------- colour math
@@ -163,6 +206,14 @@ function snapFrame(frame: OutCell[][]) {
       if (o.aoeCol) o.aoeCol = toIsotope(o.aoeCol);
       if (o.detail) o.detail = { ch: o.detail.ch, fg: toIsotope(o.detail.fg) };
       if (o.subBar) o.subBar = { ...o.subBar, col: toIsotope(o.subBar.col), track: toIsotope(o.subBar.track) };
+      if (o.micro) {
+        o.micro = {
+          ...o.micro,
+          hi: toIsotope(o.micro.hi),
+          lo: toIsotope(o.micro.lo),
+          acc: o.micro.acc ? toIsotope(o.micro.acc) : undefined,
+        };
+      }
     }
   }
 }
@@ -304,6 +355,14 @@ function monochrome(out: OutCell[][], boxes: Screen['boxes'], tone?: Tone) {
       if (o.token) o.token = toned(o.token, t);
       if (o.foamCol) o.foamCol = toned(o.foamCol, t);
       if (o.plotCol) o.plotCol = toned(o.plotCol, t);
+      if (o.micro) {
+        o.micro = {
+          ...o.micro,
+          hi: toned(o.micro.hi, t),
+          lo: toned(o.micro.lo, t),
+          acc: o.micro.acc ? (o.accent ? neon(o.micro.acc, 0.35) : toned(o.micro.acc, t)) : undefined,
+        };
+      }
       if (o.accent) {
         o.fg = neon(o.fg, 0.35);
         continue;
@@ -1819,6 +1878,7 @@ export function computeFrame(
   if (outdoor && ctx.weather === 'Sunny') reflections(out, tags, v, t, W, H);
   shoreFoam(out, tags, v, W, H, motion ? t : 0);
   connectedBorders(out, tags, v, W, H, ctx.toolTier ?? 0);
+  worldMicroDetail(out, tags, v, F, W, H, boxes, season, lightMap);
   if (ctx.fx?.length) drawFx(out, ctx.fx, v, W, H, motion);
   if (!ctx.indoor) worldMargin(out, tags, buf, v, ctx.divX, ctx.divY, boxes);
   else if (ctx.mapName !== 'mine') indoorFrame(out, tags, buf, v, ctx.divX, ctx.divY, boxes);
@@ -2671,6 +2731,402 @@ function connectedBorders(
   }
 }
 
+/**
+ * Populate sub-cell architectural & terrain micro-detail metadata on world cells.
+ * Trees are intentionally left untouched to preserve their classic `/\/\` & `♣`/`♠` silhouette.
+ */
+function worldMicroDetail(
+  out: OutCell[][],
+  tags: (CellTag | null)[][],
+  v: RenderCtx['view'],
+  F: Frame,
+  W: number,
+  H: number,
+  boxes: Screen['boxes'],
+  season: number,
+  lightMap: Float32Array | null,
+) {
+  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const Tstep = Math.floor(F.t * 3);
+  const rugAt = (x: number, y: number) => {
+    const tg = tags[y]?.[x];
+    if (!tg || tg.t !== 'floor') return false;
+    return [[-2, 0], [2, 0], [0, -1], [0, 1], [-2, 1], [2, 1], [-2, -1], [2, -1]].some(
+      ([dx, dy]) => tags[y + dy]?.[x + dx]?.t === 'table',
+    );
+  };
+  const sideMask = (x: number, y: number, pred: (n: CellTag | null | undefined, nx: number, ny: number) => boolean) => {
+    let m = 0;
+    if (pred(tags[y - 1]?.[x], x, y - 1)) m |= 1;
+    if (pred(tags[y]?.[x + 1], x + 1, y)) m |= 2;
+    if (pred(tags[y + 1]?.[x], x, y + 1)) m |= 4;
+    if (pred(tags[y]?.[x - 1], x - 1, y)) m |= 8;
+    return m;
+  };
+
+  for (let y = v.y; y < v.y + v.h && y < H; y++) {
+    for (let x = v.x; x < v.x + v.w && x < W; x++) {
+      const tg = tags[y][x];
+      if (!tg || tg.t === 'ui' || tg.t === 'void' || tg.t === 'tree' || inBox(x, y)) continue;
+      const o = out[y][x];
+      if (o.ui) continue;
+      const wx = tg.wx ?? x;
+      const wy = tg.wy ?? y;
+      const seed = hash(wx * 3, wy * 5, 219);
+      const k = tg.k || '';
+      const litBoost = lightMap ? Math.min(1, F.amb + lightMap[y * W + x] * 0.75) : F.amb;
+      const snow = !!F.theme.snow;
+      const up = tags[y - 1]?.[x];
+
+      // Doorstep stone apron on ground right below any exterior door
+      if ((tg.t === 'grass' || tg.t === 'field' || tg.t === 'path') && !k && up?.t === 'door') {
+        o.micro = {
+          kind: 'dock_step',
+          seed,
+          mask: 0,
+          hi: mix(o.bg, '#d8d0c4', 0.34 * litBoost + 0.08),
+          lo: mix(o.bg, '#000000', 0.36),
+          acc: mix(o.bg, '#9e9688', 0.28 * litBoost + 0.06),
+        };
+        continue;
+      }
+
+      if (k.startsWith('soil')) {
+        const wet = k.endsWith(':wet');
+        const isBed = (n: CellTag | null | undefined) => {
+          const nk = n?.k || '';
+          return nk.startsWith('soil') || nk.startsWith('crop:');
+        };
+        o.micro = {
+          kind: wet ? 'soil_wet' : 'soil',
+          seed,
+          mask: sideMask(x, y, (n) => !isBed(n)),
+          hi: mix(o.bg, wet ? '#705038' : '#b87e4c', 0.36 * litBoost + 0.12),
+          lo: mix(o.bg, '#000000', wet ? 0.56 : 0.42),
+          acc: wet ? mix(o.bg, '#6ec8ff', 0.38 * litBoost + 0.08) : mix(o.bg, '#9a683a', 0.25),
+        };
+        continue;
+      }
+
+      if (k.startsWith('crop:')) {
+        const wet = k.endsWith(':wet');
+        const stage = k.startsWith('crop:ripe') ? 3 : k.startsWith('crop:young') ? 2 : k.startsWith('crop:sprout') ? 1 : 0;
+        const isBed = (n: CellTag | null | undefined) => {
+          const nk = n?.k || '';
+          return nk.startsWith('soil') || nk.startsWith('crop:');
+        };
+        o.micro = {
+          kind: 'crop',
+          seed,
+          mask: sideMask(x, y, (n) => isBed(n)),
+          hi: mix(o.bg, wet ? '#6a4c36' : '#a87444', 0.3 * litBoost + 0.08),
+          lo: mix(o.bg, '#000000', 0.48),
+          acc: mix(o.bg, o.fg, 0.55),
+          v: stage,
+        };
+        continue;
+      }
+
+      switch (tg.t) {
+        case 'grass': {
+          const edgeMask = sideMask(x, y, (n) => !!n && (n.t === 'path' || WATERY.has(n.t) || n.t === 'sand'));
+          o.micro = {
+            kind: 'grass',
+            seed,
+            mask: edgeMask,
+            hi: mix(o.bg, snow ? '#eef4fc' : F.theme.tuft, (snow ? 0.34 : 0.24) * litBoost + 0.06),
+            lo: mix(o.bg, '#000000', snow ? 0.22 : 0.32),
+            acc: F.theme.wildflowers && !snow ? mix(o.bg, F.theme.wildflowers[Math.floor(seed * F.theme.wildflowers.length)], 0.35 * litBoost) : undefined,
+            v: season,
+          };
+          break;
+        }
+        case 'flower': {
+          o.micro = {
+            kind: 'flower',
+            seed,
+            hi: mix(o.bg, snow ? '#eef4fc' : '#58d838', 0.32 * litBoost + 0.08),
+            lo: mix(o.bg, '#0a2008', 0.44),
+            acc: mix(o.bg, o.fg, 0.65),
+            v: season,
+          };
+          break;
+        }
+        case 'field': {
+          const edgeGrass = sideMask(x, y, (n) => !!n && (n.t === 'grass' || n.t === 'flower'));
+          o.micro = {
+            kind: 'field',
+            seed,
+            mask: edgeGrass,
+            hi: mix(o.bg, F.theme.soilDot, 0.38 * litBoost + 0.08),
+            lo: mix(o.bg, '#000000', 0.36),
+            acc: edgeGrass ? mix(o.bg, F.theme.tuft, 0.25 * litBoost) : undefined,
+            v: snow ? 1 : 0,
+          };
+          break;
+        }
+        case 'path': {
+          const kerb = sideMask(x, y, (n) => !!n && (n.t === 'grass' || n.t === 'flower' || n.t === 'field'));
+          o.micro = {
+            kind: 'path',
+            seed,
+            mask: kerb,
+            hi: mix(o.bg, snow ? '#dde8f8' : '#b8b0a2', 0.16 * litBoost + 0.04),
+            lo: mix(o.bg, '#000000', 0.32),
+            acc: mix(o.bg, snow ? '#ffffff' : '#8a8275', 0.1 * litBoost + 0.03),
+            v: (wx + wy * 2) & 3,
+          };
+          break;
+        }
+        case 'sand': {
+          const damp = sideMask(x, y, (n) => !!n && WATERY.has(n.t)) !== 0;
+          o.micro = {
+            kind: 'sand',
+            seed,
+            mask: damp ? 1 : 0,
+            hi: mix(o.bg, '#f0d8a8', (damp ? 0.16 : 0.28) * litBoost + 0.06),
+            lo: mix(o.bg, '#000000', damp ? 0.38 : 0.26),
+            acc: hash(wx, wy, 223) < 0.14 ? mix(o.bg, '#ffd8d0', 0.4 * litBoost + 0.1) : undefined,
+            v: damp ? 1 : 0,
+          };
+          break;
+        }
+        case 'bridge': {
+          const exposed = sideMask(x, y, (n) => !n || n.t !== 'bridge');
+          o.micro = {
+            kind: 'bridge',
+            seed,
+            mask: exposed,
+            hi: mix(o.bg, '#e4aa64', 0.46 * litBoost + 0.1),
+            lo: mix(o.bg, '#000000', 0.56),
+            acc: mix(o.bg, '#f2d8b0', 0.4 * litBoost + 0.1),
+            v: wx & 1,
+          };
+          break;
+        }
+        case 'water':
+        case 'pond':
+        case 'spring':
+        case 'fountain': {
+          if (tg.k === 'deco' && tg.dch) break;
+          const shore = sideMask(x, y, (n) => !!n && n.t !== 'ui' && !WATERY.has(n.t) && n.t !== 'bridge' && n.t !== 'void');
+          const lily = o.ch === '◡' || o.ch === '⌓';
+          o.micro = {
+            kind: 'water',
+            seed,
+            mask: shore,
+            hi: mix(o.bg, o.fg, 0.36),
+            lo: mix(o.bg, '#000000', 0.34),
+            acc: lily
+              ? mix(o.bg, '#33b848', 0.55)
+              : shore
+                ? mix(o.bg, '#b8c4d4', 0.22 * litBoost)
+                : undefined,
+            v: (Tstep + Math.floor(seed * 8)) & 15,
+          };
+          break;
+        }
+        case 'roof': {
+          const edge = sideMask(x, y, (n) => !n || n.t !== 'roof');
+          const sloped = o.ch === '◢' || o.ch === '◣' || o.ch === '▄';
+          o.micro = {
+            kind: sloped ? 'roof_edge' : 'roof',
+            seed,
+            mask: edge,
+            hi: mix(o.bg, '#ffffff', 0.12 * litBoost + 0.03),
+            lo: mix(o.bg, '#000000', 0.34),
+            acc: snow ? mix(o.bg, '#f0f6ff', 0.55 * litBoost + 0.15) : mix(o.bg, o.fg, 0.2),
+            v: (wy & 1) | (snow ? 4 : 0),
+          };
+          break;
+        }
+        case 'wall': {
+          if (tg.k === 'deco' && tg.dch === '=') {
+            o.micro = {
+              kind: 'window',
+              seed,
+              hi: mix(o.bg, '#c89050', 0.48 * litBoost + 0.14),
+              lo: mix(o.bg, '#000000', 0.55),
+              acc: o.fg,
+              v: o.glow ? 1 : 0,
+            };
+            break;
+          }
+          if (tg.k === 'deco' && tg.dch !== undefined) break;
+          const walled = (n: CellTag | null | undefined) => !!n && (n.t === 'wall' || n.t === 'door');
+          let wmask = 0;
+          if (up?.t === 'roof') wmask |= 1;
+          if (!walled(tags[y]?.[x + 1])) wmask |= 2;
+          const dn = tags[y + 1]?.[x];
+          if (!walled(dn)) wmask |= 4;
+          if (!walled(tags[y]?.[x - 1])) wmask |= 8;
+          o.micro = {
+            kind: 'wall',
+            seed,
+            mask: wmask,
+            hi: mix(o.bg, '#d49a60', 0.2 * litBoost + 0.05),
+            lo: mix(o.bg, '#000000', 0.34),
+            acc: snow && (wmask & 1) ? mix(o.bg, '#e8f2ff', 0.65) : undefined,
+            v: snow ? 1 : 0,
+          };
+          break;
+        }
+        case 'door': {
+          const open = o.ch === '▯';
+          o.micro = {
+            kind: 'door',
+            seed,
+            hi: mix(o.bg, open ? '#ffd078' : '#e09a48', 0.55),
+            lo: mix(o.bg, '#000000', 0.55),
+            acc: mix(o.bg, open ? '#fff0c0' : '#f0c850', 0.72),
+            v: open ? 1 : 0,
+          };
+          break;
+        }
+        case 'cliff': {
+          const exposed = sideMask(x, y, (n) => !n || n.t !== 'cliff');
+          o.micro = {
+            kind: 'cliff',
+            seed,
+            mask: exposed,
+            hi: mix(o.bg, snow ? '#eef4fc' : '#d8cbb4', 0.34 * litBoost + 0.08),
+            lo: mix(o.bg, '#000000', 0.52),
+            acc: snow ? mix('#eef4fc', o.bg, 0.25) : mix(o.bg, '#b8aa92', 0.25 * litBoost),
+            v: snow ? 1 : 0,
+          };
+          break;
+        }
+        case 'mwall': {
+          if (isTorch(F, x, y, tg)) break;
+          o.micro = {
+            kind: 'mwall',
+            seed,
+            mask: sideMask(x, y, (n) => !!n && n.t !== 'mwall'),
+            hi: mix(o.bg, '#8a7e70', 0.34 * litBoost + 0.08),
+            lo: mix(o.bg, '#000000', 0.54),
+            acc: hash(wx, wy, 227) < 0.14 ? mix(o.bg, '#70e8ff', 0.32 * litBoost + 0.1) : undefined,
+          };
+          break;
+        }
+        case 'floor': {
+          if (rugAt(x, y)) {
+            const rugEdge = sideMask(x, y, (_n, nx, ny) => !rugAt(nx, ny));
+            o.micro = {
+              kind: 'rug',
+              seed,
+              mask: rugEdge,
+              hi: mix(o.bg, '#ff80c0', 0.34),
+              lo: mix(o.bg, '#000000', 0.38),
+              acc: mix(o.bg, '#ffe0a0', 0.42),
+            };
+          } else {
+            o.micro = {
+              kind: 'floor',
+              seed,
+              hi: mix(o.bg, '#a87848', 0.26),
+              lo: mix(o.bg, '#000000', 0.36),
+              v: (wx + wy) & 3,
+            };
+          }
+          break;
+        }
+        case 'mfloor': {
+          o.micro = {
+            kind: 'mfloor',
+            seed,
+            hi: mix(o.bg, '#706458', 0.25 * litBoost + 0.06),
+            lo: mix(o.bg, '#000000', 0.42),
+            v: (wx + wy) & 3,
+          };
+          break;
+        }
+        case 'iwall': {
+          if (tg.k === 'deco' && tg.dch === '=') {
+            o.micro = {
+              kind: 'window',
+              seed,
+              hi: mix(o.bg, '#c89050', 0.5),
+              lo: mix(o.bg, '#000000', 0.52),
+              acc: o.fg,
+              v: 1,
+            };
+            break;
+          }
+          const dn = tags[y + 1]?.[x];
+          const wmask = (!up || up.t !== 'iwall') && dn?.t === 'floor' ? 4 : 0;
+          o.micro = {
+            kind: 'iwall',
+            seed,
+            mask: wmask,
+            hi: mix(o.bg, '#b0865c', 0.22),
+            lo: mix(o.bg, '#000000', 0.36),
+          };
+          break;
+        }
+        case 'bed': {
+          const left = tags[y]?.[x - 1];
+          const head = !left || left.t !== 'bed';
+          o.micro = {
+            kind: 'bed',
+            seed,
+            mask: head ? 8 : 0,
+            hi: mix(o.bg, '#90a8f0', 0.38),
+            lo: mix(o.bg, '#000000', 0.45),
+            acc: head ? '#f2efe8' : mix(o.bg, '#d8e4ff', 0.34),
+          };
+          break;
+        }
+        case 'table':
+        case 'counter': {
+          o.micro = {
+            kind: tg.t,
+            seed,
+            hi: mix(o.bg, tg.t === 'counter' ? '#e8b888' : '#c88c4e', 0.44),
+            lo: mix(o.bg, '#000000', 0.5),
+            acc: mix(o.bg, '#fff0d8', 0.32),
+          };
+          break;
+        }
+        case 'fireplace': {
+          o.micro = {
+            kind: 'fireplace',
+            seed,
+            hi: mix(o.bg, '#908074', 0.38),
+            lo: mix(o.bg, '#000000', 0.58),
+            acc: '#ff9900',
+          };
+          break;
+        }
+        case 'bookcase':
+        case 'shelf': {
+          o.micro = {
+            kind: tg.t,
+            seed,
+            hi: mix(o.bg, '#b87c44', 0.32),
+            lo: mix(o.bg, '#000000', 0.44),
+            acc: tg.t === 'bookcase' ? mix(o.bg, o.fg, 0.45) : mix(o.bg, '#80d8ff', 0.35),
+            v: wx & 3,
+          };
+          break;
+        }
+        case 'bath': {
+          const rim = sideMask(x, y, (n) => !n || n.t !== 'bath');
+          o.micro = {
+            kind: 'bath',
+            seed,
+            mask: rim,
+            hi: mix(o.bg, '#60b8ff', 0.42),
+            lo: mix(o.bg, '#406078', 0.35),
+            acc: '#ffffff',
+            v: Tstep & 7,
+          };
+          break;
+        }
+      }
+    }
+  }
+}
+
 /** Fast radial lantern-iris reveal when stepping between maps. */
 function applyWipe(out: OutCell[][], v: RenderCtx['view'], W: number, H: number, wipe: NonNullable<RenderCtx['wipe']>) {
   const p = wipe.age / Math.max(0.01, wipe.duration);
@@ -2780,8 +3236,17 @@ function decorateBoxes(out: OutCell[][], boxes: Screen['boxes'], W: number, H: n
     const shadow = (x: number, y: number) => {
       if (x < 0 || y < 0 || x >= W || y >= H) return;
       if (boxes.some((o) => o !== b && x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h)) return;
-      out[y][x].bg = mix(out[y][x].bg, '#000000', 0.45);
-      out[y][x].fg = mix(out[y][x].fg, '#000000', 0.4);
+      const cell = out[y][x];
+      cell.bg = mix(cell.bg, '#000000', 0.45);
+      cell.fg = mix(cell.fg, '#000000', 0.4);
+      if (cell.micro) {
+        cell.micro = {
+          ...cell.micro,
+          hi: mix(cell.micro.hi, '#000000', 0.45),
+          lo: mix(cell.micro.lo, '#000000', 0.45),
+          acc: cell.micro.acc ? mix(cell.micro.acc, '#000000', 0.45) : undefined,
+        };
+      }
     };
     for (let y = b.y + 1; y <= b.y + b.h; y++) shadow(b.x + b.w, y);
     for (let x = b.x + 1; x < b.x + b.w; x++) shadow(x, b.y + b.h);
@@ -2828,7 +3293,10 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.label?.text !== n.label?.text || p.label?.scale !== n.label?.scale ||
         p.label?.w !== n.label?.w || p.label?.h !== n.label?.h ||
         p.subBar?.frac !== n.subBar?.frac || p.subBar?.pos !== n.subBar?.pos ||
-        p.subBar?.col !== n.subBar?.col || p.subBar?.track !== n.subBar?.track
+        p.subBar?.col !== n.subBar?.col || p.subBar?.track !== n.subBar?.track ||
+        p.micro?.kind !== n.micro?.kind || p.micro?.seed !== n.micro?.seed ||
+        p.micro?.mask !== n.micro?.mask || p.micro?.v !== n.micro?.v ||
+        p.micro?.hi !== n.micro?.hi || p.micro?.lo !== n.micro?.lo || p.micro?.acc !== n.micro?.acc
       ) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -2939,7 +3407,7 @@ const SUBPOOL: Record<string, string[]> = Object.fromEntries(Object.entries(SUBP
  * screens, 2 (2x2) where half-size glyphs are still legible, otherwise 1 (plain glyph).
  */
 export function hiresLevel(fontPx: number, dpr = 1): number {
-  if (fontPx >= 14 && fontPx * dpr >= 28) return 3;
+  if (fontPx >= 18 || (fontPx >= 14 && fontPx * dpr >= 28)) return 3;
   return fontPx >= HIRES_MIN_FONT ? 2 : 1;
 }
 
@@ -3013,17 +3481,24 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       x0 = x;
     }
   }
+  // sub-cell architectural & terrain micro-detail pass (sits cleanly beneath glyphs & overlays)
+  const hiresMicro = (m.hires ?? true) && cw >= 6 && ch >= 10;
   let curFont = '';
   let glowOn = false;
   for (let y = Y0; y < Y1; y++) {
     const row = frame[y];
     for (let x = X0; x < X1; x++) {
       const o = row[x];
-      // two-tone cells: the detail glyph sits small on the upper right, drawn with the batch
-      if (o.detail) mini(x * cw + cw * 0.48, y * ch + ch * 0.3, o.detail.ch, o.detail.fg, 1, true);
-      if (o.ch === ' ' && !(o.texture && o.ch === o.textureGlyph)) continue;
       const px = x * cw;
       const py = y * ch;
+      let skipFillerGlyph = false;
+      if (hiresMicro && o.micro && !o.ui) {
+        skipFillerGlyph = paintMicroDetail(g, o, px, py, cw, ch);
+      }
+      // two-tone cells: the detail glyph sits small on the upper right, drawn with the batch
+      if (o.detail) mini(px + cw * 0.48, py + ch * 0.3, o.detail.ch, o.detail.fg, 1, true);
+      if (skipFillerGlyph && !o.plain && !o.token && !o.label) continue;
+      if (o.ch === ' ' && !(o.texture && o.ch === o.textureGlyph)) continue;
       if (o.label) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
         const label = o.label;
@@ -3067,6 +3542,16 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         }
         g.closePath();
         g.fill();
+        if (hiresMicro && o.micro?.kind === 'roof_edge') {
+          const steps = 3;
+          g.fillStyle = o.micro.hi;
+          for (let i = 0; i < steps; i++) {
+            const sy = Math.floor(py + ((i + 0.5) * ch) / steps);
+            const rx = Math.round(px + (o.ch === '◢' ? cw * (1 - (i + 0.6) / steps) : cw * 0.08));
+            const rw = Math.max(2, Math.round(cw * ((i + 0.5) / steps) * 0.72));
+            g.fillRect(rx, sy, rw, 1);
+          }
+        }
         continue;
       }
       // Seamless vector box-drawing rules & rounded modal corners (no vertical/horizontal font gaps)
@@ -3296,10 +3781,719 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
   g.restore();
 }
 
+/**
+ * Paint sub-cell high-resolution textures & architectural details strictly inside [px, px+cw] x [py, py+ch].
+ * Returns true if this vector geometry replaces an otherwise stretched structural filler glyph (`≡`, `═`, `▒`, etc.).
+ */
+function paintMicroDetail(
+  g: CanvasRenderingContext2D,
+  o: OutCell,
+  px: number,
+  py: number,
+  cw: number,
+  ch: number,
+): boolean {
+  const m = o.micro;
+  if (!m) return false;
+  const X = Math.floor(px);
+  const Y = Math.floor(py);
+  const W = Math.max(2, Math.ceil(cw));
+  const H = Math.max(2, Math.ceil(ch));
+  const mask = m.mask ?? 0;
+  const s = m.seed;
+  const v = m.v ?? 0;
+  const u1 = Math.max(1, Math.round(W / 8));
+  const h1 = Math.max(1, Math.round(H / 16));
+
+  switch (m.kind) {
+    case 'soil':
+    case 'soil_wet': {
+      const padL = mask & 8 ? Math.max(1, u1) : 0;
+      const padR = mask & 2 ? Math.max(1, u1) : 0;
+      const span = Math.max(2, W - padL - padR);
+      for (let r = 0; r < 4; r++) {
+        const ry = Y + Math.round((r * H) / 4);
+        const ridgeH = Math.max(1, Math.round(H / 9));
+        g.fillStyle = m.hi;
+        g.fillRect(X + padL, ry + 1, span, ridgeH);
+        g.fillStyle = m.lo;
+        g.fillRect(X + padL, ry + 1 + ridgeH, span, Math.max(1, Math.round(H / 10)));
+        if (m.kind === 'soil_wet' && m.acc && ((r + Math.floor(s * 7)) % 2 === 0)) {
+          const sx = X + padL + Math.round(((s * 19 + r * 0.37) % 1) * Math.max(1, span - u1 * 3));
+          g.fillStyle = m.acc;
+          g.fillRect(sx, ry + 1 + ridgeH, Math.max(2, u1 * 2), 1);
+        }
+      }
+      // small soil clods
+      g.fillStyle = m.lo;
+      const cx0 = X + padL + Math.round(((s * 13) % 1) * Math.max(1, span - 2));
+      g.fillRect(cx0, Y + Math.round(H * 0.32), u1, h1);
+      if (m.acc) {
+        g.fillStyle = m.acc;
+        const cx1 = X + padL + Math.round(((s * 29) % 1) * Math.max(1, span - 2));
+        g.fillRect(cx1, Y + Math.round(H * 0.74), u1, h1);
+      }
+      return !o.plain && (o.ch === '≡' || o.ch === '═');
+    }
+
+    case 'crop': {
+      // soft furrow extensions at left/right if connected to soil neighbors
+      const ry0 = Y + Math.round(H * 0.25);
+      const ry1 = Y + Math.round(H * 0.72);
+      g.fillStyle = m.lo;
+      if (mask & 8) g.fillRect(X, ry0, Math.max(2, u1 * 2), 1);
+      if (mask & 2) g.fillRect(X + W - Math.max(2, u1 * 2), ry0, Math.max(2, u1 * 2), 1);
+      // rounded loam planting mound beneath crop glyph
+      const mw = Math.max(4, Math.round(W * 0.72));
+      const mx = X + Math.floor((W - mw) / 2);
+      const mh = Math.max(2, Math.round(H * 0.2));
+      g.fillStyle = m.lo;
+      g.fillRect(mx, ry1, mw, mh);
+      g.fillStyle = m.hi;
+      g.fillRect(mx + 1, Math.max(Y, ry1 - 1), Math.max(2, mw - 2), 1);
+      // tiny basal leaf flecks once sprouted
+      if (v >= 1 && m.acc) {
+        g.fillStyle = m.acc;
+        g.fillRect(Math.max(X, mx - 1), ry1, u1, h1);
+        g.fillRect(Math.min(X + W - u1, mx + mw), ry1, u1, h1);
+      }
+      return false;
+    }
+
+    case 'grass': {
+      // organic turf strip or winter snow drift
+      if (v === 3) {
+        if (s < 0.55) {
+          const sx = X + Math.round(((s * 17) % 1) * Math.max(1, W - 4));
+          const sy = Y + Math.round(((s * 23) % 1) * Math.max(1, H - 3));
+          const sw = Math.max(3, Math.round(W * 0.42));
+          g.fillStyle = m.hi;
+          g.fillRect(sx, sy, Math.min(sw, X + W - sx), 1);
+          g.fillStyle = m.lo;
+          g.fillRect(sx + 1, Math.min(Y + H - 1, sy + 1), Math.max(1, Math.min(sw - 1, X + W - sx - 1)), 1);
+        }
+        return false;
+      }
+      // soft meadow turf micro-patch
+      if (s > 0.35 && s < 0.72) {
+        const px0 = X + Math.round(((s * 19) % 1) * Math.max(1, W - 4));
+        const py0 = Y + Math.round(((s * 31) % 1) * Math.max(1, H - 4));
+        const pw = Math.max(2, Math.round(W * 0.38));
+        g.fillStyle = m.lo;
+        g.fillRect(px0, py0 + 1, Math.min(pw, X + W - px0), h1);
+      }
+      // crisp paired grass blades on ~45% of meadow cells
+      if (((s * 11) % 1) < 0.45 && o.ch === ' ') {
+        const bx = X + 1 + Math.round(((s * 37) % 1) * Math.max(1, W - 4));
+        const by = Y + Math.round(H * 0.42) + Math.round(((s * 43) % 1) * Math.max(1, H * 0.35));
+        const bh = Math.max(2, Math.round(H * 0.16));
+        g.fillStyle = m.hi;
+        g.fillRect(bx, by, 1, bh);
+        if (bx + 2 < X + W) g.fillRect(bx + 2, by + 1, 1, Math.max(1, bh - 1));
+      }
+      // wild clover / blossom micro-buds
+      if (m.acc && s > 0.86) {
+        g.fillStyle = m.acc;
+        const fx = X + Math.round(((s * 53) % 1) * Math.max(1, W - 2));
+        const fy = Y + Math.round(((s * 61) % 1) * Math.max(1, H - 2));
+        g.fillRect(fx, fy, Math.max(1, u1), Math.max(1, h1));
+      }
+      // border grass overhang next to paths or water
+      if (mask) {
+        g.fillStyle = m.hi;
+        if (mask & 1) g.fillRect(X + 1, Y, Math.max(2, Math.round(W * 0.3)), h1);
+        if (mask & 4) g.fillRect(X + Math.round(W * 0.4), Y + H - h1, Math.max(2, Math.round(W * 0.3)), h1);
+        if (mask & 8) g.fillRect(X, Y + Math.round(H * 0.3), u1, Math.max(2, Math.round(H * 0.25)));
+        if (mask & 2) g.fillRect(X + W - u1, Y + Math.round(H * 0.45), u1, Math.max(2, Math.round(H * 0.25)));
+      }
+      return false;
+    }
+
+    case 'flower': {
+      // basal emerald rosette leaves + diagonal secondary buds
+      const cy = Y + Math.round(H * 0.62);
+      const cx = X + Math.round(W * 0.5);
+      g.fillStyle = m.lo;
+      g.fillRect(Math.max(X, cx - u1 * 3), cy, Math.min(W, u1 * 6), Math.max(2, h1 * 2));
+      g.fillStyle = m.hi;
+      g.fillRect(Math.max(X, cx - u1 * 2), cy, Math.max(1, u1 * 2), h1);
+      g.fillRect(Math.min(X + W - u1 * 2, cx + 1), cy + h1, Math.max(1, u1 * 2), h1);
+      if (m.acc && v !== 3) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + u1, Y + Math.round(H * 0.22), Math.max(1, u1), Math.max(1, h1));
+        g.fillRect(X + W - u1 * 2, Y + Math.round(H * 0.72), Math.max(1, u1), Math.max(1, h1));
+      }
+      return false;
+    }
+
+    case 'field': {
+      // scattered loam clods & tiny surface stones
+      const px0 = X + Math.round(((s * 23) % 1) * Math.max(1, W - 3));
+      const py0 = Y + Math.round(((s * 31) % 1) * Math.max(1, H - 3));
+      const px1 = X + Math.round(((s * 47) % 1) * Math.max(1, W - 3));
+      const py1 = Y + Math.round(((s * 59) % 1) * Math.max(1, H - 3));
+      g.fillStyle = m.lo;
+      g.fillRect(px0, py0, Math.max(1, u1 + 1), h1);
+      g.fillStyle = m.hi;
+      g.fillRect(px1, py1, u1, h1);
+      if (mask && m.acc) {
+        g.fillStyle = m.acc;
+        if (mask & 8) g.fillRect(X, Y + Math.round(H * 0.35), u1, Math.max(2, h1 * 2));
+        if (mask & 2) g.fillRect(X + W - u1, Y + Math.round(H * 0.55), u1, Math.max(2, h1 * 2));
+      }
+      return false;
+    }
+
+    case 'path': {
+      // staggered 2x3 hand-laid cobblestones with crisp non-wrapping mortar seams & subtle upper bevels
+      const rows = 3;
+      const rowH = H / rows;
+      for (let r = 0; r < rows; r++) {
+        const y0 = Y + Math.round(r * rowH);
+        const y1 = Y + Math.round((r + 1) * rowH);
+        const bh = Math.max(2, y1 - y0 - 1);
+        const split = ((r + v) & 1) ? Math.round(W * 0.38) : Math.round(W * 0.62);
+        const stones: [number, number][] = [
+          [X, Math.max(2, split - 1)],
+          [X + split, Math.max(2, W - split - 1)],
+        ];
+        for (let c = 0; c < stones.length; c++) {
+          const [sx, sw] = stones[c];
+          if (sx + sw > X + W) continue;
+          const tone = (r * 3 + c + Math.floor(s * 11)) % 3;
+          if (tone !== 0) {
+            g.fillStyle = tone === 1 ? m.hi : (m.acc ?? m.hi);
+            g.fillRect(sx, y0 + 1, sw, 1);
+          }
+          g.fillStyle = m.lo;
+          g.fillRect(sx, y0 + bh, sw, 1);
+        }
+        // vertical mortar joint cleanly between the two stones
+        g.fillStyle = m.lo;
+        g.fillRect(X + Math.max(1, split - 1), y0, 1, bh);
+      }
+      return !o.plain && o.ch === '▪';
+    }
+
+    case 'sand': {
+      // wind-rippled beach dune lines + occasional seashell speck
+      const yA = Y + Math.round(H * (0.28 + (s % 0.14)));
+      const yB = Y + Math.round(H * (0.68 + ((s * 3) % 0.14)));
+      const xA = X + Math.round(W * 0.12);
+      const xB = X + Math.round(W * 0.25);
+      g.fillStyle = m.hi;
+      g.fillRect(xA, yA, Math.max(2, Math.round(W * 0.55)), 1);
+      g.fillStyle = m.lo;
+      g.fillRect(xA + 1, Math.min(Y + H - 1, yA + 1), Math.max(2, Math.round(W * 0.5)), 1);
+      g.fillStyle = m.hi;
+      g.fillRect(xB, Math.min(Y + H - 2, yB), Math.max(2, Math.round(W * 0.5)), 1);
+      if (v === 1) {
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y + Math.round(H * 0.82), W, Math.max(1, Math.round(H * 0.18)));
+      }
+      if (m.acc) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + Math.round(W * 0.65), Y + Math.round(H * 0.45), Math.max(2, u1), Math.max(1, h1));
+      }
+      return false;
+    }
+
+    case 'bridge': {
+      // 4 vertical wood plank slats + nailheads + exposed timber guardrails
+      const railTop = (mask & 1) ? Math.max(2, Math.round(H * 0.18)) : 0;
+      const railBot = (mask & 4) ? Math.max(2, Math.round(H * 0.18)) : 0;
+      const deckY = Y + railTop;
+      const deckH = Math.max(2, H - railTop - railBot);
+      const planks = 4;
+      for (let i = 0; i < planks; i++) {
+        const px0 = X + Math.round((i * W) / planks);
+        const px1 = X + Math.round(((i + 1) * W) / planks);
+        const pw = Math.max(1, px1 - px0 - 1);
+        g.fillStyle = ((i + v) & 1) ? m.hi : m.lo;
+        g.fillRect(px0, deckY, pw, deckH);
+        // plank gap
+        g.fillStyle = m.lo;
+        if (px1 - 1 >= px0) g.fillRect(px1 - 1, deckY, 1, deckH);
+        // nailheads near ends
+        if (m.acc && pw >= 2) {
+          g.fillStyle = m.acc;
+          g.fillRect(px0 + 1, deckY + 1, 1, 1);
+          g.fillRect(px0 + 1, deckY + Math.max(1, deckH - 2), 1, 1);
+        }
+      }
+      if (railTop) {
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y, W, Math.max(1, railTop - 1));
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y + railTop - 1, W, 1);
+        g.fillStyle = m.acc ?? m.hi;
+        g.fillRect(X + 1, Y, Math.max(1, u1), railTop);
+      }
+      if (railBot) {
+        const ry = Y + H - railBot;
+        g.fillStyle = m.hi;
+        g.fillRect(X, ry, W, Math.max(1, railBot - 1));
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y + H - 1, W, 1);
+        g.fillStyle = m.acc ?? m.hi;
+        g.fillRect(X + W - Math.max(2, u1 + 1), ry, Math.max(1, u1), railBot);
+      }
+      if (mask & 8) {
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y, Math.max(1, u1), H);
+      }
+      if (mask & 2) {
+        g.fillStyle = m.hi;
+        g.fillRect(X + W - Math.max(1, u1), Y, Math.max(1, u1), H);
+      }
+      return !o.plain && o.ch === '═';
+    }
+
+    case 'water': {
+      // stepped shallow shelf + rounded lily-pad leaf + drifting caustic ribbons
+      if (mask) {
+        g.fillStyle = m.hi;
+        const bandX = Math.max(2, Math.round(W * 0.25));
+        const bandY = Math.max(2, Math.round(H * 0.16));
+        if (mask & 1) g.fillRect(X, Y, W, bandY);
+        if (mask & 4) g.fillRect(X, Y + H - bandY, W, bandY);
+        if (mask & 8) g.fillRect(X, Y, bandX, H);
+        if (mask & 2) g.fillRect(X + W - bandX, Y, bandX, H);
+      }
+      if (o.ch === '◡' || o.ch === '⌓') {
+        if (m.acc) {
+          const pw = Math.max(4, Math.round(W * 0.72));
+          const ph = Math.max(3, Math.round(H * 0.34));
+          const lx = X + Math.floor((W - pw) / 2);
+          const ly = Y + Math.floor((H - ph) / 2);
+          g.fillStyle = m.acc;
+          g.fillRect(lx, ly, pw, ph);
+          g.fillStyle = m.lo;
+          g.fillRect(lx + Math.floor(pw * 0.65), ly, Math.max(1, u1), Math.max(1, Math.floor(ph / 2)));
+        }
+        return false;
+      }
+      // animated subtle wave caustic bars
+      const phase = ((v * 2 + Math.floor(s * 16)) % 8) / 8;
+      const rw = Math.max(2, Math.round(W * 0.48));
+      const rx1 = X + Math.round(phase * Math.max(1, W - rw));
+      const rx2 = X + Math.round(((phase + 0.5) % 1) * Math.max(1, W - rw));
+      g.fillStyle = m.hi;
+      g.fillRect(rx1, Y + Math.round(H * 0.3), rw, 1);
+      g.fillRect(rx2, Y + Math.round(H * 0.72), Math.max(2, rw - 1), 1);
+      if (mask && m.acc && s < 0.4) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + Math.round(W * 0.3), Y + Math.round(H * 0.52), Math.max(2, u1 * 2), h1);
+      }
+      return false;
+    }
+
+    case 'roof': {
+      // 3 staggered shingle/tile courses with crisp 1px overhang shadows, sunlit lip highlights & snow
+      const courses = 3;
+      const snow = (v & 4) !== 0;
+      for (let r = 0; r < courses; r++) {
+        const y0 = Y + Math.round((r * H) / courses);
+        const y1 = Y + Math.round(((r + 1) * H) / courses);
+        const ch0 = Math.max(2, y1 - y0);
+        const split = ((r + v + Math.floor(s * 5)) & 1) ? Math.round(W * 0.38) : Math.round(W * 0.66);
+        const hl = (r + Math.floor(s * 13)) % 3;
+        if (hl === 0) {
+          g.fillStyle = m.hi;
+          g.fillRect(X, y0, Math.max(2, split - 1), 1);
+        } else if (hl === 1 && m.acc) {
+          g.fillStyle = m.acc;
+          g.fillRect(X + split, y0, Math.max(2, W - split), 1);
+        }
+        // course overhang shadow & staggered vertical seam
+        g.fillStyle = m.lo;
+        g.fillRect(X, y0 + ch0 - 1, W, 1);
+        g.fillRect(X + Math.min(W - 1, split), y0, 1, ch0);
+      }
+      if (mask & 1) {
+        // sunlit roof ridge beam
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y, W, Math.max(1, h1));
+      }
+      if (mask & 4) {
+        // overhanging eaves shadow & fascia lip
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y + H - Math.max(2, h1 * 2), W, 1);
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y + H - 1, W, 1);
+      }
+      if (snow && m.acc && s < 0.6) {
+        const sw = Math.max(3, Math.round(W * 0.55));
+        g.fillStyle = m.acc;
+        g.fillRect(X + Math.round(((s * 7) % 1) * Math.max(1, W - sw)), Y + 1, sw, Math.max(1, h1));
+      }
+      return !o.plain && o.ch !== '▐' && !'◢◣▄'.includes(o.ch);
+    }
+
+    case 'roof_edge': {
+      // ridge bar bevels for horizontal '▄' ridge caps (triangles '◢'/'◣' get beveled right after fill)
+      if (o.ch === '▄') {
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y + Math.floor(H / 2), W, Math.max(1, h1));
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y + H - 1, W, 1);
+      }
+      return false;
+    }
+
+    case 'wall': {
+      const foundation = (mask & 4) !== 0;
+      if (foundation) {
+        // ashlar stone foundation masonry (2 rows of offset stone blocks)
+        for (let r = 0; r < 2; r++) {
+          const y0 = Y + Math.round((r * H) / 2);
+          const bh = Math.max(2, Math.round(H / 2));
+          const cut = r === 0 ? Math.round(W * 0.55) : Math.round(W * 0.35);
+          g.fillStyle = m.hi;
+          g.fillRect(X, y0 + 1, W, 1);
+          g.fillStyle = m.lo;
+          g.fillRect(X, y0 + bh - 1, W, 1);
+          g.fillRect(X + cut, y0, 1, bh);
+        }
+      } else {
+        // horizontal timber clapboard siding (3 courses)
+        for (let r = 0; r < 3; r++) {
+          const y0 = Y + Math.round((r * H) / 3);
+          const bh = Math.max(2, Math.round(H / 3));
+          g.fillStyle = m.hi;
+          g.fillRect(X, y0, W, 1);
+          g.fillStyle = m.lo;
+          g.fillRect(X, y0 + bh - 1, W, 1);
+        }
+      }
+      // eaves cast shadow at top of wall under roof
+      if (mask & 1) {
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.28)));
+        if (v === 1 && m.acc && s < 0.55) {
+          // crisp snow/icicle tips under eaves
+          g.fillStyle = m.acc;
+          g.fillRect(X + Math.round(W * 0.25), Y + 1, Math.max(1, u1), Math.max(2, h1 * 2));
+          g.fillRect(X + Math.round(W * 0.72), Y + 1, Math.max(1, u1), Math.max(2, h1 * 2));
+        }
+      }
+      // heavy corner timber posts on exposed left/right ends
+      if (mask & 8) {
+        const pw = Math.max(2, Math.round(W * 0.28));
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y, pw, H);
+        g.fillStyle = m.hi;
+        g.fillRect(X + pw - 1, Y, 1, H);
+      }
+      if (mask & 2) {
+        const pw = Math.max(2, Math.round(W * 0.28));
+        g.fillStyle = m.lo;
+        g.fillRect(X + W - pw, Y, pw, H);
+        g.fillStyle = m.hi;
+        g.fillRect(X + W - pw, Y, 1, H);
+      }
+      return !o.plain && (o.ch === '═' || o.ch === '║' || o.ch === '▀');
+    }
+
+    case 'window': {
+      // framed 4-pane window with wooden mullions, sill & interior warm/sky reflection
+      const fw = Math.max(1, Math.round(W * 0.14));
+      const fh = Math.max(2, Math.round(H * 0.12));
+      const gx = X + fw;
+      const gy = Y + fh;
+      const gw = Math.max(3, W - fw * 2);
+      const gh = Math.max(4, H - fh * 2 - 1);
+      // outer shadow + wooden surround frame
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y, W, H);
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y + fh, W, gh + fh);
+      // glass panes
+      g.fillStyle = m.acc ?? m.hi;
+      g.fillRect(gx, gy, gw, gh);
+      // subtle pane shading on bottom-right pane + sky glint on top-left
+      if (!v) {
+        g.fillStyle = m.lo;
+        g.fillRect(gx, gy + Math.floor(gh / 2), gw, Math.ceil(gh / 2));
+      }
+      // cross mullions
+      g.fillStyle = m.lo;
+      g.fillRect(gx + Math.floor(gw / 2), gy, 1, gh);
+      g.fillRect(gx, gy + Math.floor(gh / 2), gw, 1);
+      // prominent timber window sill at bottom
+      g.fillStyle = m.hi;
+      g.fillRect(X, Math.min(Y + H - 2, gy + gh), W, Math.max(1, fh));
+      return !o.plain && o.ch === '▦';
+    }
+
+    case 'door': {
+      const open = v === 1;
+      const jw = Math.max(1, Math.round(W * 0.16));
+      const lintel = Math.max(2, Math.round(H * 0.14));
+      // door frame jambs + header lintel
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y, W, H);
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y, W, lintel);
+      g.fillRect(X, Y, jw, H - 1);
+      g.fillRect(X + W - jw, Y, jw, H - 1);
+      const ix = X + jw;
+      const iy = Y + lintel;
+      const iw = Math.max(2, W - jw * 2);
+      const ih = Math.max(3, H - lintel - 2);
+      if (open) {
+        // warm golden room interior + swung inner door leaf on left
+        g.fillStyle = m.acc ?? m.hi;
+        g.fillRect(ix, iy, iw, ih);
+        g.fillStyle = m.lo;
+        g.fillRect(ix, iy, Math.max(2, Math.round(iw * 0.34)), ih);
+      } else {
+        // paneled wood door leaf + recessed upper/lower panels + brass latch
+        g.fillStyle = m.hi;
+        g.fillRect(ix, iy, iw, ih);
+        g.fillStyle = m.lo;
+        const pw = Math.max(1, iw - 2);
+        const pH = Math.max(2, Math.round(ih * 0.3));
+        g.fillRect(ix + 1, iy + 1, pw, pH);
+        g.fillRect(ix + 1, iy + Math.round(ih * 0.56), pw, pH);
+        if (m.acc) {
+          g.fillStyle = m.acc;
+          g.fillRect(ix + Math.max(1, iw - 2), iy + Math.round(ih * 0.48), Math.max(1, u1), Math.max(1, h1));
+        }
+      }
+      // threshold sill
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y + H - 2, W, 1);
+      return !o.plain && (o.ch === '▮' || o.ch === '▯');
+    }
+
+    case 'cliff': {
+      // stratified sedimentary rock ledges + vertical fissures + exposed top brow highlight
+      for (let r = 0; r < 3; r++) {
+        const y0 = Y + Math.round((r * H) / 3);
+        const bh = Math.max(2, Math.round(H / 3));
+        g.fillStyle = m.lo;
+        g.fillRect(X, y0 + bh - 1, W, 1);
+        const cut = Math.round(((s * (r + 3) * 19) % 1) * Math.max(1, W - 2));
+        g.fillRect(X + cut, y0, 1, bh);
+        if ((r + Math.floor(s * 7)) % 2 === 0 && m.acc) {
+          g.fillStyle = m.acc;
+          g.fillRect(X + Math.round(W * 0.15), y0 + 1, Math.max(2, Math.round(W * 0.45)), 1);
+        }
+      }
+      if (mask & 1) {
+        g.fillStyle = v === 1 && m.acc ? m.acc : m.hi;
+        g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.2)));
+      }
+      return !o.plain && (o.ch === '▔' || o.ch === '▀');
+    }
+
+    case 'mwall': {
+      // rough-hewn cavern masonry + occasional ore glint
+      for (let r = 0; r < 2; r++) {
+        const y0 = Y + Math.round((r * H) / 2);
+        const bh = Math.max(2, Math.round(H / 2));
+        const cut = r === 0 ? Math.round(W * (0.3 + s * 0.4)) : Math.round(W * (0.65 - s * 0.3));
+        g.fillStyle = m.hi;
+        g.fillRect(X + 1, y0 + 1, Math.max(2, W - 2), 1);
+        g.fillStyle = m.lo;
+        g.fillRect(X, y0 + bh - 1, W, 1);
+        g.fillRect(X + cut, y0, 1, bh);
+      }
+      if (m.acc) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + Math.round(W * 0.55), Y + Math.round(H * 0.32), Math.max(1, u1), Math.max(1, h1));
+      }
+      return false;
+    }
+
+    case 'floor': {
+      // 2 smooth hardwood plank lanes per cell with staggered plank end joints
+      for (let r = 0; r < 2; r++) {
+        const y0 = Y + Math.round((r * H) / 2);
+        const bh = Math.max(2, Math.round(H / 2));
+        g.fillStyle = m.hi;
+        g.fillRect(X, y0 + 1, Math.max(2, W - 1), 1);
+        g.fillStyle = m.lo;
+        g.fillRect(X, y0 + bh - 1, W, 1);
+        if (((v + r) & 3) === 0) {
+          g.fillRect(X + Math.round(W * 0.45), y0, 1, bh);
+        }
+      }
+      return !o.plain && o.ch === '─';
+    }
+
+    case 'rug': {
+      // woven tapestry inner motif + crisp 1px border trim along exposed edges
+      g.fillStyle = m.hi;
+      g.fillRect(X + Math.round(W * 0.25), Y + Math.round(H * 0.28), Math.max(1, u1), Math.max(1, h1));
+      g.fillRect(X + Math.round(W * 0.68), Y + Math.round(H * 0.64), Math.max(1, u1), Math.max(1, h1));
+      if (mask) {
+        g.fillStyle = m.acc ?? m.hi;
+        if (mask & 1) g.fillRect(X, Y + 1, W, 1);
+        if (mask & 4) g.fillRect(X, Y + H - 2, W, 1);
+        if (mask & 8) g.fillRect(X + 1, Y, 1, H);
+        if (mask & 2) g.fillRect(X + W - 2, Y, 1, H);
+        g.fillStyle = m.lo;
+        if (mask & 1) g.fillRect(X, Y, W, 1);
+        if (mask & 4) g.fillRect(X, Y + H - 1, W, 1);
+      }
+      return !o.plain && o.ch === '░';
+    }
+
+    case 'mfloor': {
+      // cracked stone floor + subtle pebbles
+      if (v === 0) {
+        g.fillStyle = m.lo;
+        g.fillRect(X + Math.round(W * 0.2), Y + Math.round(H * 0.5), Math.max(2, Math.round(W * 0.5)), 1);
+        g.fillRect(X + Math.round(W * 0.5), Y + Math.round(H * 0.25), 1, Math.max(2, Math.round(H * 0.4)));
+      } else if (s < 0.4) {
+        g.fillStyle = m.hi;
+        g.fillRect(X + Math.round(W * 0.6), Y + Math.round(H * 0.65), Math.max(1, u1), Math.max(1, h1));
+      }
+      return false;
+    }
+
+    case 'iwall': {
+      // wainscoted indoor paneling with mid molding rail
+      const railY = Y + Math.round(H * 0.45);
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y + 1, W, 1);
+      g.fillRect(X, railY, W, Math.max(1, h1));
+      g.fillStyle = m.lo;
+      g.fillRect(X, railY + Math.max(1, h1), W, 1);
+      // lower wainscot vertical ribs
+      const rbh = Math.max(2, Y + H - railY - 2);
+      g.fillRect(X + Math.round(W * 0.32), railY + 2, 1, rbh);
+      g.fillRect(X + Math.round(W * 0.72), railY + 2, 1, rbh);
+      if (mask & 4) {
+        g.fillStyle = m.hi;
+        g.fillRect(X, Y + H - Math.max(2, Math.round(H * 0.16)), W, Math.max(2, Math.round(H * 0.16)));
+      }
+      return !o.plain && (o.ch === '▄' || o.ch === '▓' || o.ch === '▒');
+    }
+
+    case 'bed': {
+      const head = (mask & 8) !== 0;
+      // wooden frame outer trim
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.14)));
+      g.fillRect(X, Y + H - Math.max(2, Math.round(H * 0.14)), W, Math.max(2, Math.round(H * 0.14)));
+      const innerY = Y + Math.max(2, Math.round(H * 0.14));
+      const innerH = Math.max(4, H - Math.max(4, Math.round(H * 0.28)));
+      if (head && m.acc) {
+        // crisp white pillow bolster + headboard wood rail
+        g.fillStyle = m.lo;
+        g.fillRect(X, Y, Math.max(2, Math.round(W * 0.22)), H);
+        g.fillStyle = m.acc;
+        g.fillRect(X + Math.max(2, Math.round(W * 0.26)), innerY + 1, Math.max(3, Math.round(W * 0.56)), Math.max(3, innerH - 2));
+        g.fillStyle = m.hi;
+        g.fillRect(X + Math.max(2, Math.round(W * 0.84)), innerY, Math.max(1, W - Math.round(W * 0.84)), innerH);
+      } else {
+        // quilt blanket fold & stitched squares
+        g.fillStyle = m.hi;
+        g.fillRect(X + 1, innerY + 1, Math.max(2, W - 2), Math.max(1, Math.round(innerH * 0.22)));
+        g.fillStyle = m.acc ?? m.hi;
+        g.fillRect(X + Math.round(W * 0.25), innerY + Math.round(innerH * 0.45), Math.max(2, u1 * 2), Math.max(2, h1 * 2));
+      }
+      return !o.plain && (o.ch === '▀' || o.ch === '░' || o.ch === '▒');
+    }
+
+    case 'table':
+    case 'counter': {
+      // chamfered wooden slab + dark underside shadow
+      const topH = Math.max(3, Math.round(H * 0.56));
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y + 1, W, topH);
+      if (m.acc) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + 1, Y + 1, Math.max(2, W - 2), 1);
+      }
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y + 1 + topH, W, Math.max(2, Math.round(H * 0.22)));
+      return !o.plain && o.ch === '▀';
+    }
+
+    case 'fireplace': {
+      // stone masonry surround + glowing ember bed
+      const jamb = Math.max(2, Math.round(W * 0.18));
+      g.fillStyle = m.hi;
+      g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.16)));
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y, jamb, H);
+      g.fillRect(X + W - jamb, Y, jamb, H);
+      if (m.acc) {
+        g.fillStyle = m.acc;
+        g.fillRect(X + jamb, Y + H - Math.max(2, Math.round(H * 0.18)), Math.max(2, W - jamb * 2), Math.max(2, Math.round(H * 0.14)));
+      }
+      return false;
+    }
+
+    case 'bookcase':
+    case 'shelf': {
+      // 3 crisp wooden shelf tiers + vertical book spines or jars
+      g.fillStyle = m.lo;
+      g.fillRect(X, Y, W, H);
+      for (let r = 0; r < 3; r++) {
+        const sy = Y + Math.round(((r + 1) * H) / 3) - 2;
+        const sh = Math.max(2, Math.round(H / 3) - 2);
+        const top = Math.max(Y, sy - sh);
+        if (m.kind === 'bookcase') {
+          for (let b = 0; b < 3; b++) {
+            const bx = X + 1 + Math.round((b * (W - 2)) / 3);
+            const bw = Math.max(1, Math.round((W - 2) / 3) - 1);
+            g.fillStyle = ((b + r + v) & 1) ? (m.acc ?? m.hi) : m.hi;
+            g.fillRect(bx, top + 1, bw, Math.max(2, sh - 1));
+          }
+        } else if (m.acc) {
+          g.fillStyle = m.acc;
+          g.fillRect(X + Math.round(W * 0.22), top + 2, Math.max(2, u1 * 2), Math.max(2, sh - 2));
+          g.fillRect(X + Math.round(W * 0.64), top + 3, Math.max(2, u1), Math.max(2, sh - 3));
+        }
+        g.fillStyle = m.hi;
+        g.fillRect(X, sy, W, 2);
+      }
+      return !o.plain && (o.ch === '▤' || o.ch === '▌' || o.ch === '▐');
+    }
+
+    case 'bath': {
+      // ceramic tile coping rim around exposed edges + soft aqua ripples
+      const rimX = Math.max(2, u1 * 2);
+      const rimY = Math.max(2, Math.round(H * 0.16));
+      if (mask && m.acc) {
+        g.fillStyle = m.acc;
+        if (mask & 1) g.fillRect(X, Y, W, rimY);
+        if (mask & 4) g.fillRect(X, Y + H - rimY, W, rimY);
+        if (mask & 8) g.fillRect(X, Y, rimX, H);
+        if (mask & 2) g.fillRect(X + W - rimX, Y, rimX, H);
+      }
+      const rx = X + Math.round(((v & 3) / 4) * Math.max(1, W * 0.35));
+      g.fillStyle = m.hi;
+      g.fillRect(rx + 2, Y + Math.round(H * 0.52), Math.max(2, Math.round(W * 0.42)), 1);
+      return false;
+    }
+
+    case 'dock_step': {
+      // stone doorstep threshold apron in front of doorway
+      const sw = Math.max(4, Math.round(W * 0.84));
+      const sx = X + Math.floor((W - sw) / 2);
+      const sh = Math.max(3, Math.round(H * 0.44));
+      g.fillStyle = m.lo;
+      g.fillRect(sx, Y, sw, sh + 1);
+      g.fillStyle = m.acc ?? m.hi;
+      g.fillRect(sx + 1, Y, Math.max(2, sw - 2), sh - 1);
+      g.fillStyle = m.hi;
+      g.fillRect(sx + 1, Y, Math.max(2, sw - 2), 1);
+      return false;
+    }
+  }
+  return false;
+}
+
 /** Cheap change detection so we only repaint when something visible changed. */
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.meter ? 'm' : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.meter ? 'm' : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
   return s;
 }

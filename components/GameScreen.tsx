@@ -596,6 +596,7 @@ export default function GameScreen() {
       } catch {
         // storage unavailable; the choice still applies this session
       }
+      screen.onRender?.();
     };
     let crtOn = false;
     try {
@@ -660,9 +661,16 @@ export default function GameScreen() {
       setCompact(isCompact(screen.w));
     }
 
+    let lastDpr = 0;
+    const getRenderDpr = () => {
+      const base = window.devicePixelRatio || 1;
+      return screen.hires ? Math.min(3, Math.max(2, base)) : base;
+    };
+
     function sizeCanvas(w: number, h: number) {
       if (!canvas || !ctx || !stage) return;
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = getRenderDpr();
+      lastDpr = dpr;
       canvas.width = Math.ceil(w * cw * dpr);
       canvas.height = Math.ceil(h * ch * dpr);
       const fit = Math.min(1, stage.clientWidth / (w * cw), stage.clientHeight / (h * ch));
@@ -702,7 +710,8 @@ export default function GameScreen() {
         canvas.style.transform = sx || sy ? `translate(${sx}px, ${sy}px)` : '';
         shaking = !!(sx || sy);
       }
-      if (!prevBuf || prevBuf.length !== screen.h || (prevBuf[0] && prevBuf[0].length !== screen.w)) {
+      const dpr = getRenderDpr();
+      if (!prevBuf || prevBuf.length !== screen.h || (prevBuf[0] && prevBuf[0].length !== screen.w) || dpr !== lastDpr) {
         sizeCanvas(screen.w, screen.h);
         prevBuf = screen.buf.map((row) => [...row]);
         prevFrame = null;
@@ -717,7 +726,7 @@ export default function GameScreen() {
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
       lastSig = sig;
-      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, dpr: window.devicePixelRatio || 1, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
+      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, dpr, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
       prevFrame = frame;
     };
 

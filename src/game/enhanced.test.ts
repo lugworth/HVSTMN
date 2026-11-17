@@ -1602,3 +1602,83 @@ describe('visual polish pass', () => {
   });
 });
 
+describe('high-resolution world micro-detail', () => {
+  test('desktop 18px fonts unlock 3x3 contour patterns even at dpr=1 while keeping 16px at 2x2', () => {
+    assert.equal(hiresLevel(18, 1), 3);
+    assert.equal(hiresLevel(16, 1), 2);
+  });
+
+  test('micro-detail colors stay in Isotope ramps across modes and stay pure grey in mono on non-accents', () => {
+    const allowed = new Set(isotopeRamps().map((c) => rgbToHex(c)));
+    const isGrey = (h: string) => { const [r, g, b] = hexToRgb(h); return r === g && g === b; };
+    const s = scene({ palette: 'mono', season: 0 });
+    for (let x = 10; x < 16; x++) {
+      s.put(x, 6, '=', '09', '00');
+      s.tag(x, 6, { t: 'field', wx: x, wy: 6, k: x % 2 ? 'soil:wet' : 'soil' });
+      s.put(x, 8, '.', '04', '00');
+      s.tag(x, 8, { t: 'path', wx: x, wy: 8 });
+      s.put(x, 10, '=', '09', '00');
+      s.tag(x, 10, { t: 'bridge', wx: x, wy: 10 });
+    }
+    for (const mode of ['mono', 'duotone', 'isotope'] as const) {
+      const frame = computeFrame({ ...s, ctx: { ...s.ctx!, palette: mode } }, 0);
+      assert.equal(frame[6][10].micro?.kind, 'soil');
+      assert.equal(frame[6][11].micro?.kind, 'soil_wet');
+      assert.equal(frame[8][10].micro?.kind, 'path');
+      assert.equal(frame[10][10].micro?.kind, 'bridge');
+      for (const o of frame.flat()) {
+        if (!o.micro) continue;
+        assert.ok(allowed.has(o.micro.hi), `hi in ramp: ${o.micro.hi}`);
+        assert.ok(allowed.has(o.micro.lo), `lo in ramp: ${o.micro.lo}`);
+        if (o.micro.acc) assert.ok(allowed.has(o.micro.acc), `acc in ramp: ${o.micro.acc}`);
+        if (mode === 'mono' && !o.accent) {
+          assert.ok(isGrey(o.micro.hi) && isGrey(o.micro.lo), 'non-accent mono micro stays pure grey');
+          if (o.micro.acc) assert.ok(isGrey(o.micro.acc), 'non-accent mono acc stays pure grey');
+        }
+      }
+    }
+  });
+
+  test('trees omit micro-detail and retain reverted /\\/\\ contour crowns', () => {
+    const s = scene({ palette: 'isotope' });
+    for (let x = 10; x < 14; x++) {
+      s.put(x, 5, 'T', '0B', '00', true);
+      s.tag(x, 5, { t: 'tree', wx: x, wy: 5 });
+    }
+    const out = computeFrame(s, 0);
+    assert.equal(out[5][10].micro, undefined);
+    const tree = out[5][10];
+    assert.equal(subPattern({ ...tree, glow: undefined, token: undefined }, 16, 2), '/\\/\\');
+  });
+
+  test('drawFrame paints rich sub-cell geometry when hires=true and omits it when hires=false', () => {
+    const s = scene({ palette: 'isotope' });
+    for (let x = 10; x < 14; x++) {
+      s.put(x, 8, '.', '04', '00');
+      s.tag(x, 8, { t: 'path', wx: x, wy: 8 });
+      s.put(x, 10, '=', '09', '00');
+      s.tag(x, 10, { t: 'bridge', wx: x, wy: 10 });
+    }
+    const frame = computeFrame(s, 0);
+    const countRects = (hires: boolean) => {
+      let n = 0;
+      const canvas = new Proxy({ fillRect: () => { n++; } }, {
+        get: (t, k) => (k in t ? t[k as keyof typeof t] : () => {}),
+      }) as unknown as CanvasRenderingContext2D;
+      drawFrame(canvas, frame, { cw: 11, ch: 22, fontPx: 18, font: 'monospace', dpr: 2, hires });
+      return n;
+    };
+    const hi = countRects(true);
+    const lo = countRects(false);
+    assert.ok(hi > lo + 80, `expected sub-cell rects when hires=true (${hi} vs ${lo})`);
+  });
+
+  test('micro changes invalidate both frameSignature and frameDirtyRect', () => {
+    const a: OutCell[][] = [[{ ch: ' ', fg: '#ffffff', bg: '#202020', bold: false, micro: { kind: 'grass', seed: 0.2, hi: '#404040', lo: '#101010' } }]];
+    const b: OutCell[][] = [[{ ch: ' ', fg: '#ffffff', bg: '#202020', bold: false, micro: { kind: 'path', seed: 0.2, hi: '#404040', lo: '#101010' } }]];
+    assert.notEqual(frameSignature(a), frameSignature(b));
+    assert.deepEqual(frameDirtyRect(a, b), { x0: 0, y0: 0, x1: 1, y1: 1 });
+  });
+});
+
+
