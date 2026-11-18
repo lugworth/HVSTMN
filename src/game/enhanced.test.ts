@@ -1,5 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { contourPattern } from './contour';
 import { Screen, RenderCtx } from './screen';
 import { grey, windowLit, blueNoise, toneFor, shakeOffset, TIER_COLOURS, edgeGlyph, SPRITE_KEEP, spritePattern, rowAlpha, hiresLevel, effectiveHiresLevel, subAlpha, subPattern, HIRES_MIN_FONT, resetTrail, computeFrame, drawFrame, frameSignature, frameDirtyRect, skyFor, mix, hexToRgb, hash, lightning, toIsotope, isotopeRamps, rgbToHex, neon, hsv, lightReach, cropFamily, themeFor, THEMES, type OutCell } from './enhanced';
 
@@ -68,6 +69,28 @@ describe('skyFor', () => {
 });
 
 describe('computeFrame', () => {
+  test('open ground has sparse contour marks and landmark textures keep their shapes', () => {
+    const sample = Array.from({ length: 24 * 20 }, (_, i) => contourPattern({ x: i % 24, y: Math.floor(i / 24), kind: 'ground' }, 1));
+    const density = sample.filter((ch) => ch !== ' ').length / sample.length;
+    assert.ok(density > 0.12 && density < 0.22, `expected sparse open-ground contours, got ${density}`);
+    const row = (kind: 'roof' | 'water' | 'sand') => Array.from({ length: 12 }, (_, x) => contourPattern({ x, y: 1, kind }, 1)).join('');
+    assert.equal(row('roof'), ' )   (     )');
+    assert.equal(row('sand'), ' .          ');
+    assert.equal(row('water'), '   ~~~      ');
+  });
+
+  test('path kerbs read at noon and dusk while the path center stays calm', () => {
+    for (const minutes of [12 * 60, 18 * 60]) {
+      const s = scene({ minutes });
+      for (let y = 9; y <= 11; y++) for (let x = 9; x <= 11; x++) s.tag(x, y, { t: 'path', wx: x, wy: y });
+      const out = computeFrame(s, 0);
+      const edge = out[10][9];
+      assert.equal(edge.foam, 8, `path should be edged along the adjacent grass at ${minutes}`);
+      assert.ok(edge.foamCol && lum(edge.foamCol) - lum(edge.bg) > 60, `path edge should stand out at ${minutes}`);
+      assert.equal(out[10][10].foam, undefined, `path center should stay calm at ${minutes}`);
+    }
+  });
+
   test('dirty rectangles bound changed cells with glyph overhang', () => {
     const cell = (ch: string) => ({ ch, fg: '#ffffff', bg: '#000000', bold: false });
     const a = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => cell('a')));

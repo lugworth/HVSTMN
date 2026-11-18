@@ -2013,7 +2013,7 @@ function shoreFoam(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['v
       if (!m) continue;
       const o = out[y][x];
       o.foam = m;
-      o.foamCol = mix(o.bg, '#ffffff', 0.2);
+      o.foamCol = mix(o.bg, '#ffffff', 0.32);
     }
   }
 }

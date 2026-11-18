@@ -19,6 +19,11 @@ function mark(x: number, y: number, kind: ContourTexture['kind']): string {
   const b = x * 0.09 + y * 0.14;
   const field = (y + Math.sin(a) * (roof ? 0.9 : 2.4) + Math.sin(b) * 1.7) / (roof ? 1.4 : 2.5);
   if (Math.abs(field - Math.round(field)) > 0.13) return ' ';
+  if (kind === 'ground') {
+    // Leave gaps in meadow and field lines that stay in place when the camera moves.
+    const grain = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
+    if (grain - Math.floor(grain) < 0.35) return ' ';
+  }
   const slope = Math.cos(a) * (roof ? 0.47 : 0.46) + Math.cos(b) * 0.15;
   return Math.abs(slope) < 0.16 ? '-' : slope > 0 ? ')' : '(';
 }
