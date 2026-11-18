@@ -6441,20 +6441,18 @@ export class Game {
     if (compact) {
       s.put(0, H - 4, '-'.repeat(W), '01');
       this.draw_status(H - 4, W);
-      if (this.show_panel) {
-        const rows = 16 + (this.chickens ? 1 : 0) + (this.animals.length ? 1 : 0);
-        s.box(W - 29, 1, 29, Math.min(H - 4, rows), '0C', '00', 'Status');
-        this.draw_side(W - 27, 2, 25, false);
-      }
+      if (this.show_panel) this.draw_compact_almanac();
       this.draw_msgs(H - 3);
       return;
     }
-    for (let y = mapY; y < dividerY; y++) {
-      s.put(vw, y, '|', '01');
-    }
     s.put(0, dividerY, '-'.repeat(W), '01');
-    if (contour) this.draw_contour_side(vw + 3, 1, side - 5);
-    else this.draw_side(vw + 2, 2, side - 2);
+    if (contour) {
+      this.draw_almanac_frame(vw, 0, side + 1, dividerY);
+      this.draw_contour_side(vw + 3, 1, side - 5);
+    } else {
+      for (let y = mapY; y < dividerY; y++) s.put(vw, y, '|', '01');
+      this.draw_side(vw + 2, 2, side - 2);
+    }
     this.draw_msgs(dividerY + 1);
   }
 
@@ -6524,7 +6522,8 @@ export class Game {
     const end = s.ctx?.divY ?? s.h - 2;
     const compact = s.h < 30;
     const gap = s.h >= 38 ? 2 : 1;
-    const clip = (text: string, width = w) => text.length > width ? text.slice(0, Math.max(0, width - 1)) + '…' : text;
+    const clip = (text: string, width = w) =>
+      text.length > width && width >= 3 ? text.slice(0, width - 3) + '...' : text.slice(0, width);
     const line = (row: number, text: string, col = '05', bold = false) => {
       if (row < end) s.put(x, row, clip(text), col, '00', bold);
     };
@@ -6542,7 +6541,7 @@ export class Game {
     const rail = (row: number) => {
       if (row >= end) return;
       for (let i = 0; i < w; i++) {
-        s.put(x + i, row, fencePost(i, w) ? '╪' : '═', '01');
+        s.put(x + i, row, fencePost(i, w) ? '+' : '-', '01');
         s.tag(x + i, row, { t: 'ui', k: 'hud:fence' });
       }
     };
@@ -6551,7 +6550,7 @@ export class Game {
       pair(row, name, value, col);
       const from = name.length + 1;
       const to = w - Math.min(value.length, Math.max(1, w - name.length - 1)) - 1;
-      if (to - from >= 3) s.put(x + from, row, '·'.repeat(to - from), '01');
+      if (to - from >= 3) s.put(x + from, row, '.'.repeat(to - from), '01');
     };
 
     const titleH = compact ? 1 : 2;
@@ -6559,24 +6558,21 @@ export class Game {
     line(y + titleH, `${this.name} of ${this.farm} Farm`, '04');
     rail(y + titleH + 1);
     y += titleH + 1 + gap;
-    // the season glyph (blossom, clover, leaf, snowflake) is drawn by the renderer
-    if (y < end) {
-      s.put(x + 2, y, clip(`${this.season_name.toUpperCase()} / YEAR ${this.year}`, w - 2), '0C', '00', true);
-      s.ctx?.icons.push({ x, y, icon: 'season' });
-    }
-    y++;
+    line(y++, `${this.season_name.toUpperCase()} / YEAR ${this.year}`, '0C', true);
     const dayH = compact ? 2 : 3;
-    label(y, String(this.day).padStart(2, '0'), compact ? 1.8 : 2.6, 7, dayH);
-    s.put(x + 8, y, WEEKDAYS[this.weekday].toUpperCase(), '07', '00', true);
-    s.put(x + 8, y + 1, fmt_time(this.minutes).replace(/(AM|PM)$/, ' $1'), '05');
+    if (y < end) {
+      label(y, String(this.day).padStart(2, '0'), compact ? 1.8 : 2.6, 7, dayH);
+      s.put(x + 8, y, WEEKDAYS[this.weekday].toUpperCase(), '07', '00', true);
+      if (y + 1 < end) s.put(x + 8, y + 1, fmt_time(this.minutes).replace(/(AM|PM)$/, ' $1'), '05');
+    }
     y += dayH;
-    line(y, `  ${this.weather.toUpperCase()}`, WEATHER_COL[this.weather] || '09');
-    s.ctx?.icons.push({ x, y, icon: 'weather' });
+    const weatherMark = this.weather === 'Sunny' ? '*' : this.weather === 'Rain' ? '~' : this.weather === 'Snow' ? '.' : '!';
+    line(y, `${weatherMark} ${this.weather.toUpperCase()}`, WEATHER_COL[this.weather] || '09');
     y += 1 + gap;
 
     const tool = this.tool;
     const preview = this.action_preview();
-    const facing = this.facing_action();
+    const facing = this.facing_action().summary.replace(' · ', ' / ');
     const cost = preview.cost > 0 ? `${w >= 20 ? 'COST ' : ''}-${preview.cost}st${preview.faint ? '!' : ''}` : '';
     pair(y++, 'EQUIPPED', cost, preview.faint ? '08' : '04');
     const idx = TOOLS.includes(tool) ? `[${TOOLS.indexOf(tool) + 1}] ` : '';
@@ -6615,11 +6611,7 @@ export class Game {
     const fraction = clamp(this.stamina / this.max_stamina, 0, 1);
     const staminaCol = fraction > 0.5 ? '0B' : fraction > 0.2 ? '09' : '08';
     pair(y++, 'STAMINA', `${this.stamina}/${this.max_stamina}`, staminaCol);
-    const filled = Math.round(fraction * w);
-    for (let i = 0; i < w; i++) {
-      s.put(x + i, y, '─', i < filled ? staminaCol : '01');
-      s.tag(x + i, y, { t: 'ui', k: i < filled ? 'hud:meter' : 'hud:meter:empty' });
-    }
+    if (y < end) this.draw_almanac_meter(x, y, w, fraction, staminaCol);
     y++;
     pair(y++, 'FATIGUE', `${this.fatigue}/100`, this.fatigue < 50 ? '04' : this.fatigue < 80 ? '09' : '08');
     y += gap;
@@ -6629,31 +6621,31 @@ export class Game {
     const basket = getBasketTotal(this.basket);
     const held = this.held === 'Basket' ? `Basket ${basket}/${BASKET_CAPACITY}`
       : this.held ? `${this.held} x${this.inv[this.held] || 0}`
-      : basket ? `Basket ${basket}/${BASKET_CAPACITY}` : '—';
+      : basket ? `Basket ${basket}/${BASKET_CAPACITY}` : '-';
     ledger(y++, 'HELD', held, this.held ? '0A' : basket ? '09' : '04');
     y += gap;
     if (this.upgrading) line(y++, `FORGE  ${this.upgrading[0]}`, '09');
     if (this.riding_horse) line(y++, 'RIDING HORSE / 2x', '09');
-    if (this.chickens) ledger(y++, 'COOP', `${this.chickens} hens / ${this.eggs} eggs`);
+    if (this.chickens) ledger(y++, 'COOP', `${this.chickens} hens/${this.eggs} eggs`);
     if (this.animals.length) {
       const hungry = this.animals.filter((animal) => !animal.fed).length;
       ledger(y++, 'BARN', hungry ? `${hungry} hungry` : `${this.animals.length} fed`, hungry ? '08' : '04');
     }
     if (this.power_berries || this.has_mystic_berry) ledger(y++, 'BERRIES', `${this.power_berries}${this.has_mystic_berry ? ' + Mystic' : ''}`);
-    if (y + 1 < end) {
-      if (facing.summary.length <= w - 7) {
-        pair(y++, 'FACING', facing.summary, '0E');
+    if (y < end) {
+      if (facing.length <= w - 7) {
+        pair(y++, 'FACING', facing, '0E');
       } else if (y + 3 < end) {
         line(y++, 'FACING', '04');
-        const wrapped = wrapLines([facing.summary], w);
+        const wrapped = wrapLines([facing], w);
         for (let i = 0; i < Math.min(2, wrapped.length) && y + 1 < end; i++) {
           line(y++, wrapped[i], '0E');
         }
       } else {
-        pair(y++, 'FACING', facing.summary.replace(' stamina', 'st'), '0E');
+        pair(y++, 'FACING', facing.replace(' / ', ' ').replace(' stamina', 'st'), '0E');
       }
     }
-    const locFull = this.map.title + (this.map.indoor ? ' · Indoors' : '');
+    const locFull = this.map.title + (this.map.indoor ? ' / Indoors' : '');
     if (y + 1 < end) {
       if (locFull.length <= w) {
         line(end - 1, locFull, '04');
@@ -6663,6 +6655,100 @@ export class Game {
       } else {
         line(end - 1, locFull, '04');
       }
+    }
+  }
+
+  private draw_almanac_frame(x: number, top: number, w: number, bottom: number): void {
+    const s = this.scr;
+    const right = x + w - 1;
+    const rail = '+' + '-'.repeat(w - 2) + '+';
+    for (const y of [top, bottom]) {
+      s.put(x, y, rail, '01');
+      for (let cx = x; cx <= right; cx++) s.tag(cx, y, { t: 'ui', k: 'hud:fence' });
+    }
+    for (let y = top + 1; y < bottom; y++) {
+      for (const cx of [x, right]) {
+        s.put(cx, y, '|', '01');
+        s.tag(cx, y, { t: 'ui', k: 'hud:fence' });
+      }
+    }
+  }
+
+  private draw_almanac_meter(x: number, y: number, w: number, fraction: number, col: string): void {
+    const s = this.scr;
+    const filled = Math.round(fraction * (w - 2));
+    s.put(x, y, '[', '04');
+    s.put(x + 1, y, '#'.repeat(filled), col, '00', true);
+    s.put(x + 1 + filled, y, '.'.repeat(w - 2 - filled), '03');
+    s.put(x + w - 1, y, ']', '04');
+  }
+
+  /** Compact INFO almanac bounded above the message rail. */
+  private draw_compact_almanac(): void {
+    const s = this.scr;
+    const w = 32;
+    const x = s.w - w - 1;
+    const right = x + w - 1;
+    const limit = Math.min(s.h - 5, 19);
+    const blank = ' '.repeat(w - 2);
+    let row = 2;
+    const clear = () => s.put(x + 1, row, blank, '05');
+    const line = (label: string, value: string, color = '05') => {
+      if (row >= limit) return;
+      const labelEnd = x + 2 + label.length;
+      const start = Math.max(labelEnd + 1, right - value.length - 1);
+      clear();
+      s.put(x + 2, row, label, '04');
+      const dots = start - labelEnd - 2;
+      if (dots >= 2) s.put(labelEnd + 1, row, '.'.repeat(dots), '01');
+      s.put(start, row++, value.slice(0, right - start), color, '00', true);
+    };
+    line('Farmer', this.name, '07');
+    line('Farm', this.farm, '05');
+    const preview = this.action_preview();
+    line('Tool', `${this.tool}${preview.cost ? ` -${preview.cost}st${preview.faint ? '!' : ''}` : ''}`, preview.faint ? '08' : '07');
+    if (UPGRADABLE.includes(this.tool)) {
+      const level = this.levels[this.tool] || 0;
+      const exp = clamp(this.tool_exp[this.tool] || 0, 0, 100);
+      line(LEVELS[level], this.tool === 'Watering Can' ? `${exp}% ${this.water}/${CAN_CAP[level]}` : `${exp}%`, '0C');
+    } else if (this.tool.endsWith(' Seeds')) {
+      const crop = this.tool.slice(0, -6);
+      const inSeason = crop === 'Grass' || CROPS[crop]?.[0] === this.season_name;
+      line('Seeds', `${this.inv[this.tool] || 0} bags${inSeason ? '' : ' (off-season)'}`, inSeason ? '0B' : '08');
+    }
+    const facing = this.facing_action().summary.replace(' · ', ' / ').replace(' stamina', 'st');
+    if (facing.length <= w - 11) line('Facing', facing, '0E');
+    else {
+      clear();
+      s.put(x + 2, row++, 'Facing', '04');
+      for (const text of wrapLines([facing], w - 4).slice(0, 2)) {
+        clear();
+        s.put(x + 2, row++, text, '0E');
+      }
+    }
+    const basket = getBasketTotal(this.basket);
+    const held = this.held === 'Basket' ? `Basket ${basket}/${BASKET_CAPACITY}` : this.held ? `${this.held} x${this.inv[this.held] || 0}` : basket ? `Basket ${basket}/${BASKET_CAPACITY}` : '-';
+    line('Held', held, this.held ? '0A' : '04');
+    const fraction = clamp(this.stamina / this.max_stamina, 0, 1);
+    const staminaCol = fraction > 0.5 ? '0B' : fraction > 0.2 ? '09' : '08';
+    line('Stamina', `${this.stamina}/${this.max_stamina}`, staminaCol);
+    clear();
+    this.draw_almanac_meter(x + 2, row++, w - 4, fraction, staminaCol);
+    line('Fatigue', `${this.fatigue}/100`, '05');
+    line('Gold', `${this.gold}G`, '09');
+    const binValue = py_sum(Object.entries(this.bin).map(([item, qty]) => (ITEMS[item] ? ITEMS[item][0] : 0) * qty));
+    line('Bin', `${binValue}G`, binValue ? '09' : '04');
+    if (this.upgrading) line('Forge', this.upgrading[0], '09');
+    else if (this.riding_horse) line('Riding', 'Horse / 2x', '09');
+    if (this.power_berries || this.has_mystic_berry) line('Berries', `${this.power_berries}${this.has_mystic_berry ? ' + Mystic' : ''}`, '0C');
+    if (this.chickens) line('Coop', `${this.chickens} hens / ${this.eggs} eggs`, '05');
+    if (this.animals.length) {
+      const hungry = this.animals.filter((animal) => !animal.fed).length;
+      line('Barn', hungry ? `${hungry} hungry` : `${this.animals.length} fed`, hungry ? '08' : '05');
+    }
+    this.draw_almanac_frame(x, 1, w, row);
+    for (let y = 2; y < row; y++) {
+      for (let cx = x + 1; cx < right; cx++) s.tag(cx, y, { t: 'ui' });
     }
   }
 

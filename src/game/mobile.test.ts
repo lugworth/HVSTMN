@@ -206,8 +206,8 @@ describe('compact engine layout', () => {
     const { s, g } = farm(53, 28);
     await g.handle('p');
     g.render();
-    assert.ok(s.boxes.some((b) => b.x === 53 - 29 && b.w === 29), 'status box drawn');
-    assert.ok(s.buf.some((row) => row.map((c) => c[0]).join('').includes('Stam')));
+    assert.ok(s.buf.some((row) => row.map((c) => c[0]).join('').includes('Farmer')));
+    assert.ok(s.buf.some((row) => row.map((c) => c[0]).join('').includes('Facing')));
     await g.handle('p');
     g.render();
     assert.equal(s.boxes.length, 0);
