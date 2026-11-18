@@ -1642,3 +1642,134 @@ describe('the camera stays on the map', () => {
     assert.equal(g.scr.ctx.view.h, g.maps.house.h, 'the whole farmhouse is drawn');
   });
 });
+
+describe('market regulars at the stall (task 10)', () => {
+  /** Monday of the first week, Spring Y1: the market is on Spring 6. */
+  const monday = () => {
+    const g = fresh();
+    g.day = 1;
+    g.minutes = 8 * 60;
+    g.weather = 'Sunny';
+    return g;
+  };
+  /** The same game moved on to market morning, at the stall. */
+  const toSaturday = (g: any) => {
+    g.day = 6;
+    g.minutes = 9 * 60;
+    g.warp('town', STALL_SPOT[0], STALL_SPOT[1] + 1, [0, -1]);
+  };
+  /** Run fn with the ordinary villagers already gone by, so only the regulars shop. */
+  const steady = async (g: any, fn: () => Promise<void>) => {
+    const real = Math.random;
+    Math.random = () => 0.99;
+    g.stall.seen = Object.keys(NPCS);
+    try {
+      await fn();
+    } finally {
+      Math.random = real;
+    }
+  };
+
+  test("the week's lists are in Today's Plan from Monday, and on the market sign", async () => {
+    const g = monday();
+    const w = g.market_wants();
+    assert.equal(g.market_next(), g.absday(1, 0, 6), 'the next market is Saturday');
+    const today = g.today_lines().join('\n');
+    assert.match(today, new RegExp(`Saturday regulars: Doug wants ${w.pantry.join(' and ')}; Lillia wants an? ${w.flower}`));
+    const said: string[] = [];
+    g.say = async (text: string) => { said.push(text); };
+    g.warp('town', STALL_SPOT[0], STALL_SPOT[1] + 1, [0, -1]);
+    await g.interact();
+    assert.match(said.join(' '), new RegExp(`This Saturday: Doug wants ${w.pantry[0]}`));
+    g.day = 4;
+    assert.deepEqual(g.market_wants(), w, 'the list holds all week');
+    g.day = 13;
+    assert.notEqual(JSON.stringify(g.market_wants()), JSON.stringify(w), 'next week brings a new list (for these two weeks)');
+  });
+
+  test('the stocking menu shows the lists and marks the goods a regular wants', async () => {
+    const g = monday();
+    const w = g.market_wants();
+    toSaturday(g);
+    g.inv = { [w.pantry[0]]: 4, [w.flower]: 2, 'Small Fish': 3 };
+    const menus: { title: string; opts: string[]; info: any }[] = [];
+    g.menu = async (title: string, opts: string[], _sel = 0, info: any = null) => {
+      menus.push({ title, opts, info: typeof info === 'function' ? info(0) : info });
+      return menus.length === 1 ? opts.indexOf('Put out a good...') : null;
+    };
+    await g.interact();
+    assert.ok(menus[0].info.some((l: string) => l.startsWith('Regulars: Doug wants')), 'the lists in the stall menu');
+    const picker = menus[1].opts;
+    assert.ok(picker.find((o) => o.startsWith(w.pantry[0]))!.endsWith('Doug wants this'));
+    assert.ok(picker.find((o) => o.startsWith(w.flower))!.endsWith('Lillia wants this'));
+    assert.ok(!picker.find((o) => o.startsWith('Small Fish'))!.includes('wants this'));
+  });
+
+  test('Doug comes at noon and Lillia at 3 PM, and each buys from their list at a premium', async () => {
+    const g = monday();
+    const w = g.market_wants();
+    toSaturday(g);
+    g.inv = { [w.pantry[0]]: 5, [w.flower]: 3, 'Small Fish': 3 };
+    const [dougFriend, lilliaFriend] = [g.friend.Doug || 0, g.friend.Lillia || 0];
+    g.stall_open([[w.pantry[0], 5], [w.flower, 3], ['Small Fish', 3]]);
+    await steady(g, async () => {
+      await g.advance(3 * 60); // to noon
+      assert.deepEqual(g.stall.callers, ['Doug']);
+      assert.equal(g.stall.goods[0].sold, 3, 'three of a staple he wanted');
+      assert.equal(g.stall.goods[1].sold, 0, 'not the flower');
+      assert.equal(g.stall.gold, Math.round(ITEMS[w.pantry[0]][0] * 1.6) * 3);
+      await g.advance(3 * 60); // to 3 PM
+      assert.deepEqual(g.stall.callers, ['Doug', 'Lillia']);
+      assert.equal(g.stall.goods[1].sold, 2, 'two of the flower she hoped for');
+    });
+    assert.equal(g.friend.Doug, dougFriend + 3);
+    assert.equal(g.friend.Lillia, lilliaFriend + 3);
+    assert.ok(g.stall.log.some((l: string) => l.startsWith('Doug: "Just what')));
+    assert.ok(g.stall.log.some((l: string) => l.startsWith('Lillia: "You found one!')));
+  });
+
+  test('a regular whose list is not on the stall leaves without, and says what they came for', async () => {
+    const g = monday();
+    const w = g.market_wants();
+    toSaturday(g);
+    g.inv = { 'Small Fish': 3 };
+    g.stall_open([['Small Fish', 3]]);
+    await steady(g, async () => g.advance(6 * 60));
+    assert.equal(g.stall.goods[0].sold, 0);
+    assert.equal(g.stall.gold, 0);
+    assert.ok(g.stall.log.includes(`Doug came for ${w.pantry.join(' and ')} for the inn, and left without.`));
+    assert.ok(g.stall.log.some((l: string) => l.startsWith(`Lillia hoped for a`) && l.includes(w.flower)));
+  });
+
+  test('in winter Lillia stays home and Doug asks only for eggs', () => {
+    const g = monday();
+    g.season = 3;
+    g.day = 1;
+    const w = g.market_wants();
+    assert.deepEqual(w, { pantry: ['Egg'], flower: null });
+    assert.equal(g.market_clue(), 'Doug wants Egg.');
+  });
+
+  test('no clue for a Saturday that is a festival, since there is no market', () => {
+    const g = monday();
+    const real = g.fest_on.bind(g);
+    g.fest_on = (offset = 0) => (offset === 5 ? ['Spring Fair', 10, 18, ''] : real(offset));
+    assert.equal(g.market_clue(), null);
+    assert.ok(!/Saturday regulars/.test(g.today_lines().join('\n')));
+  });
+
+  test('an open stall from an older save (no callers yet) still gets its regulars', async () => {
+    const g = monday();
+    const w = g.market_wants();
+    toSaturday(g);
+    g.inv = { [w.pantry[0]]: 3 };
+    g.stall_open([[w.pantry[0], 3]]);
+    delete g.stall.callers;
+    g.save(2);
+    const b = new Game(new Screen(132, 30), true) as any;
+    b.load(2);
+    await steady(b, async () => b.advance(3 * 60));
+    assert.deepEqual(b.stall.callers, ['Doug']);
+    assert.equal(b.stall.goods[0].sold, 3);
+  });
+});

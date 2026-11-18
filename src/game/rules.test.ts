@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { ITEMS } from './constants';
 import {
   stallVisit,
+  marketWants,
+  marketVisit,
   innSceneFor,
   innCardsWin,
   canUpgradeAdvice,
@@ -36,7 +38,7 @@ import {
   rollStoneSkips,
   MAX_STONE_SKIPS,
 } from './rules';
-import { REGION_CATCH, UPGRADE, CAN_CAP } from './constants';
+import { REGION_CATCH, UPGRADE, CAN_CAP, CROPS, SEASONS, FORAGE, REGION_FORAGE, MARKET_FLOWERS, PANTRY_STAPLES, MARKET_SHOPPERS } from './constants';
 
 describe('Harvest Moon: Friends of Mineral Town Rules & Mechanics', () => {
   test('Power Berries scale max stamina from 150 to 250 (+10 each)', () => {
@@ -411,5 +413,63 @@ describe('Saturday stall shoppers (task 09)', () => {
     assert.deepEqual(stallVisit(onlyFish, tastes, price, markup, 0), { kind: 'pass', reason: 'hate' });
     assert.deepEqual(stallVisit([{ item: 'Egg', qty: 2, sold: 2 }], tastes, price, markup, 0), { kind: 'pass', reason: 'empty' });
     assert.deepEqual(stallVisit([], tastes, price, markup, 0), { kind: 'pass', reason: 'empty' });
+  });
+});
+
+describe('market regulars and their lists (task 10)', () => {
+  const inSeason = (season: number) => (i: string) => CROPS[i]?.[0] === SEASONS[season];
+  const wants = (day: number, season: number) => marketWants(day, season, PANTRY_STAPLES, inSeason(season), MARKET_FLOWERS, 2);
+
+  test('one list per market day: the same every time it is asked for, and it changes from week to week', () => {
+    assert.deepEqual(wants(5, 0), wants(5, 0));
+    const lists = new Set<string>();
+    for (let week = 0; week < 4; week++) lists.add(JSON.stringify(wants(5 + week * 7, 0)));
+    assert.ok(lists.size >= 3, `four spring Saturdays give varied lists (${lists.size})`);
+  });
+
+  test('Doug asks for two different staples: eggs, or crops in their own season', () => {
+    for (let season = 0; season < 3; season++) {
+      for (let day = 0; day < 400; day += 7) {
+        const { pantry } = wants(day, season);
+        assert.equal(pantry.length, 2);
+        assert.notEqual(pantry[0], pantry[1]);
+        for (const item of pantry) assert.ok(item === 'Egg' || CROPS[item][0] === SEASONS[season], `${item} in ${SEASONS[season]}`);
+      }
+    }
+    // nothing grows in winter, so eggs are all he can ask for
+    assert.deepEqual(wants(117, 3).pantry, ['Egg']);
+  });
+
+  test("Lillia's flower can always be had that season, and she wants none in winter", () => {
+    const grows = (flower: string, season: number) =>
+      CROPS[flower]?.[0] === SEASONS[season] ||
+      (FORAGE[SEASONS[season]] || []).includes(flower) ||
+      Object.values(REGION_FORAGE).some((r) => (r[SEASONS[season]] || []).includes(flower));
+    for (let season = 0; season < 3; season++) {
+      const seen = new Set<string>();
+      for (let day = 0; day < 400; day += 7) seen.add(wants(day, season).flower!);
+      assert.deepEqual([...seen].sort(), [...MARKET_FLOWERS[season]].sort(), `every ${SEASONS[season]} flower turns up`);
+      for (const f of seen) assert.ok(grows(f, season), `${f} grows or can be foraged in ${SEASONS[season]}`);
+    }
+    assert.equal(wants(117, 3).flower, null);
+  });
+
+  test('a regular buys only from the list, up to their limit of each, at their markup', () => {
+    const price = (item: string) => ({ Potato: 80, Egg: 50, Turnip: 60 })[item] ?? 0;
+    const goods = [
+      { item: 'Turnip', qty: 5, sold: 0 },
+      { item: 'Potato', qty: 5, sold: 1 },
+      { item: 'Egg', qty: 2, sold: 0 },
+    ];
+    const { markup, each } = MARKET_SHOPPERS.pantry;
+    assert.deepEqual(marketVisit(goods, ['Potato', 'Egg'], price, markup, each), [
+      { index: 1, qty: 3, gold: Math.round(80 * markup) * 3 },
+      { index: 2, qty: 2, gold: Math.round(50 * markup) * 2 },
+    ]);
+    goods[1].sold = 5;
+    goods[2].sold = 2;
+    assert.deepEqual(marketVisit(goods, ['Potato', 'Egg'], price, markup, each), [], 'sold out of everything on the list');
+    assert.deepEqual(marketVisit(goods, ['Cabbage'], price, markup, each), [], 'nothing on the list was put out');
+    assert.ok(markup > 1.5 && MARKET_SHOPPERS.flower.markup > markup, 'regulars pay more than any villager, Lillia most of all');
   });
 });

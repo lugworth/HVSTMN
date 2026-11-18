@@ -3479,5 +3479,19 @@ export const STALL_SPOT: [number, number] = [40, 16];
 export const STALL_CATEGORIES = ['crop', 'forage', 'fish', 'animal', 'food', 'dish'];
 /** What shoppers pay over the shipping price, by how much they like the good. */
 export const STALL_MARKUP = { love: 1.5, like: 1.25, neutral: 1.1 } as const;
+/**
+ * Task 10: two market regulars with a shopping list each week. Doug stocks the inn's pantry with
+ * plain staples; Lillia hunts for one unusual flower of the season. Their lists are known all
+ * week (Today's Plan, the market sign, the stocking menu), so filling the three slots is a choice
+ * between what they want and what sells to everyone else.
+ */
+export const MARKET_SHOPPERS = {
+  pantry: { name: 'Doug', hour: 12, each: 3, markup: 1.6, wants: 2 },
+  flower: { name: 'Lillia', hour: 15, each: 2, markup: 2 },
+} as const;
+/** What Doug may ask for: eggs any week, these crops in their own season. */
+export const PANTRY_STAPLES = ['Egg', 'Potato', 'Turnip', 'Cabbage', 'Onion', 'Corn', 'Tomato', 'Carrot', 'Sweet Potato', 'Spinach'];
+/** The unusual flower Lillia hunts for, by season (each one grows or can be foraged then). None in winter. */
+export const MARKET_FLOWERS: string[][] = [['Toy Flower', 'Moondrop Flower'], ['Pink Cat Flower', 'Edelweiss'], ['Magic Red Flower'], []];
 export const STALL_SIGN =
   'Saturday Market — On Saturdays this stall is yours. Put out up to three goods before noon; folk stop by on the hour until 5 PM and pay a little over the shipping price, more for the things they love.';
