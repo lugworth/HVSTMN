@@ -1894,3 +1894,34 @@ describe('companion planting mark (task 17)', () => {
     assert.equal(f[10][12].detail, undefined);
   });
 });
+
+describe('display font for HUD headings', () => {
+  /** The fonts drawFrame sets for each fillText call. */
+  const fontsUsed = (frame: OutCell[][], displayFont?: string) => {
+    const calls: { text: string; font: string }[] = [];
+    let font = '';
+    const canvas = new Proxy(
+      { fillText: (text: string) => { calls.push({ text, font }); } },
+      {
+        get: (t, k) => (k in t ? t[k as keyof typeof t] : () => {}),
+        set: (_t, k, v) => { if (k === 'font') font = v; return true; },
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    drawFrame(canvas, frame, { cw: 10, ch: 20, fontPx: 16, font: 'GridMono', displayFont, dpr: 1 });
+    return calls;
+  };
+  const frame: OutCell[][] = [[
+    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'HRVSTMN', scale: 1.45, w: 9, h: 2 } },
+    { ch: 'x', fg: '#ffffff', bg: '#000000', bold: false },
+  ]];
+
+  test('large headings use the display face; every other glyph stays in the grid font', () => {
+    const calls = fontsUsed(frame, 'DisplayFace');
+    assert.deepEqual(calls.find((c) => c.text === 'HRVSTMN'), { text: 'HRVSTMN', font: 'bold 23.2px DisplayFace' });
+    assert.equal(calls.find((c) => c.text === 'x')?.font, '16px GridMono');
+  });
+
+  test('without a display face the headings fall back to the grid font', () => {
+    assert.equal(fontsUsed(frame).find((c) => c.text === 'HRVSTMN')?.font, 'bold 23.2px GridMono');
+  });
+});

@@ -20,6 +20,8 @@ import GameMenu, { type MenuClose, type MenuItem, type MenuSection } from './Gam
 import { PIXEL_ICONS, bitmapToBoxShadow, toolIconId, type ToolbarIconId } from '@/src/game/toolbarIcons';
 
 const FONT = '"HRVSTMN Mono", "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace';
+/** Pixelify Sans, for the large HUD headings (the same face as the toolbar and menu). */
+const DISPLAY_FONT = `"HRVSTMN Display", ${FONT}`;
 
 const ICON_SHADOWS: Record<ToolbarIconId, string> = Object.fromEntries(
   (Object.entries(PIXEL_ICONS) as [ToolbarIconId, readonly string[]][]).map(([id, map]) => [
@@ -695,7 +697,7 @@ export default function GameScreen() {
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
       lastSig = sig;
-      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, dpr, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
+      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
       prevFrame = frame;
     };
 
@@ -756,7 +758,7 @@ export default function GameScreen() {
 
     // The bundled font may arrive after first paint: re-measure and repaint once it's ready.
     if (document.fonts && document.fonts.load) {
-      Promise.all([document.fonts.load(`16px ${FONT}`), document.fonts.load(`bold 16px ${FONT}`)])
+      Promise.all([FONT, DISPLAY_FONT].flatMap((f) => [document.fonts.load(`16px ${f}`), document.fonts.load(`bold 16px ${f}`)]))
         .then(relayout)
         .catch(() => {});
     }

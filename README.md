@@ -49,7 +49,7 @@ ground and roof stipple, with bright conifer detail and flowing water. The right
 groups the date, equipped tool, stamina, fatigue, shipping and held items on a black surface.
 It keeps tool-cost/fainting warnings, watering-can capacity and seasonal seed warnings.
 The cyan action footer uses the existing keyboard controls, and touch controls retain their
-context-sensitive action. HUD headings stay in the bundled monospace font; actors, obstacles
+context-sensitive action. The large HUD headings use the display font (below); actors, obstacles
 and crops keep their full-size glyphs. Enhanced remains the only visible style.
 
 `npm run dev` also accepts `--host` / `--port` preview flags. `npm test` uses Node's test
@@ -80,8 +80,14 @@ The engine still writes plain `(glyph, fg, bg)` cells, and also tags each map ce
 logic never depends on the visual style. Any ordinary write over a cell clears its tag, so dialogs
 and menus drawn over the map always render as UI.
 
-The bundled font is a subset of DejaVu Sans Mono (`public/fonts`, see `LICENSE-DejaVu.txt`), so the
-block and symbol glyphs look the same on every device.
+The bundled grid font is a subset of DejaVu Sans Mono (`public/fonts`, see `LICENSE-DejaVu.txt`), so the
+block and symbol glyphs look the same on every device. The map, dialogs and all body text use it.
+
+A second, display face, Pixelify Sans (`public/fonts`, see `LICENSE-PixelifySans.txt`, SIL OFL 1.1),
+sets the large HUD headings on the canvas (HRVSTMN, the day number) and the controls around the map:
+the desktop toolbar, the F10 menu and the touch buttons. It is `"HRVSTMN Display"` /
+`--font-display` in `app/globals.css` and `DISPLAY_FONT` in `GameScreen.tsx`, and falls back to the
+grid font for glyphs it lacks (the touch arrows).
 
 ### ASCII art pack
 

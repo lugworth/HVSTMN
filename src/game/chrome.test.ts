@@ -350,6 +350,20 @@ describe('chrome colours', () => {
     assert.match(css, /\.game-toolbar \{[^}]*border-top: 1px solid var\(--fence-rail\)/);
     assert.match(css, /\.game-sep::before \{ content: "╪"/);
   });
+
+  test('Pixelify Sans is the display face for the controls; the grid and body text stay in HRVSTMN Mono', () => {
+    const css = readFileSync(new URL('../../app/globals.css', import.meta.url), 'utf8');
+    const faces = [...css.matchAll(/@font-face \{[^}]*font-family: "HRVSTMN Display";[^}]*src: url\("([^"]+)"\)[^}]*font-weight: (\d+)/g)];
+    assert.deepEqual(faces.map((f) => [f[1], f[2]]), [['/fonts/PixelifySans.woff2', '400'], ['/fonts/PixelifySans-Bold.woff2', '700']]);
+    for (const [file] of faces.map((f) => [f[1]])) {
+      assert.ok(readFileSync(new URL(`../../public${file}`, import.meta.url)).length > 1000, `${file} is bundled`);
+    }
+    assert.match(readFileSync(new URL('../../public/fonts/LICENSE-PixelifySans.txt', import.meta.url), 'utf8'), /SIL Open Font License/);
+    assert.match(css, /--font-display: "HRVSTMN Display", "HRVSTMN Mono"/, 'falls back to the grid font');
+    for (const sel of ['\\.game-toolbar \\{', '\\.game-menu \\{']) assert.match(css, new RegExp(`${sel}[^}]*font-family: var\\(--font-display\\)`), sel);
+    assert.match(css, /\.pad-btn,\s*\.dpad-arm \{[^}]*font: 700 [^;]*var\(--font-display\)/);
+    assert.match(css, /html, body \{[^}]*font-family: "HRVSTMN Mono"/, 'the page itself stays monospace');
+  });
 });
 
 describe('tool XP sub-bar', () => {
