@@ -40,6 +40,9 @@ import {
   PRESERVE_SEASONS,
   RECIPES,
   MARKET_SHOPPERS,
+  ORDERS,
+  ORDER_DAYS,
+  ORDER_GAP,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -2330,5 +2333,158 @@ describe('a few preserves (task 31)', () => {
     ]);
     assert.equal(infos.CROP.length, 1, 'a turnip gets no preserve line');
     assert.equal(g.preserve_note('Turnip'), null);
+  });
+});
+
+describe('orders for finished goods (task 32)', () => {
+  const supper = ORDERS.find((o) => o.id === 'inn_supper')!;
+  /** A farm with a Kitchen and the inn's supper basket on the board. */
+  const withOrder = () => {
+    const g = fresh();
+    g.house_flags = ['Kitchen'];
+    g.order_last = 'inn_cheese'; // so the refresh can only pick the supper basket among what is possible
+    assert.ok(g.order_refresh());
+    assert.equal(g.order.id, 'inn_supper');
+    return g;
+  };
+  const answering = (g: any, picks: (string | null)[]) => {
+    const seen: { title: string; opts: string[]; info: string[] }[] = [];
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      const want = picks.shift();
+      const i = want == null ? -1 : opts.findIndex((o) => o.trim().startsWith(want));
+      seen.push({ title, opts, info: typeof info === 'function' ? info(Math.max(0, i)) : info || [] });
+      if (want == null) return null;
+      assert.ok(i >= 0, `"${want}" offered in ${title}: ${opts.join(' | ')}`);
+      return i;
+    };
+    return seen;
+  };
+
+  test('each order is a small bundle of finished goods from someone in the valley, worth more than its parts at the lowest grade', () => {
+    for (const o of ORDERS) {
+      assert.ok(NPCS[o.npc], o.npc);
+      assert.ok(o.pieces.length >= 1 && o.pieces.length <= 3, o.id);
+      let parts = 0;
+      for (const p of o.pieces) {
+        for (const it of p.any) assert.ok(ITEMS[it], `${it} is an item`);
+        assert.ok(['food', 'dish', 'animal'].includes(ITEMS[p.any[0]][2]), `${p.label} is a finished good`);
+        parts += Math.min(...p.any.map((it) => ITEMS[it][0] || 100)) * p.qty; // at the lowest grade (Bread: Jeff's 100G)
+        assert.ok(p.where.length > 0);
+      }
+      assert.ok(o.reward > parts, `${o.id}: ${o.reward}G beats shipping the parts (${parts}G)`);
+    }
+  });
+
+  test('no order is posted until its goods can be made', () => {
+    const g = fresh();
+    assert.equal(g.order_refresh(), null, 'no Kitchen, no Makers');
+    g.makers = ['Yarn Maker'];
+    assert.equal(g.order_refresh().id, 'manna_scarf', 'a Yarn Maker opens Manna\'s scarf');
+    const h = fresh();
+    h.house_flags = ['Kitchen'];
+    assert.equal(h.order_refresh().id, 'inn_supper', 'a Kitchen opens the supper basket, but not the cheese board');
+    assert.equal(h.order_refresh(), null, 'one order at a time');
+  });
+
+  test('the board lists the order first and its page shows which pieces are still missing', async () => {
+    const g = withOrder();
+    g.inv = { Bread: 1, Turnip: 2 };
+    const seen = answering(g, ['★ Doug', null]);
+    await g.request_menu();
+    assert.match(seen[0].opts[0], new RegExp(`^★ Doug's order: a supper basket for the inn — ${supper.reward}G \\(${ORDER_DAYS}d left\\)$`));
+    assert.deepEqual(seen[0].info, [
+      'A bundle of finished goods. Still needed: Bread, Pickled Turnip and Dried Herbs.',
+      'Hand pieces over as you make them; paid when it is complete.',
+    ]);
+    assert.equal(seen[1].title, 'Order: a supper basket for the inn');
+    assert.deepEqual(seen[1].info.slice(1), [
+      "  · Bread 0/1, in your rucksack (Jeff's General Store, 100G)",
+      '  · Pickled Turnip 0/1, missing 1 (Kitchen: 2 Turnip)',
+      '  · Dried Herbs 0/1, missing 1 (Kitchen: 3 Medicinal Herb)',
+    ]);
+    assert.deepEqual(seen[1].opts, ['Hand over what you have', 'Leave']);
+  });
+
+  test('pieces go over a few at a time, and the reward comes with the last one', async () => {
+    const g = withOrder();
+    quiet(g);
+    const gold = g.gold;
+    const friend = g.friend.Doug || 0;
+    g.inv = { Bread: 2, 'Pickled Turnip': 1 };
+    answering(g, ['★ Doug', 'Hand over']);
+    await g.request_menu();
+    assert.deepEqual(g.inv, { Bread: 1 }, 'one of each piece, no more');
+    assert.deepEqual(g.order.delivered, [1, 1, 0]);
+    assert.equal(g.gold, gold, 'not paid yet');
+    assert.match(g.msgs.at(-1)[0], /^You handed Doug 1 Bread and 1 Pickled Turnip\. Still needed: Dried Herbs\.$/);
+    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Order  Doug: Dried Herbs (')));
+
+    // the page now ticks off what was handed over, and offers nothing to hand over
+    const seen = answering(g, ['★ Doug', null]);
+    await g.request_menu();
+    assert.ok(seen[1].info.includes('  ✓ Bread 1/1'));
+    assert.ok(seen[1].info.includes('  ✓ Pickled Turnip 1/1'));
+    assert.deepEqual(seen[1].opts, ['Leave']);
+
+    g.inv['Dried Herbs'] = 1;
+    answering(g, ['★ Doug', 'Hand over']);
+    await g.request_menu();
+    assert.equal(g.order, null);
+    assert.equal(g.gold, gold + supper.reward);
+    assert.equal(g.friend.Doug, Math.min(100, friend + 8));
+    assert.equal(g.requests_done, 1);
+    assert.equal(g.order_next, g.absday() + ORDER_GAP, 'a short gap before the next order');
+    assert.equal(g.order_refresh(), null);
+  });
+
+  test('graded goods count at any grade, and the lowest grade goes first', () => {
+    const g = fresh();
+    g.makers = ['Yarn Maker'];
+    g.order_refresh();
+    g.inv = { 'Golden Yarn': 2, 'Small Yarn': 1 };
+    g.order_deliver();
+    assert.equal(g.order, null, 'two yarn of any grade complete the scarf');
+    assert.deepEqual(g.inv, { 'Golden Yarn': 1 }, 'the Small Yarn went first, then one Golden');
+  });
+
+  test('an order lapses after its days and the next one waits a little', async () => {
+    const g = withOrder();
+    g.order.delivered = [1, 0, 0];
+    g.day += ORDER_DAYS + 1;
+    const report: string[] = [];
+    g.request_day(report);
+    assert.ok(report.includes("Doug's order for a supper basket for the inn lapsed at the Rose Square board."), report.join(' | '));
+    assert.equal(g.order, null);
+    g.day += ORDER_GAP;
+    const later: string[] = [];
+    g.request_day(later);
+    assert.ok(later.some((l) => l.startsWith('Doug posted an order at the Rose Square board')), later.join(' | '));
+  });
+
+  test('an order and its progress survive a reload; a broken one is dropped', () => {
+    const g = withOrder();
+    g.order.delivered = [1, 0, 0];
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.order, g.order);
+    assert.equal(h.order_last, 'inn_supper');
+    const bad = JSON.parse(JSON.stringify(snap));
+    bad.order = { id: 'no_such_order', delivered: [], deadline: 9 };
+    const k = fresh();
+    k.applySaveData(bad);
+    assert.equal(k.order, null);
+    const odd = JSON.parse(JSON.stringify(snap));
+    odd.order.delivered = [99, -3, 'x'];
+    const o = fresh();
+    o.applySaveData(odd);
+    assert.deepEqual(o.order.delivered, [1, 0, 0], 'clamped to each piece');
+    const old = JSON.parse(JSON.stringify(snap));
+    delete old.order;
+    delete old.order_next;
+    delete old.order_last;
+    const p = fresh();
+    p.applySaveData(old);
+    assert.equal(p.order, null);
   });
 });

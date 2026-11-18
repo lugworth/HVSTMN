@@ -96,6 +96,9 @@ import {
   STALL_SIGN,
   COMPANION,
   SEED_SAVING,
+  ORDERS,
+  ORDER_DAYS,
+  ORDER_GAP,
   MAKER_SPOTS,
   MARKET_SHOPPERS,
   PANTRY_STAPLES,
@@ -260,6 +263,14 @@ export function worksState(d: Partial<PublicWorks> | null | undefined = null): P
   return { delivered: { ...(d?.delivered || {}) }, crop: d?.crop ?? null, done_day: d?.done_day ?? null, built: !!d?.built };
 }
 
+/** An order from a save, or null if its template is gone or the data is broken. */
+function sanitizeOrder(raw: any): VillagerOrder | null {
+  const t = raw && ORDERS.find((o) => o.id === raw.id);
+  if (!t || !Number.isFinite(raw.deadline)) return null;
+  const delivered = t.pieces.map((p, i) => clamp(Math.floor(Number(raw.delivered?.[i]) || 0), 0, p.qty));
+  return { id: t.id, delivered, deadline: raw.deadline };
+}
+
 /** Keep only well-formed batches for installed Makers (a save may be old, edited or cut short). */
 function sanitizeMakerJobs(raw: unknown, makers: string[]): Record<string, { steps: MakerStep[]; ready: number }> {
   const out: Record<string, { steps: MakerStep[]; ready: number }> = {};
@@ -320,6 +331,13 @@ export interface VillagerRequest {
   item: string;
   qty: number;
   reward: number;
+  deadline: number;
+}
+
+/** A finished-goods order on the board (task 32): which template, what has been handed over, until when. */
+export interface VillagerOrder {
+  id: string;
+  delivered: number[];
   deadline: number;
 }
 
@@ -475,6 +493,10 @@ export class Game {
   museum: string[] = [];
   museum_rewards: number[] = [];
   requests: VillagerRequest[] = [];
+  order: VillagerOrder | null = null;
+  /** Absolute day the board may post its next order. */
+  order_next: number = 0;
+  order_last: string | null = null;
   next_request_id: number = 1;
   requests_done: number = 0;
   mastery_xp: Record<string, number> = {};
@@ -549,7 +571,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -681,6 +703,9 @@ export class Game {
     this.museum = [];
     this.museum_rewards = [];
     this.requests = [];
+    this.order = null;
+    this.order_next = 0;
+    this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
     this.mastery_xp = Object.fromEntries(MASTERY_DISCIPLINES.map((d) => [d, 0]));
@@ -1024,6 +1049,7 @@ export class Game {
       for (const id of this.shortcuts) open_shortcut(this.maps, id);
       this.prune_forage();
       this.prune_requests();
+      this.order = sanitizeOrder(this.order);
       this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
@@ -4644,6 +4670,11 @@ export class Game {
       const extra = this.requests.length > 1 ? ` (+${this.requests.length - 1} more)` : '';
       lines.push(`  Board  ${r.npc} needs ${r.qty} × ${r.item}${extra}`);
     }
+    const ordT = this.order_template();
+    if (ordT) {
+      const days = Math.max(0, this.order!.deadline - this.absday());
+      lines.push(`  Order  ${ordT.npc}: ${andList(this.order_still_needed())} (${days}d)`);
+    }
     if (this.gray_quest === 1) {
       lines.push(`  Gray   wants ${GRAY_COPPER_QTY} × Copper from the Spring Mine (have ${this.inv['Copper'] || 0})`);
     } else if (this.gray_quest === 2) {
@@ -4827,6 +4858,9 @@ export class Game {
         const r = this.requests[0];
         const extra = this.requests.length > 1 ? ` (+${this.requests.length - 1})` : '';
         all.push(...wrapLabeled('✦ Board ', '0E', `${r.npc} needs ${r.qty} × ${r.item}${extra}`, '05'));
+      }
+      if (this.order_template()) {
+        all.push(...wrapLabeled('★ Order ', '0E', `${this.order_template()!.npc}: ${andList(this.order_still_needed())}`, '05'));
       }
       if (this.gray_quest === 1) {
         all.push(...wrapLabeled('◆ Gray  ', '0C', `Wants ${GRAY_COPPER_QTY}×Copper (have ${this.inv['Copper'] || 0})`, '05'));
@@ -5266,6 +5300,111 @@ export class Game {
     return added;
   }
 
+  // ---------------------------------------------------------------- orders for finished goods (mechanics task 32)
+  order_template(): (typeof ORDERS)[number] | null {
+    return this.order ? (ORDERS.find((o) => o.id === this.order!.id) ?? null) : null;
+  }
+
+  /** Can everything in this order be made now? (a Kitchen, and any Maker it names) */
+  order_possible(t: (typeof ORDERS)[number]): boolean {
+    if (t.needs.kitchen && !this.house_flags.includes('Kitchen')) return false;
+    return (t.needs.makers || []).every((m) => this.makers.includes(m));
+  }
+
+  /** Post a new order when the board is ready for one and something can be made. Returns it, or null. */
+  order_refresh(): VillagerOrder | null {
+    if (this.order || this.absday() < this.order_next) return null;
+    const open = ORDERS.filter((t) => this.order_possible(t));
+    if (!open.length) return null;
+    const fresh = open.filter((t) => t.id !== this.order_last);
+    const t = py_rng().choice(fresh.length ? fresh : open);
+    this.order = { id: t.id, delivered: t.pieces.map(() => 0), deadline: this.absday() + ORDER_DAYS };
+    this.order_last = t.id;
+    return this.order;
+  }
+
+  /** Per piece: handed over so far, what the rucksack holds toward it, and how many are still missing. */
+  order_rows(): { label: string; qty: number; got: number; have: number; missing: number; where: string }[] {
+    const t = this.order_template();
+    if (!t || !this.order) return [];
+    return t.pieces.map((p, i) => {
+      const got = this.order!.delivered[i] || 0;
+      const have = py_sum(p.any.map((it) => this.inv[it] || 0));
+      return { label: p.label, qty: p.qty, got, have, missing: Math.max(0, p.qty - got - have), where: p.where };
+    });
+  }
+
+  /** "Bread, Dried Herbs" — the pieces not yet handed over. */
+  order_still_needed(): string[] {
+    return this.order_rows()
+      .filter((r) => r.got < r.qty)
+      .map((r) => (r.qty - r.got > 1 ? `${r.qty - r.got} ${r.label}` : r.label));
+  }
+
+  /**
+   * Hand over whatever the rucksack holds toward the order (lowest grade first). Pays out when the
+   * bundle is complete. Returns the message, or null if there was nothing to give.
+   */
+  order_deliver(): string | null {
+    const t = this.order_template();
+    const o = this.order;
+    if (!t || !o) return null;
+    const given: string[] = [];
+    t.pieces.forEach((p, i) => {
+      let want = p.qty - o.delivered[i];
+      const grades = [...p.any].sort((a, b) => (ITEMS[a]?.[0] || 0) - (ITEMS[b]?.[0] || 0));
+      for (const it of grades) {
+        if (want <= 0) break;
+        const n = Math.min(want, this.inv[it] || 0);
+        if (n <= 0) continue;
+        this.take(it, n);
+        o.delivered[i] += n;
+        want -= n;
+        given.push(`${n} ${it}`);
+      }
+    });
+    if (!given.length) return null;
+    const left = this.order_still_needed();
+    if (left.length) {
+      const line = `You handed ${t.npc} ${andList(given)}. Still needed: ${andList(left)}.`;
+      this.msg(line, '0B');
+      return line;
+    }
+    this.gold += t.reward;
+    this.friend[t.npc] = clamp((this.friend[t.npc] || 0) + 8, 0, 100);
+    this.requests_done += 1;
+    this.order = null;
+    this.order_next = this.absday() + ORDER_GAP;
+    this.fx_add('coin', this.px, this.py, 0.8);
+    this.fx_add('text', this.px, this.py, 1.1, { text: `+${t.reward}G` });
+    const line = `${t.npc} has ${t.title}! You earned ${t.reward}G and +8 friendship.`;
+    this.msg(line, '0B');
+    return line;
+  }
+
+  /** The order's page on the board: each piece, handed over or missing, and where it comes from. */
+  async order_menu(): Promise<void> {
+    const t = this.order_template();
+    const o = this.order;
+    if (!t || !o) return;
+    const days = Math.max(0, o.deadline - this.absday());
+    const rows = this.order_rows();
+    const info = [
+      `  ${t.npc} would like ${t.title}: ${t.reward}G (${days}d left).`,
+      ...rows.map((r) => {
+        if (r.got >= r.qty) return `  ✓ ${r.label} ${r.qty}/${r.qty}`;
+        const status = r.missing ? `missing ${r.missing}` : 'in your rucksack';
+        return `  · ${r.label} ${r.got}/${r.qty}, ${status} (${r.where})`;
+      }),
+    ];
+    const ready = rows.some((r) => r.got < r.qty && r.have > 0);
+    const opts = ready ? ['Hand over what you have', 'Leave'] : ['Leave'];
+    const sel = await this.menu(`Order: ${t.title}`, opts, 0, info);
+    if (!ready || sel !== 0) return;
+    const line = this.order_deliver();
+    if (line) await this.say(line, t.npc);
+  }
+
   request_day(report: string[]): void {
     const today = this.absday();
     const expired = this.requests.filter((r) => r.deadline < today);
@@ -5276,6 +5415,17 @@ export class Game {
     if (this.requests.length < 3) {
       const added = this.request_refresh(3);
       if (added) report.push(`${added} new request${added === 1 ? '' : 's'} appeared at the Rose Square board.`);
+    }
+    const t = this.order_template();
+    if (t && this.order!.deadline < today) {
+      report.push(`${t.npc}'s order for ${t.title} lapsed at the Rose Square board.`);
+      this.order = null;
+      this.order_next = today + ORDER_GAP;
+    }
+    const posted = this.order_refresh();
+    if (posted) {
+      const nt = this.order_template()!;
+      report.push(`${nt.npc} posted an order at the Rose Square board: ${nt.title}.`);
     }
   }
 
@@ -5545,16 +5695,29 @@ export class Game {
 
   async request_menu(): Promise<void> {
     if (!this.requests.length) this.request_refresh(3);
-    if (!this.requests.length) {
+    this.order_refresh();
+    const ot = this.order_template();
+    if (!this.requests.length && !ot) {
       await this.say('The request board is empty today. Check again tomorrow morning.', 'Rose Square');
       return;
     }
-    const labels = this.requests.map((r) => {
-      const days = Math.max(0, r.deadline - this.absday());
-      return `${r.npc}: ${r.qty} × ${r.item} — ${r.reward}G (${days}d left)`;
-    });
+    const orderLabel = ot
+      ? [`★ ${ot.npc}'s order: ${ot.title} — ${ot.reward}G (${Math.max(0, this.order!.deadline - this.absday())}d left)`]
+      : [];
+    const labels = [
+      ...orderLabel,
+      ...this.requests.map((r) => {
+        const days = Math.max(0, r.deadline - this.absday());
+        return `${r.npc}: ${r.qty} × ${r.item} — ${r.reward}G (${days}d left)`;
+      }),
+    ];
+    const off = orderLabel.length;
     const info = (s: number): string[] => {
-      const r = this.requests[s];
+      if (off && s === 0) {
+        const left = this.order_still_needed();
+        return [`A bundle of finished goods. Still needed: ${andList(left)}.`, 'Hand pieces over as you make them; paid when it is complete.'];
+      }
+      const r = this.requests[s - off];
       if (!r) return ['', ''];
       const have = this.inv[r.item] || 0;
       return [
@@ -5563,9 +5726,13 @@ export class Game {
       ];
     };
     const sel = await this.menu('Rose Square Request Board', [...labels, 'Leave'], 0, info);
-    if (sel === null || sel >= this.requests.length) return;
-    const request = this.requests[sel];
-    const result = this.request_deliver(sel);
+    if (sel === null || sel >= labels.length) return;
+    if (off && sel === 0) {
+      await this.order_menu();
+      return;
+    }
+    const request = this.requests[sel - off];
+    const result = this.request_deliver(sel - off);
     if (result === null) return;
     if (result.startsWith('You need')) {
       await this.say(result, 'Rose Square');

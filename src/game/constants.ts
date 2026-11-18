@@ -3503,6 +3503,66 @@ export const MAKER_SPOTS: Record<string, { x: number; y: number; hours: number; 
   'Yarn Maker': { x: 34, y: 6, hours: 6, by: 'barn' },
 };
 
+/** One piece of a finished-goods order: any of `any` counts (lowest grade handed over first). */
+export interface OrderPiece {
+  label: string;
+  any: string[];
+  qty: number;
+  /** Where it comes from, for the board. */
+  where: string;
+}
+
+/**
+ * Orders for finished goods (mechanics task 32): a small bundle from one villager, posted on the
+ * Rose Square board beside the single-item requests. Pieces can be handed over a few at a time; the
+ * board shows which are still missing, and the reward comes when the bundle is complete. An order
+ * is only posted once everything in it can be made (`needs`): a Kitchen, and any Maker named.
+ */
+export const ORDERS: {
+  id: string;
+  npc: string;
+  title: string;
+  pieces: OrderPiece[];
+  reward: number;
+  needs: { kitchen?: boolean; makers?: string[] };
+}[] = [
+  {
+    id: 'inn_supper',
+    npc: 'Doug',
+    title: 'a supper basket for the inn',
+    pieces: [
+      { label: 'Bread', any: ['Bread'], qty: 1, where: "Jeff's General Store, 100G" },
+      { label: 'Pickled Turnip', any: ['Pickled Turnip'], qty: 1, where: 'Kitchen: 2 Turnip' },
+      { label: 'Dried Herbs', any: ['Dried Herbs'], qty: 1, where: 'Kitchen: 3 Medicinal Herb' },
+    ],
+    reward: 650,
+    needs: { kitchen: true },
+  },
+  {
+    id: 'inn_cheese',
+    npc: 'Doug',
+    title: 'a cheese board for the inn',
+    pieces: [
+      { label: 'Bread', any: ['Bread'], qty: 1, where: "Jeff's General Store, 100G" },
+      { label: 'Cheese', any: ['Small Cheese', 'Medium Cheese', 'Large Cheese', 'Golden Cheese', 'P Cheese', 'X Cheese'], qty: 2, where: 'Cheese Maker, from your cows\' milk' },
+      { label: 'Dried Herbs', any: ['Dried Herbs'], qty: 1, where: 'Kitchen: 3 Medicinal Herb' },
+    ],
+    reward: 1500,
+    needs: { kitchen: true, makers: ['Cheese Maker'] },
+  },
+  {
+    id: 'manna_scarf',
+    npc: 'Manna',
+    title: 'yarn for a winter scarf',
+    pieces: [{ label: 'Yarn', any: ['Small Yarn', 'Medium Yarn', 'Large Yarn', 'Golden Yarn', 'P Yarn', 'X Yarn'], qty: 2, where: 'Yarn Maker, from your sheep\'s wool' }],
+    reward: 1200,
+    needs: { makers: ['Yarn Maker'] },
+  },
+];
+/** Days an order stays on the board, and the days before the next one after it is filled or lapses. */
+export const ORDER_DAYS = 7;
+export const ORDER_GAP = 2;
+
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
