@@ -1158,6 +1158,20 @@ describe('Contour Farm presentation', () => {
 });
 
 
+test('context action target reuses primary reticle and invalidates incremental frames', () => {
+  const s = scene();
+  s.put(10, 10, '.', '07', '00');
+  s.tag(10, 10, { t: 'grass', wx: 10, wy: 10, hl: true, actionTarget: true });
+  const marked = computeFrame(s, 0);
+  assert.equal(marked[10][10].aoePrimary, true);
+  assert.equal(marked[10][10].actionReticle, true);
+  const signature = frameSignature(marked);
+  s.tag(10, 10, { t: 'grass', wx: 10, wy: 10, hl: true });
+  const plain = computeFrame(s, 0);
+  assert.notEqual(frameSignature(plain), signature);
+  assert.deepEqual(frameDirtyRect(marked, plain), { x0: 9, y0: 9, x1: 12, y1: 12 });
+});
+
 test('large HUD label changes invalidate the frame cache even with the same first glyph', () => {
   const s = new Screen();
   s.put(55, 4, '1', '07');

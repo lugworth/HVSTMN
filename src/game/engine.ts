@@ -6836,6 +6836,10 @@ export class Game {
     const dusk = classic && !m.indoor && m.name !== 'mine' && 17.5 <= hour && hour < 19;
     if (s.ctx) s.ctx.view = { x: ox, y: oy, w: Math.min(vw, m.w), h: Math.min(vh, m.h) };
     const [tx, ty] = this.target();
+    // Resolve once so the touch action and map marker describe the same faced cell.
+    const action = this.context_action();
+    const actionReticle = action.key === 'x' ||
+      (action.key === 'space' && ['WATER', 'DIG', 'CRACK', 'CAST'].includes(action.label));
     const aoeSet = new Set<string>();
     aoeSet.add(pkey(tx, ty));
     if (this.mapname === 'farm') {
@@ -6868,6 +6872,7 @@ export class Game {
           bg = bg === '01' ? '02' : '01';
         }
         const tag = this.cell_tag(m, x, y, row[x], hl, hl && !(x === tx && y === ty));
+        if (actionReticle && x === tx && y === ty) tag.actionTarget = true;
         const px = ox + sx;
         s.put(px, oy + sy, ch, fg, bg, bold);
         s.tag(px, oy + sy, tag);

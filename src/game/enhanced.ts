@@ -46,6 +46,8 @@ export type OutCell = {
   aoeCol?: string;
   /** Primary aimed cell inside the AoE reticle (draws corner reticle ticks). */
   aoePrimary?: boolean;
+  /** Faced concrete context action marker, using the existing primary corner bracket. */
+  actionReticle?: boolean;
   texture?: ContourTexture;
   /** Later weather/particle passes can replace the glyph without inheriting its texture. */
   textureGlyph?: string;
@@ -2748,7 +2750,10 @@ function connectedBorders(
         } else {
           o.aoeCol = toolTier === 0 ? '#808898' : aoeCol;
         }
-        if (tg.hl) o.aoePrimary = true;
+        if (tg.hl) {
+          o.aoePrimary = true;
+          if (tg.actionTarget) o.actionReticle = true;
+        }
       }
     }
   }
@@ -3311,7 +3316,7 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.plain !== n.plain || p.ui !== n.ui || p.accent !== n.accent || p.seed !== n.seed ||
         p.foam !== n.foam || p.foamCol !== n.foamCol ||
         p.plot !== n.plot || p.plotCol !== n.plotCol ||
-        p.aoe !== n.aoe || p.aoeCol !== n.aoeCol || p.aoePrimary !== n.aoePrimary ||
+        p.aoe !== n.aoe || p.aoeCol !== n.aoeCol || p.aoePrimary !== n.aoePrimary || p.actionReticle !== n.actionReticle ||
         p.detail?.ch !== n.detail?.ch || p.detail?.fg !== n.detail?.fg ||
         p.texture?.kind !== n.texture?.kind || p.texture?.x !== n.texture?.x || p.texture?.y !== n.texture?.y ||
         p.textureGlyph !== n.textureGlyph ||
@@ -3763,7 +3768,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         g.globalAlpha = 1;
       }
       if (o.aoePrimary) {
-        g.globalAlpha = o.aoe ? 0.75 : 0.38;
+        g.globalAlpha = (o.aoe ? 0.75 : 0.38) + (o.actionReticle ? 0.14 : 0);
         g.fillStyle = o.aoeCol ?? '#808898';
         const tw = Math.max(1, Math.floor(aw));
         const tk = Math.max(2, Math.round(Math.min(cw, ch) * 0.2));
@@ -4510,6 +4515,6 @@ function paintMicroDetail(
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
   return s;
 }

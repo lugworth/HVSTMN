@@ -3,6 +3,7 @@ import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { Screen } from './screen';
 import { Game } from './engine';
+import { computeFrame } from './enhanced';
 import { HEDGE_GATE } from './map';
 import {
   ITEMS,
@@ -1574,6 +1575,50 @@ describe('fishing and the request board', () => {
     const h = fresh();
     h.load(1);
     assert.deepEqual(h.requests.map((r: any) => r.item), ['Small Fish', 'Spa Catfish']);
+  });
+});
+
+describe('context action reticle', () => {
+  test('farmhouse exit interaction is marked, then modal and typing actions clear it', () => {
+    const g: Game = fresh();
+    g.warp('house', 7, 8, [0, 1]); // faced farmhouse exit at 7,9
+    g.render();
+    const isExit = (tag: (typeof g.scr.tags)[number][number]) => tag?.wx === 7 && tag?.wy === 9;
+    const target = () => g.scr.tags.flat().find(isExit);
+    assert.equal(g.context_action().label, 'ENTER');
+    assert.equal(target()?.actionTarget, true);
+    const index = g.scr.tags.flat().findIndex(isExit);
+    const marked = computeFrame(g.scr, 0).flat()[index];
+    assert.equal(marked.aoePrimary, true, 'uses the existing primary corner bracket');
+    assert.equal(marked.actionReticle, true, 'marker metadata reaches renderer');
+
+    g.modal_depth = 1;
+    g.render();
+    assert.equal(g.context_action().label, 'OK');
+    assert.equal(target()?.actionTarget, undefined);
+    const plain = computeFrame(g.scr, 0).flat()[index];
+    assert.equal(plain.actionReticle, undefined);
+    assert.equal(plain.ch, marked.ch, 'action marker leaves the target glyph intact');
+    g.modal_depth = 0;
+    g.typing = true;
+    g.render();
+    assert.equal(g.context_action().label, 'DONE');
+    assert.equal(target()?.actionTarget, undefined);
+  });
+
+  test('generic Hoe use keeps the ordinary primary preview without action emphasis', () => {
+    const g: Game = fresh();
+    g.warp('farm', 14, 10, [1, 0]);
+    g.tool = 'Hoe';
+    g.render();
+    assert.equal(g.context_action().label, 'USE HOE');
+    const index = g.scr.tags.flat().findIndex((tag) => tag?.wx === 15 && tag?.wy === 10);
+    const tag = g.scr.tags.flat()[index];
+    const out = computeFrame(g.scr, 0).flat()[index];
+    assert.equal(tag?.hl, true);
+    assert.equal(tag?.actionTarget, undefined);
+    assert.equal(out.aoePrimary, true);
+    assert.equal(out.actionReticle, undefined);
   });
 });
 
