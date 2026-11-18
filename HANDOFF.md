@@ -1,5 +1,14 @@
 # Handoff: HRVSTMN
 
+## Display font, 2026-11-18
+
+- The player asked for a second font family. **Pixelify Sans** (SIL OFL 1.1, `public/fonts/
+  PixelifySans*.woff2` + `LICENSE-PixelifySans.txt`, about 15 KB) is the display face
+  `"HRVSTMN Display"`: the large canvas HUD headings (`hud:label` cells, via `Metrics.displayFont`),
+  the desktop toolbar, the F10 menu and the touch buttons (`--font-display`). Everything on the map
+  grid, dialogs and body text stays in DejaVu Sans Mono. Chosen over Silkscreen (too wide for the
+  toolbar) and VT323 (too small in the toolbar) after an in-game comparison.
+
 ## Companion planting (mechanics task 17), 2026-11-18
 
 - One pairing (`COMPANION` in `constants.ts`): a **Moondrop Flower in bloom** on any of the eight

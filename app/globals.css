@@ -14,8 +14,23 @@
   font-weight: 700;
   font-display: swap;
 }
+/* Pixelify Sans (see public/fonts/LICENSE-PixelifySans.txt): the display face for headings and the
+   controls around the map. The map grid and all body text stay in HRVSTMN Mono. */
+@font-face {
+  font-family: "HRVSTMN Display";
+  src: url("/fonts/PixelifySans.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "HRVSTMN Display";
+  src: url("/fonts/PixelifySans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
 
 :root {
+  --font-display: "HRVSTMN Display", "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace;
   --base00: #000000;
   --base01: #404040;
   --base02: #606060;
@@ -76,6 +91,7 @@ html, body {
    The footer continues the HUD's fence: a wooden rail along the top, and fence posts between groups. */
 .game-toolbar {
   position: relative; /* the game menu hangs above it */
+  font-family: var(--font-display);
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -217,6 +233,7 @@ html, body {
 /* ---- Game menu: section columns above the desktop toolbar; on touch, a sheet over the map. */
 .game-menu {
   z-index: 40;
+  font-family: var(--font-display);
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -466,7 +483,7 @@ html, body {
   border: 1px solid var(--base02);
   background: var(--base01);
   color: var(--base05);
-  font: 700 clamp(11px, calc(var(--u, 44px) * 0.24), 14px)/1.1 "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace;
+  font: 700 clamp(11px, calc(var(--u, 44px) * 0.24), 14px)/1.1 var(--font-display);
   letter-spacing: 0.02em;
   box-shadow: 0 2px 0 var(--base00);
   touch-action: none;

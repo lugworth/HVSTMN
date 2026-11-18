@@ -3289,7 +3289,18 @@ function decorateBoxes(out: OutCell[][], boxes: Screen['boxes'], W: number, H: n
 
 // ---------------------------------------------------------------- drawing
 
-export type Metrics = { cw: number; ch: number; fontPx: number; font: string; dpr?: number; hires?: boolean; crt?: boolean };
+export type Metrics = {
+  cw: number;
+  ch: number;
+  fontPx: number;
+  /** The grid font: every map cell and all body text. */
+  font: string;
+  /** The display face for the large HUD headings; the grid font when absent. */
+  displayFont?: string;
+  dpr?: number;
+  hires?: boolean;
+  crt?: boolean;
+};
 
 export type DirtyRect = { x0: number; y0: number; x1: number; y1: number };
 
@@ -3536,7 +3547,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       if (o.label) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
         const label = o.label;
-        g.font = `${o.bold ? 'bold ' : ''}${fontPx * label.scale}px ${font}`;
+        g.font = `${o.bold ? 'bold ' : ''}${fontPx * label.scale}px ${m.displayFont ?? font}`;
         curFont = '';
         g.fillStyle = o.fg;
         g.fillText(label.text, px, py + label.h * ch / 2, label.w * cw);
