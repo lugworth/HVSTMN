@@ -44,15 +44,16 @@ describe('fence rails', () => {
     }
   });
 
-  test('desktop: the divider is one unbroken fence with the panel edge standing on it', () => {
+  test('desktop: the map fence meets the closed almanac frame', () => {
     for (const [w, h] of [[80, 24], [110, 24], [132, 30], [160, 50]]) {
       const { s, out } = farm(w, h);
       const { divX, divY } = s.ctx!;
       const row = out[divY];
-      assert.ok(row.every((o) => FENCE.includes(o.ch) && o.ui), `${w}x${h}: ${text(row)}`);
-      assert.equal(row[divX].ch, '╧');
-      assert.equal(text(row).split('╧').length, 2, 'exactly one edge post');
-      for (let x = 0; x < w; x++) {
+      assert.ok(row.slice(0, divX).every((o) => '═╪'.includes(o.ch) && o.ui), `${w}x${h}: ${text(row)}`);
+      const rail = '+' + '-'.repeat(w - divX - 2) + '+';
+      assert.equal(text(row.slice(divX)), rail);
+      assert.equal(text(out[0].slice(divX)), rail);
+      for (let x = 0; x < divX; x++) {
         const o = row[x];
         assert.equal(o.fg, o.ch === '═' ? FARM_CHROME.rail : FARM_CHROME.post);
         assert.equal(o.bg, '#000000');
@@ -61,11 +62,12 @@ describe('fence rails', () => {
           assert.ok(Math.abs(x - divX) > 2, 'no post crowds the panel edge');
         }
       }
-      for (let y = 0; y < divY; y++) {
-        assert.equal(out[y][divX].ch, '│');
-        assert.equal(out[y][divX].fg, FARM_CHROME.rail);
+      for (let y = 1; y < divY; y++) {
+        for (const x of [divX, w - 1]) {
+          assert.equal(out[y][x].ch, '|');
+          assert.equal(out[y][x].fg, FARM_CHROME.rail);
+        }
       }
-      assert.equal(bufRow(s, divY), '-'.repeat(w), 'the engine still writes a plain rule');
     }
   });
 
@@ -73,15 +75,15 @@ describe('fence rails', () => {
     const { s, out } = farm(80, 24);
     const { divX, divY } = s.ctx!;
     const rails: string[] = [];
-    for (let y = 0; y < divY; y++) {
-      const cells = out[y].slice(divX + 1).filter((_, i) => s.tags[y][divX + 1 + i]?.k === 'hud:fence');
+    for (let y = 1; y < divY; y++) {
+      const cells = out[y].slice(divX + 1, -1).filter((_, i) => s.tags[y][divX + 1 + i]?.k === 'hud:fence');
       if (!cells.length) continue;
       rails.push(text(cells));
-      assert.ok(cells.every((o) => o.ui && o.bg === '#000000' && o.fg === (o.ch === '═' ? FARM_CHROME.rail : FARM_CHROME.post)));
+      assert.ok(cells.every((o) => o.ui && o.bg === '#000000' && o.fg === (o.ch === '+' ? FARM_CHROME.post : FARM_CHROME.rail)));
     }
-    assert.deepEqual(rails, ['╪═════╪═════╪═════╪', '╪═════╪═════╪═════╪']);
+    assert.deepEqual(rails, ['+-----+-----+-----+', '+-----+-----+-----+']);
     const panel = out.slice(0, divY).map((r) => text(r.slice(divX + 1))).join('\n');
-    assert.ok(!panel.includes('─'), 'no plain rule is left in the panel');
+    assert.ok(!/[╪═─·]/.test(panel), 'panel chrome is ASCII');
   });
 
   test('a dialog over the divider hides the fence beneath it', () => {
@@ -186,62 +188,98 @@ describe('ledger', () => {
   test('accounts get dot leaders one cell clear of the label and the value', () => {
     const { s, out } = farm(80, 24);
     const { divX, divY } = s.ctx!;
-    const panel = out.slice(0, divY).map((r) => text(r.slice(divX + 3)).trimEnd());
-    assert.ok(panel.includes('GOLD ········· 500G'), panel.join('\n'));
-    assert.ok(panel.includes('BIN ············ 0G'));
-    assert.ok(panel.includes('HELD ············ —'));
-    const y = panel.indexOf('GOLD ········· 500G');
+    const panel = out.slice(1, divY).map((r) => text(r.slice(divX + 3, -1)).trimEnd());
+    assert.ok(panel.includes('GOLD ......... 500G'), panel.join('\n'));
+    assert.ok(panel.includes('BIN ............ 0G'));
+    assert.ok(panel.includes('HELD ............ -'));
+    const y = panel.indexOf('GOLD ......... 500G') + 1;
     assert.equal(out[y][divX + 3 + 5].fg, '#404040', 'leaders are the dimmest grey');
   });
 
   test('gauges and tight rows take no leaders', () => {
     const { s, out } = farm(80, 24, (g) => { g.gold = 98765432109; g.chickens = 3; g.eggs = 2; });
     const { divX, divY } = s.ctx!;
-    const panel = out.slice(0, divY).map((r) => text(r.slice(divX + 3)).trimEnd());
+    const panel = out.slice(1, divY).map((r) => text(r.slice(divX + 3, -1)).trimEnd());
     const gold = panel.find((l) => l.startsWith('GOLD'))!;
     assert.match(gold, /^GOLD +98765432109G$/);
-    assert.ok(!gold.includes('·'), 'fewer than three leaders are dropped');
+    assert.ok(!gold.includes('.'), 'fewer than three leaders are dropped');
     for (const name of ['STAMINA', 'FATIGUE', 'EQUIPPED', 'COOP']) {
       const line = panel.find((l) => l.startsWith(name));
-      assert.ok(line && !line.includes('·'), `${name}: ${line}`);
+      assert.ok(line && !line.includes('.'), `${name}: ${line}`);
     }
   });
 });
 
-describe('season glyphs and the message bullet', () => {
-  const COLS = ['#ff0099', '#33ff00', '#ff9900', '#00ffff'];
-
-  test('desktop: each season leads its line with its own glyph and colour', () => {
+describe('season, weather, and status chrome', () => {
+  test('desktop: the season heading keeps its cyan accent', () => {
     for (let season = 0; season < 4; season++) {
       const { s, out } = farm(80, 24, (g) => { g.season = season; });
       const { divX, divY } = s.ctx!;
       const hits = out.slice(0, divY).flatMap((r) => r.slice(divX + 1)).filter((o) => (SEASON_GLYPHS as readonly string[]).includes(o.ch));
-      assert.equal(hits.length, 1);
-      assert.equal(hits[0].ch, SEASON_GLYPHS[season]);
-      assert.equal(hits[0].fg, COLS[season]);
-      const line = out.slice(0, divY).map((r) => text(r.slice(divX + 3))).find((l) => l.includes('YEAR'))!;
-      assert.match(line, new RegExp(`^${SEASON_GLYPHS[season]} [A-Z]+ / YEAR 1`));
+      assert.equal(hits.length, 0);
+      const y = out.slice(0, divY).findIndex((r) => text(r.slice(divX + 1)).includes('YEAR 1'));
+      assert.ok(y >= 0);
+      assert.ok(out[y].slice(divX + 1).some((o) => o.fg === '#00ffff'), 'season heading is cyan');
+      assert.match(text(out[y].slice(divX + 1)).trimStart(), /^[A-Z]+ \/ YEAR 1/);
     }
   });
 
-  test('winter in the snow: the season flake is not the weather flake', () => {
+  test('winter and snow fit in the ASCII almanac', () => {
     const { s, out } = farm(80, 24, (g) => { g.season = 3; g.weather = 'Snow'; g.minutes = 12 * 60; });
     const panel = out.slice(0, s.ctx!.divY).map((r) => text(r.slice(s.ctx!.divX + 1))).join('\n');
-    assert.ok(panel.includes('❆') && panel.includes('❄'));
-    assert.notEqual(SEASON_GLYPHS[3], '❄');
+    assert.match(panel, /WINTER \/ YEAR 1/);
+    assert.match(panel, /\. SNOW/);
+    assert.ok(!/[❆❄]/.test(panel));
   });
 
-  test('compact: the glyph sits against the season name without costing the text', () => {
+  test('compact top bar shows the season, date and weekday', () => {
     const { out } = farm(50, 24, (g) => { g.season = 2; g.day = 14; });
     assert.match(text(out[0]), /^ ❦Fall 14 Thu Y1 /);
     assert.equal(out[0][1].fg, '#ff9900');
   });
 
-  test('a dialog over the season line hides the glyph', () => {
+  test('INFO frame keeps ASCII chrome and accented player/item text intact', () => {
+    const { s, g } = farm(50, 24, (game) => {
+      game.name = 'János';
+      game.tool = 'Éclair Seeds';
+      game.inv['Éclair Seeds'] = 3;
+    });
+    g.show_panel = true;
+    g.render();
+    const rendered = computeFrame(s, 0);
+    const rail = '+' + '-'.repeat(30) + '+';
+    const lowerRail = rendered.findIndex((row, y) => y > 1 && text(row.slice(17, 49)) === rail);
+    assert.ok(lowerRail > 1 && lowerRail < s.ctx!.divY, 'a closed frame fits above the compact status row');
+    const frame = rendered.slice(1, lowerRail + 1).map((row) => text(row.slice(17, 49))).join('\n');
+    assert.match(frame, /\+-+\+/);
+    assert.match(frame, /János/);
+    assert.match(frame, /Éclair Seeds/);
+    assert.match(frame, /\[#+\]/);
+    assert.ok(!/[╭╮╰╯│─·]/.test(frame), `almanac frame and leaders are ASCII\n${frame}`);
+    for (let y = 1; y <= lowerRail; y++) {
+      for (let x = 17; x < 49; x++) {
+        assert.equal(rendered[y][x].ui, true, `overlay cell ${x},${y}`);
+      }
+    }
+  });
+
+  test('50x24 INFO frame ends above the message rail without being overwritten', () => {
+    const { s, g } = farm(50, 24, (game) => { game.msgs = []; game.msg('Message stays visible.', '05'); });
+    g.show_panel = true;
+    g.render();
+    const bottom = s.buf.map((r) => r.map((c) => c[0]).join('')).findIndex((r) => r.includes('Message stays visible.'));
+    assert.equal(bottom, 21, `message row ${bottom}`);
+    const rail = '+' + '-'.repeat(30) + '+';
+    assert.equal(s.buf.slice(1, 20).filter((_, y) => bufRow(s, y + 1).slice(17, 49) === rail).length, 2);
+    assert.ok(!bufRow(s, 20).includes('Message'));
+    assert.ok(bufRow(s, 21).includes('Message stays visible.'));
+  });
+
+  test('a dialog over the almanac covers the season heading', () => {
     const { s } = farm(80, 24);
     s.box(s.ctx!.divX + 1, 0, 80 - s.ctx!.divX - 1, 12, '0C', '00', 'Note');
     const out = computeFrame(s, 0);
-    assert.ok(!out.flat().some((o) => (SEASON_GLYPHS as readonly string[]).includes(o.ch)));
+    assert.ok(out.every((row) => !text(row).includes('SPRING / YEAR 1')));
   });
 
   test('desktop: the newest message gets a leaf bullet in fence-post brown', () => {

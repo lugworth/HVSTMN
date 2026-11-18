@@ -50,7 +50,6 @@ export type OutCell = {
   /** Later weather/particle passes can replace the glyph without inheriting its texture. */
   textureGlyph?: string;
   label?: HudLabel;
-  meter?: boolean;
   /** Thin bottom-edge progress rule along a panel row (e.g. Tool XP). */
   subBar?: { frac: number; pos: number; len: number; col: string; track: string };
   /** Sub-cell high-resolution architectural & terrain micro-detail (strictly inside the cell). */
@@ -1451,7 +1450,7 @@ export function computeFrame(
         else if (k.startsWith('minimap:')) o = styleMinimapCell(k, F.t);
         else if (k === 'bar') o = { ch: '█', fg: pal(cell[1]), bg: '#0c0c11', bold: false };
         else if (k === 'bar:empty') o = { ch: '░', fg: '#2c2c36', bg: '#0c0c11', bold: false };
-        else if (k === 'hud:fence') o = { ch: cell[0], fg: cell[0] === '═' ? FENCE_RAIL : FENCE_POST, bg: '#000000', bold: false };
+        else if (k === 'hud:fence') o = { ch: cell[0], fg: cell[0] === '+' ? FENCE_POST : FENCE_RAIL, bg: '#000000', bold: false };
         else if (k === 'hud:legend') o = { ch: cell[0], fg: '╭─╮│╰╯'.includes(cell[0]) ? FENCE_POST : pal(cell[1]), bg: '#160d06', bold: cell[3] };
         else if (k === 'valley:link') o = { ch: cell[0], fg: FENCE_POST, bg: '#000000', bold: false };
         else if (k === 'hud:sign') o = { ch: cell[0], fg: pal(cell[1]), bg: SIGN_BOARD, bold: cell[3] };
@@ -1462,7 +1461,6 @@ export function computeFrame(
           if (covered) o.ch = ' ';
           else o.label = label;
         }
-        if (k.startsWith('hud:meter')) o = { ...o, ch: '━', meter: true };
         if (tag.subBar) {
           o = {
             ...o,
@@ -3316,7 +3314,7 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.aoe !== n.aoe || p.aoeCol !== n.aoeCol || p.aoePrimary !== n.aoePrimary ||
         p.detail?.ch !== n.detail?.ch || p.detail?.fg !== n.detail?.fg ||
         p.texture?.kind !== n.texture?.kind || p.texture?.x !== n.texture?.x || p.texture?.y !== n.texture?.y ||
-        p.textureGlyph !== n.textureGlyph || p.meter !== n.meter ||
+        p.textureGlyph !== n.textureGlyph ||
         p.label?.text !== n.label?.text || p.label?.scale !== n.label?.scale ||
         p.label?.w !== n.label?.w || p.label?.h !== n.label?.h ||
         p.subBar?.frac !== n.subBar?.frac || p.subBar?.pos !== n.subBar?.pos ||
@@ -3533,17 +3531,6 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         curFont = '';
         g.fillStyle = o.fg;
         g.fillText(label.text, px, py + label.h * ch / 2, label.w * cw);
-        continue;
-      }
-      if (o.meter) {
-        if (glowOn) { g.shadowBlur = 0; glowOn = false; }
-        const empty = o.fg === '#404040';
-        g.fillStyle = empty ? '#222228' : o.fg;
-        const mh = Math.max(3, Math.round(ch * 0.44));
-        const my0 = Math.floor(py + (ch - mh) / 2);
-        const gapX = Math.max(1, Math.round(cw * 0.2));
-        const mw = Math.max(2, Math.floor(cw - gapX));
-        g.fillRect(Math.floor(px), my0, mw, mh);
         continue;
       }
       if (o.ch === '▄' || o.ch === '▀' || o.ch === '█') {
@@ -4523,6 +4510,6 @@ function paintMicroDetail(
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.meter ? 'm' : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
   return s;
 }

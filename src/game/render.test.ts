@@ -437,7 +437,8 @@ describe('right-side Contour Farm HUD', () => {
       assert.deepEqual(labels, ['HRVSTMN', '01']);
       const panel = s.buf.slice(0, s.ctx!.divY).map((row) => row.slice(s.ctx!.divX + 1).map((c) => c[0]).join('')).join('\n');
       for (const text of ['EQUIPPED', 'STAMINA', 'FATIGUE', 'GOLD', 'BIN', 'HELD', '987654321G']) assert.ok(panel.includes(text), `${width}x${height}: ${text}`);
-      assert.ok(computeFrame(s, 0).flat().some((o) => o.meter));
+      const meter = computeFrame(s, 0).map((row) => row.slice(s.ctx!.divX + 1).map((o) => o.ch).join(''));
+      assert.ok(meter.some((row) => /\[#+\]/.test(row)), 'stamina is shown with ASCII glyphs');
     }
   });
 
@@ -455,10 +456,8 @@ test('empty stamina keeps the HUD meter empty and the tool fainting warning visi
   g.stamina = 0;
   g.fatigue = 99;
   g.render();
-  const meters = s.tags.flat().filter((t) => t?.k?.startsWith('hud:meter'));
-  assert.ok(meters.length > 0);
-  assert.ok(meters.every((t) => t?.k === 'hud:meter:empty'));
   const panel = s.buf.map((r) => r.slice(s.ctx!.divX + 1).map((c) => c[0]).join('')).join('\n');
+  assert.match(panel, /\[\.+\]/);
   assert.match(panel, /-2st!/);
 });
 
