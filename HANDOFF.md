@@ -1,5 +1,21 @@
 # Handoff: HRVSTMN
 
+## Walk-up Makers (mechanics task 30), 2026-11-18
+
+- Saibara's Mayonnaise, Cheese and Yarn Makers are now machines on the farm (`maker` tile, `⚙`), at
+  `MAKER_SPOTS` in `constants.ts`: Mayonnaise under the coop west of its door (18,6); Cheese (30,6)
+  and Yarn (34,6) flank the barn door. `Game.place_makers()` stands them (new game, load, order).
+- Face one and press X: an empty Maker lists every grade it would take from the rucksack
+  ("3 x Golden Egg → Golden Mayonnaise") with the finish time; loading takes them all as one batch
+  (`maker_jobs[maker] = { steps, ready }`, `ready` an absolute minute from `now_abs()`, so it runs
+  through the night). Working: the menu says "ready at 2:00PM (1h 20m left)". Ready: the menu lists
+  each grade, then collects; with more raw goods in the rucksack it offers the next batch.
+  Batches take 4h (mayonnaise), 8h (cheese), 6h (yarn). The glyph is grey/orange/green for
+  empty/working/ready; the action button reads LOAD/CHECK/COLLECT.
+- The coop and barn menus no longer process instantly; their info lines show each Maker's status.
+  Today's Plan has a "Makers Mayonnaise: …" line per busy or loadable Maker. `maker_jobs` is saved and
+  sanitized on load (unknown items and Makers not owned are dropped).
+
 ## Seed saving (mechanics task 19), 2026-11-18
 
 - One recipe (`SEED_SAVING` in `constants.ts`): **3 Cucumber → 1 bag of Cucumber Seeds**, from the

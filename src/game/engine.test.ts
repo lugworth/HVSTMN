@@ -34,6 +34,8 @@ import {
   COMPANION,
   CROPS,
   SEED_SAVING,
+  MAKER_SPOTS,
+  TILES,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -2026,5 +2028,196 @@ describe('seed saving (task 19)', () => {
     await g.buy_seeds();
     assert.match(rows.find((r) => r.startsWith('Cucumber Seeds'))!, /Or save your own: 3 Cucumber make 1 bag \(Rucksack\)/);
     assert.ok(!/save your own/.test(rows.find((r) => r.startsWith('Turnip Seeds'))!));
+  });
+});
+
+describe('makers you can walk up to (task 30)', () => {
+  const spot = MAKER_SPOTS['Mayonnaise Maker'];
+  /** A farm with a Mayonnaise Maker installed and the player facing it from the path below. */
+  const withMaker = (inv: Record<string, number> = {}) => {
+    const g = fresh();
+    g.makers = ['Mayonnaise Maker'];
+    g.place_makers();
+    g.inv = { ...inv };
+    g.minutes = 10 * 60;
+    g.warp('farm', spot.x, spot.y + 1, [0, -1]);
+    g.warp_fx = null;
+    return g;
+  };
+  const answering = (g: any, picks: (string | null)[]) => {
+    const seen: { title: string; opts: string[]; info: string[] }[] = [];
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      seen.push({ title, opts, info: typeof info === 'function' ? info(0) : info || [] });
+      const want = picks.shift();
+      if (want === undefined || want === null) return null;
+      const i = opts.findIndex((o) => o.trim().startsWith(want));
+      assert.ok(i >= 0, `"${want}" offered in ${title}: ${opts.join(' | ')}`);
+      return i;
+    };
+    return seen;
+  };
+
+  test('each Maker has its own spot on open farm ground beside the coop or barn', () => {
+    const g = fresh();
+    const farm = g.maps.farm;
+    const taken = new Set<string>();
+    for (const [name, sp] of Object.entries(MAKER_SPOTS)) {
+      assert.equal(farm.tile(sp.x, sp.y), 'grass', `${name} spot starts as grass`);
+      assert.ok(farm.tile(sp.x, sp.y + 1) === 'path', `${name} is reached from the farm path`);
+      assert.ok(!taken.has(`${sp.x},${sp.y}`));
+      taken.add(`${sp.x},${sp.y}`);
+      // not the dog's or the horse's spot, and not a door
+      assert.ok(!(sp.x === 21 && sp.y === 6) && !(sp.x === 25 && sp.y === 6), name);
+      assert.ok(!(`${sp.x},${sp.y}` in farm.doors), name);
+    }
+    assert.equal(TILES.maker[0], '⚙');
+  });
+
+  test('ordering a Maker stands it on the farm; a new farm takes it away', async () => {
+    const g = fresh();
+    quiet(g);
+    g.house_flags = ['Coop Expansion'];
+    g.gold = 25000;
+    g.inv = { Adamantite: 1 };
+    answering(g, ['Mayonnaise Maker']);
+    await g.order_maker();
+    assert.deepEqual(g.makers, ['Mayonnaise Maker']);
+    assert.equal(g.maps.farm.tile(spot.x, spot.y), 'maker');
+    assert.equal(TILES.maker[3], false, 'you stand beside it, not on it');
+    g.new_game('Pete', 'Moon');
+    assert.equal(g.maps.farm.tile(spot.x, spot.y), 'grass');
+  });
+
+  test('walk up, load every grade, see when it is done, and collect it there', async () => {
+    const g = withMaker({ Egg: 2, 'Golden Egg': 3, Turnip: 1 });
+    quiet(g);
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'LOAD' });
+    assert.equal(g.facing_action().label, 'LOAD');
+    let seen = answering(g, ['Load 5 eggs']);
+    await g.interact();
+    assert.equal(seen[0].title, 'Mayonnaise Maker');
+    const info = seen[0].info.join('\n');
+    assert.match(info, /3 x Golden Egg → Golden Mayonnaise/);
+    assert.match(info, /2 x Egg → Small Mayonnaise/);
+    assert.match(info, /Takes 4 hours: ready at 2:00PM/);
+    assert.deepEqual(g.inv, { Turnip: 1 }, 'eggs went in, the turnip stayed');
+    assert.equal(g.msgs.at(-1)[0], 'Loaded 5 eggs into the Mayonnaise Maker: ready at 2:00PM.');
+
+    // working: the machine says when, and the glyph turns orange
+    g.minutes = 12 * 60 + 40;
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'CHECK' });
+    assert.equal(g.facing_action().summary, 'Mayonnaise Maker: ready at 2:00PM');
+    assert.deepEqual(g.glyph(g.maps.farm, spot.x, spot.y, 'maker').slice(0, 2), ['⚙', '09']);
+    seen = answering(g, [null]);
+    await g.interact();
+    assert.match(seen[0].info[0], /Working: ready at 2:00PM \(1h 20m left\)/);
+    assert.deepEqual(seen[0].opts, ['Leave']);
+
+    // done: green, and the menu lists each grade before collecting
+    g.minutes = 14 * 60;
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'COLLECT' });
+    assert.deepEqual(g.glyph(g.maps.farm, spot.x, spot.y, 'maker').slice(0, 2), ['⚙', '0B']);
+    seen = answering(g, ['Collect 5 mayonnaise']);
+    await g.interact();
+    assert.match(seen[0].info.join('\n'), /3 x Golden Mayonnaise[\s\S]*2 x Small Mayonnaise/);
+    assert.deepEqual(g.inv, { Turnip: 1, 'Golden Mayonnaise': 3, 'Small Mayonnaise': 2 });
+    assert.equal(g.maker_state('Mayonnaise Maker'), 'idle');
+    assert.deepEqual(g.glyph(g.maps.farm, spot.x, spot.y, 'maker').slice(0, 2), ['⚙', '03']);
+  });
+
+  test('an empty Maker with nothing to load explains itself without a menu', async () => {
+    const g = withMaker({});
+    const said = quiet(g);
+    const seen = answering(g, []);
+    await g.interact();
+    assert.equal(seen.length, 0);
+    assert.match(said[0], /The Mayonnaise Maker is empty\. It takes every grade of eggs in your rucksack and needs 4 hours\./);
+  });
+
+  test('collecting with more eggs in the rucksack offers the next batch straight away', async () => {
+    const g = withMaker({ Egg: 1 });
+    quiet(g);
+    g.load_maker('Mayonnaise Maker');
+    g.inv['Good Egg'] = 4;
+    g.minutes += 4 * 60;
+    const seen = answering(g, ['Collect', 'Load 4 eggs']);
+    await g.interact();
+    assert.equal(seen.length, 2);
+    assert.equal(g.inv['Small Mayonnaise'], 1);
+    assert.deepEqual(g.maker_jobs['Mayonnaise Maker'].steps, [{ input: 'Good Egg', output: 'Medium Mayonnaise', qty: 4 }]);
+  });
+
+  test('the clock runs through the night: an evening batch is ready by morning', async () => {
+    const g = fresh();
+    g.minutes = 22 * 60;
+    const today = g.absday();
+    assert.equal(g.maker_when(g.now_abs() + 4 * 60), 'by morning');
+    assert.equal(g.maker_when(g.now_abs() + 8 * 60), 'by morning');
+    g.minutes = 23 * 60;
+    assert.equal(g.maker_when(g.now_abs() + 8 * 60), 'tomorrow at 7:00AM');
+    assert.equal(g.maker_when(today * 1440 + 15 * 60), 'at 3:00PM');
+
+    const h = withMaker({ 'High Egg': 2 });
+    h.minutes = 21 * 60;
+    h.load_maker('Mayonnaise Maker');
+    assert.match(h.msgs.at(-1)[0], /ready by morning\.$/);
+    for (let i = 0; i < 12; i++) h.scr.pushKey('enter');
+    await h.new_day('sleep');
+    assert.equal(h.maker_state('Mayonnaise Maker'), 'ready', 'done when you wake up');
+    assert.ok(h.today_lines().some((l: string) => l.includes('Makers Mayonnaise: ready to collect')));
+  });
+
+  test('the coop menu shows the machine outside instead of processing in the menu', async () => {
+    const g = withMaker({ Egg: 3 });
+    const seen = answering(g, [null]);
+    await g.coop();
+    assert.ok(!seen[0].opts.some((o) => /Maker/.test(o)), seen[0].opts.join(' | '));
+    assert.ok(seen[0].info.some((l) => l.includes('Mayonnaise Maker (outside, west of the door): empty (3 eggs in your rucksack to load)')));
+    g.load_maker('Mayonnaise Maker');
+    const again = answering(g, [null]);
+    await g.coop();
+    assert.ok(again[0].info.some((l) => l.includes('Mayonnaise Maker (outside, west of the door): 3 eggs in, ready at 2:00PM')));
+  });
+
+  test('a batch and its machine survive a reload; a broken batch is dropped', () => {
+    const g = withMaker({ 'P Egg': 2 });
+    g.load_maker('Mayonnaise Maker');
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.equal(h.maps.farm.tile(spot.x, spot.y), 'maker');
+    assert.deepEqual(h.maker_jobs, g.maker_jobs);
+    assert.equal(h.maker_state('Mayonnaise Maker'), 'working');
+
+    const bad = JSON.parse(JSON.stringify(snap));
+    bad.maker_jobs = {
+      'Mayonnaise Maker': { steps: [{ input: 'P Egg', output: 'Not An Item', qty: 2 }], ready: 5 },
+      'Cheese Maker': { steps: [{ input: 'Small Milk', output: 'Small Cheese', qty: 1 }], ready: 5 },
+    };
+    const k = fresh();
+    k.applySaveData(bad);
+    assert.deepEqual(k.maker_jobs, {}, 'unknown output and a Maker not owned are both dropped');
+
+    const old = JSON.parse(JSON.stringify(snap));
+    delete old.maker_jobs;
+    const o = fresh();
+    o.applySaveData(old);
+    assert.deepEqual(o.maker_jobs, {});
+    assert.equal(o.maps.farm.tile(spot.x, spot.y), 'maker', 'older saves with a Maker get the machine too');
+  });
+
+  test('the renderer draws the machine as a lit point of interest', () => {
+    const g = withMaker({ Egg: 1 });
+    g.load_maker('Mayonnaise Maker');
+    g.render();
+    let found = false;
+    for (let y = 0; y < g.scr.h; y++) for (let x = 0; x < g.scr.w; x++) {
+      const tag = g.scr.tags[y][x];
+      if (tag?.wx === spot.x && tag?.wy === spot.y && tag.t === 'maker') {
+        found = true;
+        assert.equal(g.scr.buf[y][x][0], '⚙');
+      }
+    }
+    assert.ok(found, 'machine visible on screen');
   });
 });
