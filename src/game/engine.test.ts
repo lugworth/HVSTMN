@@ -36,6 +36,10 @@ import {
   SEED_SAVING,
   MAKER_SPOTS,
   TILES,
+  PRESERVES,
+  PRESERVE_SEASONS,
+  RECIPES,
+  MARKET_SHOPPERS,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -1747,13 +1751,16 @@ describe('market regulars at the stall (task 10)', () => {
     assert.ok(g.stall.log.some((l: string) => l.startsWith(`Lillia hoped for a`) && l.includes(w.flower)));
   });
 
-  test('in winter Lillia stays home and Doug asks only for eggs', () => {
+  test('in winter Lillia stays home and Doug asks for eggs and a preserve (task 31)', () => {
     const g = monday();
     g.season = 3;
     g.day = 1;
     const w = g.market_wants();
-    assert.deepEqual(w, { pantry: ['Egg'], flower: null });
-    assert.equal(g.market_clue(), 'Doug wants Egg.');
+    assert.equal(w.flower, null);
+    assert.equal(w.pantry.length, 2);
+    assert.ok(PRESERVES.includes(w.pantry[0]), w.pantry.join(', '));
+    assert.equal(w.pantry[1], 'Egg', 'nothing grows in winter, so the other pick is eggs');
+    assert.equal(g.market_clue(), `Doug wants ${w.pantry[0]} and Egg.`);
   });
 
   test('no clue for a Saturday that is a festival, since there is no market', () => {
@@ -2219,5 +2226,109 @@ describe('makers you can walk up to (task 30)', () => {
       }
     }
     assert.ok(found, 'machine visible on screen');
+  });
+});
+
+describe('a few preserves (task 31)', () => {
+  /** A Monday (absolute day `1 + 30 * season`) in the given season, sunny, before the market. */
+  const mondayIn = (season: number) => {
+    const g = fresh();
+    g.season = season;
+    g.day = 1;
+    g.minutes = 8 * 60;
+    g.weather = 'Sunny';
+    return g;
+  };
+
+  test('three preserves, made in the kitchen; two need no utensil and are worth more than what goes in', () => {
+    assert.deepEqual(PRESERVES, ['Pickled Turnip', 'Dried Herbs', 'Strawberry Jam']);
+    for (const p of PRESERVES) {
+      assert.equal(ITEMS[p][2], 'dish', `${p} is a kitchen good`);
+      assert.ok(RECIPES[p], `${p} has a recipe`);
+      const [ing, , , sell] = RECIPES[p];
+      const raw = ing.reduce((t: number, [i, q]: [string, number]) => t + ITEMS[i][0] * q, 0);
+      assert.ok(sell > raw, `${p} ships for more than its ${raw}G of ingredients`);
+      assert.equal(ITEMS[p][0], sell);
+    }
+    assert.equal(RECIPES['Pickled Turnip'][1], null);
+    assert.deepEqual(RECIPES['Dried Herbs'], [[['Medicinal Herb', 3]], null, 10, 50]);
+    assert.ok(FORAGE.Spring.includes('Medicinal Herb'), 'the herbs can be gathered in spring');
+  });
+
+  test('cooking Dried Herbs uses three Medicinal Herbs, and the kitchen says what a preserve is for', async () => {
+    const g = mondayIn(0);
+    g.inv = { 'Medicinal Herb': 4 };
+    const seen: string[][] = [];
+    let n = 0;
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any = null) => {
+      if (n++ > 0) return null;
+      const i = opts.findIndex((o) => o.slice(2) === 'Dried Herbs');
+      seen.push(info(i));
+      return i;
+    };
+    await g.cook();
+    assert.deepEqual(g.inv, { 'Medicinal Herb': 1, 'Dried Herbs': 1 });
+    assert.ok(seen[0].some((l) => l.includes('Keeps for winter. Doug buys preserves for the inn in Fall and Winter.')), seen[0].join(' | '));
+  });
+
+  test('Doug asks for one preserve in Fall and Winter, never in Spring or Summer', () => {
+    const seen = new Set<string>();
+    for (let season = 0; season < 4; season++) {
+      for (let week = 0; week < 4; week++) {
+        const g = mondayIn(season);
+        g.day = 1 + week * 7;
+        if (g.day > 30) continue;
+        const { pantry } = g.market_wants();
+        assert.equal(pantry.length, 2);
+        assert.notEqual(pantry[0], pantry[1]);
+        const preserves = pantry.filter((i: string) => PRESERVES.includes(i));
+        if (PRESERVE_SEASONS.includes(season)) {
+          assert.equal(preserves.length, 1, `${pantry.join(', ')} in season ${season}`);
+          preserves.forEach((p: string) => seen.add(p));
+        } else {
+          assert.equal(preserves.length, 0, `${pantry.join(', ')} in season ${season}`);
+        }
+      }
+    }
+    assert.ok(seen.size >= 2, `more than one preserve turns up over the cold weeks (${[...seen].join(', ')})`);
+  });
+
+  test('at a winter market Doug buys the preserve he asked for at his premium', async () => {
+    const g = mondayIn(3);
+    const w = g.market_wants();
+    const want = w.pantry[0];
+    g.day += g.market_next() - g.absday(); // on to that week's Saturday
+    g.minutes = 9 * 60;
+    assert.equal(g.stall_state(), 'ready');
+    g.warp('town', STALL_SPOT[0], STALL_SPOT[1] + 1, [0, -1]);
+    g.inv = { [want]: 4, Egg: 2 };
+    assert.ok(g.stall_open([[want, 4], ['Egg', 2]]));
+    g.stall_regular('pantry');
+    assert.equal(g.stall.goods[0].sold, MARKET_SHOPPERS.pantry.each);
+    assert.equal(g.stall.goods[0].item, want);
+    assert.ok(g.stall.gold >= Math.round(ITEMS[want][0] * MARKET_SHOPPERS.pantry.markup) * MARKET_SHOPPERS.pantry.each);
+    assert.match(g.stall.log.at(-1), new RegExp(`Doug: "Just what the inn's kitchen needs\\." Bought .*${want}`));
+  });
+
+  test('the rucksack marks a preserve and says who wants it this week', async () => {
+    const g = mondayIn(3);
+    const want = g.market_wants().pantry[0];
+    g.inv = { [want]: 1, Turnip: 1 };
+    const infos: Record<string, string[]> = {};
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      if (title !== '▣ Rucksack') return null;
+      opts.forEach((_o, i) => {
+        const lines = info(i);
+        infos[lines[0].split('  ·  ')[0]] = lines;
+      });
+      return null;
+    };
+    await g.rucksack();
+    assert.deepEqual(infos.PRESERVE, [
+      `PRESERVE  ·  Ships ${ITEMS[want][0]}G  ·  +${ITEMS[want][1]} Stamina`,
+      `Keeps for winter. Doug wants ${want} at this Saturday's market.`,
+    ]);
+    assert.equal(infos.CROP.length, 1, 'a turnip gets no preserve line');
+    assert.equal(g.preserve_note('Turnip'), null);
   });
 });

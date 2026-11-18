@@ -440,6 +440,19 @@ describe('market regulars and their lists (task 10)', () => {
     assert.deepEqual(wants(117, 3).pantry, ['Egg']);
   });
 
+  test('with preserves to keep (task 31), the first pick is always one of them and the rest are staples', () => {
+    const keeps = ['Pickled Turnip', 'Dried Herbs', 'Strawberry Jam'];
+    for (const season of [2, 3]) {
+      for (let day = 0; day < 400; day += 7) {
+        const { pantry } = marketWants(day, season, PANTRY_STAPLES, inSeason(season), MARKET_FLOWERS, 2, keeps);
+        assert.equal(pantry.length, 2);
+        assert.ok(keeps.includes(pantry[0]), pantry.join(', '));
+        assert.ok(!keeps.includes(pantry[1]) && (pantry[1] === 'Egg' || CROPS[pantry[1]][0] === SEASONS[season]), pantry.join(', '));
+      }
+    }
+    assert.deepEqual(marketWants(5, 3, PANTRY_STAPLES, inSeason(3), MARKET_FLOWERS, 0, keeps).pantry, []);
+  });
+
   test("Lillia's flower can always be had that season, and she wants none in winter", () => {
     const grows = (flower: string, season: number) =>
       CROPS[flower]?.[0] === SEASONS[season] ||
