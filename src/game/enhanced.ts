@@ -1195,6 +1195,8 @@ const ICONS: Record<string, [string, string]> = {
 };
 // Farm HUD chrome: weathered wood from the dark end of the Isotope orange ramp. The rails stay
 // about as quiet as the grey rules they replace; the sign board is dark enough for white text.
+/** The blossom that marks a companion pairing under a seed bag's aim. */
+const COMPANION_MARK = '#ff80c0';
 const FENCE_RAIL = toIsotope(mix('#ff9900', '#000000', 0.6));
 const FENCE_POST = toIsotope(mix('#ff9900', '#000000', 0.42));
 const SIGN_BOARD = toIsotope(mix('#ff9900', '#000000', 0.74));
@@ -1445,6 +1447,8 @@ export function computeFrame(
         } else if (tag.hlArea) {
           o.bg = mix(o.bg, '#c8d4ff', 0.05);
         }
+        // a seed bag's aim marks the tiles in a companion pairing with a small blossom (task 17)
+        if (tag.companion) o.detail = { ch: '✿', fg: COMPANION_MARK };
       } else if (tag && tag.t === 'ui') {
         const k = tag.k || '';
         uiCell = true;

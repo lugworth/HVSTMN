@@ -1,5 +1,17 @@
 # Handoff: HRVSTMN
 
+## Companion planting (mechanics task 17), 2026-11-18
+
+- One pairing (`COMPANION` in `constants.ts`): a **Moondrop Flower in bloom** on any of the eight
+  tiles touching a **Cucumber** gives +1 cucumber every picking, by hand, into the Basket (any
+  overflow goes to the rucksack) and through Harvest Sprites (bonuses are settled before the
+  sprites pick anything). Both seeds are on sale from the first spring day (Cucumber at Jeff's,
+  Moondrop at Won's). Strawberry was the first idea, but its seeds are locked until 100 each of
+  turnip, potato and cucumber have shipped, so the pairing would have stayed out of reach.
+- Shown when aiming a seed bag: `companion_preview()` marks the tiles in the pairing (`CellTag.
+  companion`, drawn as a small pink ✿ detail) and FACING reads e.g. "Sow cucumber · 3 by Moondrop:
+  2 a picking". Also in the sow message, when checking a vine, and in Jeff's and Won's shops.
+
 ## Market regulars (mechanics task 10), 2026-11-18
 
 - Two regulars shop at the Saturday stall from a weekly list (`MARKET_SHOPPERS`): **Doug** comes

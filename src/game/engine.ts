@@ -94,6 +94,7 @@ import {
   STALL_CATEGORIES,
   STALL_MARKUP,
   STALL_SIGN,
+  COMPANION,
   MARKET_SHOPPERS,
   PANTRY_STAPLES,
   MARKET_FLOWERS,
@@ -2114,6 +2115,59 @@ export class Game {
     return rollSpringMineDrop(this.mine_floor, allBlessed, rngPct);
   }
 
+  // ---------------------------------------------------------------- companion planting (mechanics task 17)
+  /** The eight farm tiles that touch this one. */
+  companion_ring(pKey: string): string[] {
+    const [x, y] = parseCoordKey(pKey);
+    const ring: string[] = [];
+    for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) if (dx || dy) ring.push(pkey(x + dx, y + dy));
+    return ring;
+  }
+
+  /** Extra harvest for the crop on this tile: a Cucumber with a Moondrop Flower in bloom beside it. */
+  companion_bonus(pKey: string): number {
+    const c = this.crops[pKey];
+    if (!c || c[0] !== COMPANION.crop) return 0;
+    const blooms = this.companion_ring(pKey).some((k) => {
+      const n = this.crops[k];
+      return !!n && n[0] === COMPANION.helper && n[1] >= CROPS[COMPANION.helper][2];
+    });
+    return blooms ? COMPANION.bonus : 0;
+  }
+
+  /** What checking a growing crop says about its companion, if it has one. */
+  companion_note(pKey: string): string {
+    const c = this.crops[pKey];
+    if (!c || c[0] !== COMPANION.crop) return '';
+    if (this.companion_bonus(pKey)) return ` A ${COMPANION.helper} in bloom beside it: ${1 + COMPANION.bonus} a picking.`;
+    const planted = this.companion_ring(pKey).some((k) => this.crops[k]?.[0] === COMPANION.helper);
+    return planted ? ` The ${COMPANION.helper} beside it will draw bees once it blooms.` : '';
+  }
+
+  /**
+   * What a seed bag aimed at (tx, ty) would do for the pairing: the tiles to mark and a line for
+   * FACING. Cucumber seeds: the tiles they would land on that touch a Moondrop. Moondrop seeds:
+   * the Cucumber vines the new flowers would touch. Null for any other bag, or no pairing.
+   */
+  companion_preview(tool: string, tx: number, ty: number): { cells: string[]; text: string } | null {
+    if (this.mapname !== 'farm' || !tool.endsWith(' Seeds')) return null;
+    const crop = tool.slice(0, -6);
+    if (crop !== COMPANION.crop && crop !== COMPANION.helper) return null;
+    const sown: string[] = [];
+    for (const dy of [-1, 0, 1]) for (const dx of [-1, 0, 1]) {
+      const k = pkey(tx + dx, ty + dy);
+      if (this.tilled.has(k) && !this.crops[k]) sown.push(k);
+    }
+    const isCrop = (k: string, name: string) => this.crops[k]?.[0] === name;
+    if (crop === COMPANION.crop) {
+      const cells = sown.filter((k) => this.companion_ring(k).some((n) => isCrop(n, COMPANION.helper)));
+      return cells.length ? { cells, text: `${cells.length} by ${COMPANION.helper.split(' ')[0]}: ${1 + COMPANION.bonus} a picking` } : null;
+    }
+    const sownSet = new Set(sown);
+    const cells = Object.keys(this.crops).filter((k) => isCrop(k, COMPANION.crop) && this.companion_ring(k).some((n) => sownSet.has(n)));
+    return cells.length ? { cells, text: `helps ${cells.length} ${COMPANION.crop}: +${COMPANION.bonus} a picking` } : null;
+  }
+
   async sow(bag: string, p: [number, number]): Promise<void> {
     const crop = bag.slice(0, -6);
     if (this.mapname !== 'farm') {
@@ -2126,11 +2180,13 @@ export class Game {
       return;
     }
     let n = 0;
+    const sowed: string[] = [];
     for (const dx of [-1, 0, 1]) {
       for (const dy of [-1, 0, 1]) {
         const qk = pkey(p[0] + dx, p[1] + dy);
         if (this.tilled.has(qk) && !this.crops[qk]) {
           this.crops[qk] = [crop, 0];
+          sowed.push(qk);
           n += 1;
         }
       }
@@ -2140,7 +2196,12 @@ export class Game {
       return;
     }
     this.take(bag);
-    this.msg(`You sowed ${crop} seeds on ${n} tile${n > 1 ? 's' : ''}.`, '0B');
+    const paired = crop === COMPANION.crop
+      ? sowed.filter((k) => this.companion_ring(k).some((r) => this.crops[r]?.[0] === COMPANION.helper)).length
+      : crop === COMPANION.helper
+        ? Object.keys(this.crops).filter((k) => this.crops[k][0] === COMPANION.crop && this.companion_ring(k).some((r) => sowed.includes(r))).length
+        : 0;
+    this.msg(`You sowed ${crop} seeds on ${n} tile${n > 1 ? 's' : ''}.${paired ? ` ${paired} ${COMPANION.crop} ${paired > 1 ? 'plants are' : 'plant is'} paired with ${COMPANION.helper}.` : ''}`, '0B');
     if (!this.inv[bag]) {
       this.tool = 'Watering Can';
     }
@@ -2393,12 +2454,16 @@ export class Game {
           this.msg('Use your Sickle to cut ripe pasture Grass into Fodder.');
           return;
         }
+        const n = 1 + this.companion_bonus(pKey);
+        const helped = n > 1 ? ` The ${COMPANION.helper} beside it drew the bees.` : '';
         if (this.held === 'Basket' && getBasketTotal(this.basket) < BASKET_CAPACITY) {
-          this.basket[crop] = (this.basket[crop] || 0) + 1;
-          this.msg(`Harvested ${crop} into Basket (${getBasketTotal(this.basket)}/${BASKET_CAPACITY})!`, '0B');
+          const room = Math.min(n, BASKET_CAPACITY - getBasketTotal(this.basket));
+          this.basket[crop] = (this.basket[crop] || 0) + room;
+          if (n > room) this.give(crop, n - room);
+          this.msg(`Harvested ${n > 1 ? `${n} ${crop}` : crop} into Basket (${getBasketTotal(this.basket)}/${BASKET_CAPACITY})!${helped}`, '0B');
         } else {
-          this.give(crop);
-          this.msg(`You harvested a ${crop}!`, '0B');
+          this.give(crop, n);
+          this.msg(n > 1 ? `You harvested ${n} ${crop}!${helped}` : `You harvested a ${crop}!`, '0B');
         }
         if (regrow) {
           this.crops[pKey][1] = days - regrow;
@@ -2408,7 +2473,7 @@ export class Game {
         this.mastery_add('farming');
         this.fx_add('sparkle', tx, ty, 0.7);
       } else {
-        this.msg(`${crop}: ${days - age} more day${days - age > 1 ? 's' : ''} to go.${this.wet.has(pKey) ? '' : ' (needs water)'}`);
+        this.msg(`${crop}: ${days - age} more day${days - age > 1 ? 's' : ''} to go.${this.wet.has(pKey) ? '' : ' (needs water)'}${this.companion_note(pKey)}`);
       }
       return;
     }
@@ -3981,7 +4046,12 @@ export class Game {
     ];
     const sel = await this.menu(
       `Won's Exotic Shop   ${this.gold}G`,
-      items.map(([name, p]) => `${name} (${p}G)`)
+      items.map(([name, p]) => `${name} (${p}G)`),
+      0,
+      (s) =>
+        items[s]?.[0] === `${COMPANION.helper} Seeds`
+          ? [`Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop}`, `gives ${1 + COMPANION.bonus} a picking.`]
+          : [],
     );
     if (sel === null) return;
     const [name, price, lim] = items[sel];
@@ -4130,6 +4200,9 @@ export class Game {
       const regrow = d[3] ? `, regrows every ${d[3]}d` : '';
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
       const lines = [`  ${d[2]} days to grow${regrow} — ships for ${d[4]}G each (sows 3x3)`];
+      if (c === COMPANION.crop || c === COMPANION.helper) {
+        lines.push(`  Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop} gives ${1 + COMPANION.bonus} a picking.`);
+      }
       if (gate.progressText) {
         lines.push(`  Unlock Gate: ${gate.progressText}`);
       } else {
@@ -4776,6 +4849,8 @@ export class Game {
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return withTarget('Cast', 'your line', 'CAST');
     if (this.mapname === 'river' && tile === 'water' && this.tool !== 'Watering Can') return { label: 'SKIP', summary: 'Skip the water' };
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
+    const pairing = this.companion_preview(this.tool, tx, ty);
+    if (pairing) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${pairing.text}` };
     return withTarget('Use', short.length > 7 ? short.toLowerCase() : short.toLowerCase(), short.length > 7 ? 'USE' : `USE ${short.toUpperCase()}`);
   }
 
@@ -5988,10 +6063,12 @@ export class Game {
           watered += 1;
         }
       } else if (job.task === 'Harvesting') {
+        // settle companion bonuses first, so picking a flower in the same pass does not cancel them
+        const bonus = Object.fromEntries(Object.keys(this.crops).map((k) => [k, this.companion_bonus(k)]));
         for (const [k, [crop, age]] of Object.entries(this.crops)) {
           const [days, regrow] = [CROPS[crop][2], CROPS[crop][3]];
           if (age >= days && crop !== 'Grass') {
-            this.bin[crop] = (this.bin[crop] || 0) + 1;
+            this.bin[crop] = (this.bin[crop] || 0) + 1 + bonus[k];
             harvested += 1;
             if (regrow) {
               this.crops[k][1] = days - regrow;
@@ -6952,6 +7029,8 @@ export class Game {
       }
     }
 
+    const companion = new Set(this.companion_preview(this.tool, tx, ty)?.cells ?? []);
+
     for (let sy = 0; sy < Math.min(vh, m.h); sy++) {
       const y = cy + sy;
       const row = m.t[y];
@@ -6969,6 +7048,7 @@ export class Game {
         }
         const tag = this.cell_tag(m, x, y, row[x], hl, hl && !(x === tx && y === ty));
         if (actionReticle && x === tx && y === ty) tag.actionTarget = true;
+        if (companion.has(pkey(x, y))) tag.companion = true;
         const px = ox + sx;
         s.put(px, oy + sy, ch, fg, bg, bold);
         s.tag(px, oy + sy, tag);
