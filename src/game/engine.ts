@@ -94,6 +94,9 @@ import {
   STALL_CATEGORIES,
   STALL_MARKUP,
   STALL_SIGN,
+  MARKET_SHOPPERS,
+  PANTRY_STAPLES,
+  MARKET_FLOWERS,
   INN_EVENING_HOURS,
   INN_LISTEN_FRIEND,
   INN_JOIN_FRIEND,
@@ -157,7 +160,10 @@ import {
   rollStoneSkips,
   innSceneFor,
   stallVisit,
+  marketWants,
+  marketVisit,
   type StallGood,
+  type MarketWants,
   innCardsWin,
   canUpgradeAdvice,
   nextRegions,
@@ -257,6 +263,16 @@ const MAKER_NOUNS: Record<string, [string, string, string]> = {
 };
 
 /** Total items and sell value added by a Maker batch. */
+/** 'Potato', 'Potato and Egg', 'Potato, Egg and Corn'. */
+function andList(items: string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/** 'a' or 'an' for a following word. */
+function aOrAn(word: string): string {
+  return /^[AEIOU]/i.test(word) ? 'an' : 'a';
+}
+
 function makerGain(steps: { input: string; output: string; qty: number }[]): [number, number] {
   let n = 0;
   let gain = 0;
@@ -481,7 +497,7 @@ export class Game {
   inn_scenes_seen: string[] = [];
   inn_evening_day: number = -1;
   /** Saturday stall (task 09): today's goods, takings and callers while it is open, else null. */
-  stall: { day: number; goods: StallGood[]; gold: number; log: string[]; seen: string[] } | null = null;
+  stall: { day: number; goods: StallGood[]; gold: number; log: string[]; seen: string[]; callers?: string[] } | null = null;
   /** The last market day you traded on, and what you took. */
   stall_last: [number, number] = [-1, 0];
   stall_earned: number = 0;
@@ -4403,6 +4419,8 @@ export class Game {
     } else if ((this.weekday + 1) % 7 === STALL_DAY && !this.fest_on(1)) {
       lines.push('  Tomorrow: Saturday market in Rose Square. Set aside up to three goods to sell.');
     }
+    const marketClue = this.weekday !== STALL_DAY || ['ready', 'open'].includes(this.stall_state()) ? this.market_clue() : null;
+    if (marketClue) lines.push(`  Saturday regulars: ${marketClue}`);
     lines.push('');
     if (this.stamina <= 30 || this.fatigue >= 80) {
       lines.push('  Rest: stamina is low. Eat, soak at the Hot Spring, or sleep early.');
@@ -4578,6 +4596,8 @@ export class Game {
       } else if ((this.weekday + 1) % 7 === STALL_DAY && !this.fest_on(1)) {
         all.push(...wrapLabeled('▣ Next  ', '04', 'Saturday market in Rose Square.', '04'));
       }
+      const wantClue = this.weekday !== STALL_DAY || ['ready', 'open'].includes(this.stall_state()) ? this.market_clue() : null;
+      if (wantClue) all.push(...wrapLabeled('▣ Wants ', '09', wantClue, '05'));
 
       all.push({ kind: 'fence' });
       all.push(...wrapLabeled(low ? '! Rest  ' : '❧ Plan  ', low ? '08' : '0C', planText, low ? '08' : '05'));
@@ -5001,6 +5021,71 @@ export class Game {
     return this.minutes < STALL_STOCK_BY * 60 ? 'ready' : 'shut';
   }
 
+  // ---------------------------------------------------------------- market regulars (mechanics task 10)
+  /** Absolute day of the next market Saturday: today on a Saturday. */
+  market_next(): number {
+    const d = this.absday();
+    return d + ((STALL_DAY - (d % 7) + 7) % 7);
+  }
+
+  /** The regulars' lists for the market on absolute day `day` (the same all week). */
+  market_wants(day: number = this.market_next()): MarketWants {
+    const season = Math.floor((((day % 120) + 120) % 120) / 30);
+    return marketWants(day, season, PANTRY_STAPLES, (i) => CROPS[i]?.[0] === SEASONS[season], MARKET_FLOWERS, MARKET_SHOPPERS.pantry.wants);
+  }
+
+  /** "Doug wants Potato and Egg; Lillia wants a Toy Flower." Null when that Saturday is a festival. */
+  market_clue(day: number = this.market_next()): string | null {
+    if (this.fest_on(day - this.absday())) return null;
+    const w = this.market_wants(day);
+    const parts = [`${MARKET_SHOPPERS.pantry.name} wants ${andList(w.pantry)}`];
+    if (w.flower) parts.push(`${MARKET_SHOPPERS.flower.name} wants ${aOrAn(w.flower)} ${w.flower}`);
+    return parts.join('; ') + '.';
+  }
+
+  /** Which regular is after this good at the coming market, if any. */
+  market_wanted_by(item: string, day: number = this.market_next()): string | null {
+    const w = this.market_wants(day);
+    if (w.pantry.includes(item)) return MARKET_SHOPPERS.pantry.name;
+    if (w.flower === item) return MARKET_SHOPPERS.flower.name;
+    return null;
+  }
+
+  /** A regular comes by at their hour and buys only from their list, or leaves without. */
+  stall_regular(kind: 'pantry' | 'flower'): void {
+    const st = this.stall;
+    if (!st) return;
+    const who = MARKET_SHOPPERS[kind];
+    const w = this.market_wants(st.day);
+    const list = kind === 'pantry' ? w.pantry : w.flower ? [w.flower] : [];
+    if (!list.length) return; // no flowers in winter, so Lillia stays home
+    (st.callers ||= []).push(who.name);
+    const buys = marketVisit(st.goods, list, (item) => ITEMS[item]?.[0] || 0, who.markup, who.each);
+    if (!buys.length) {
+      st.log.push(
+        kind === 'pantry'
+          ? `${who.name} came for ${andList(list)} for the inn, and left without.`
+          : `${who.name} hoped for ${aOrAn(list[0])} ${list[0]}, and left without.`,
+      );
+      return;
+    }
+    let gold = 0;
+    for (const b of buys) {
+      st.goods[b.index].sold += b.qty;
+      gold += b.gold;
+    }
+    st.gold += gold;
+    this.friend[who.name] = clamp((this.friend[who.name] || 0) + 3, 0, 100);
+    const got = andList(buys.map((b) => `${b.qty} ${st.goods[b.index].item}`));
+    st.log.push(
+      kind === 'pantry'
+        ? `${who.name}: "Just what the inn's kitchen needs." Bought ${got}.`
+        : `${who.name}: "You found one! I've been looking all season." Bought ${got}.`,
+    );
+    this.msg(`Market: ${who.name} bought ${got} (+${gold}G).`, '09');
+    if (this.mapname === 'town') this.fx_add('coin', STALL_SPOT[0], STALL_SPOT[1], 0.8);
+  }
+
   /** Goods in the rucksack that can go on the stall: produce and food with a shipping price. */
   stall_pool(): string[] {
     return py_sorted(Object.keys(this.inv).filter((i) => (this.inv[i] || 0) > 0 && ITEMS[i] && ITEMS[i][0] > 0 && STALL_CATEGORIES.includes(ITEMS[i][2])));
@@ -5062,6 +5147,8 @@ export class Game {
         return;
       }
       this.stall_shopper();
+      if (h === MARKET_SHOPPERS.pantry.hour) this.stall_regular('pantry');
+      if (h === MARKET_SHOPPERS.flower.hour) this.stall_regular('flower');
     }
   }
 
@@ -5108,7 +5195,8 @@ export class Game {
     }
     if (state === 'shut') {
       const why = this.weekday !== STALL_DAY ? '' : this.fest_on() ? ' No market today: it is a festival.' : ' It is past noon: too late to set up today.';
-      await this.say(STALL_SIGN + why, 'Market Stall');
+      const clue = this.weekday !== STALL_DAY ? this.market_clue() : null;
+      await this.say(STALL_SIGN + why + (clue ? `\nThis Saturday: ${clue}` : ''), 'Market Stall');
       return;
     }
     if (!this.stall_pool().length) {
@@ -5124,9 +5212,11 @@ export class Game {
         ...(picks.length ? ['Open the stall'] : []),
         'Leave it for now',
       ];
+      const clue = this.market_clue();
       const sel = await this.menu(`Your Stall: ${picks.length}/${STALL_SLOTS} goods`, opts, Math.min(picks.length, opts.length - 1), [
         'Shoppers pay a little over the shipping price,',
         `more for things they love. Up to ${STALL_SLOT_MAX} of each.`,
+        ...(clue ? ['', `Regulars: ${clue}`] : []),
       ]);
       if (sel === null || opts[sel] === 'Leave it for now') return;
       if (opts[sel] === 'Open the stall') {
@@ -5137,7 +5227,13 @@ export class Game {
         picks.splice(sel, 1);
         continue;
       }
-      const isel = await this.menu('Put out which good?', pool.map((i) => `${i} x${this.inv[i]}  (ships for ${ITEMS[i][0]}G)`));
+      const isel = await this.menu(
+        'Put out which good?',
+        pool.map((i) => {
+          const fan = this.market_wanted_by(i);
+          return `${i} x${this.inv[i]}  (ships for ${ITEMS[i][0]}G)${fan ? `  ${fan} wants this` : ''}`;
+        }),
+      );
       if (isel === null) continue;
       const item = pool[isel];
       const max = Math.min(STALL_SLOT_MAX, this.inv[item]);

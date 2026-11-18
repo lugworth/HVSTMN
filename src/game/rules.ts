@@ -654,6 +654,60 @@ export function worksSummary(rows: { item: string | null; got: number; need: num
 
 // ---------------------------------------------------------------- Saturday stall (mechanics task 09)
 export type StallGood = { item: string; qty: number; sold: number };
+
+/** A market regular's list for one Saturday (task 10). */
+export type MarketWants = { pantry: string[]; flower: string | null };
+
+/** A whole number from a market day, stable for that day: the same list all week, a new one next week. */
+const marketSeed = (day: number, salt: number) => {
+  const x = Math.sin(day * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/**
+ * What the regulars want on the market held on absolute day `marketDay`, in `season`. Doug wants
+ * `count` different staples: eggs, or a crop in season (`inSeason` says which crops are). Lillia
+ * wants one of the season's unusual flowers, or nothing in winter.
+ */
+export function marketWants(
+  marketDay: number,
+  season: number,
+  staples: readonly string[],
+  inSeason: (item: string) => boolean,
+  flowers: readonly (readonly string[])[],
+  count: number,
+): MarketWants {
+  const pool = staples.filter((i) => i === 'Egg' || inSeason(i));
+  const pantry: string[] = [];
+  for (let k = 0; pantry.length < Math.min(count, pool.length); k++) {
+    const pick = pool[Math.floor(marketSeed(marketDay, k + 1) * pool.length)];
+    if (!pantry.includes(pick)) pantry.push(pick);
+  }
+  const choice = flowers[((season % 4) + 4) % 4] ?? [];
+  const flower = choice.length ? choice[Math.floor(marketSeed(marketDay, 9) * choice.length)] : null;
+  return { pantry, flower };
+}
+
+/**
+ * A regular at the stall buys only from their list: up to `each` of every wanted good still in
+ * stock, at `markup` over the shipping price. An empty result means nothing on the list was out.
+ */
+export function marketVisit(
+  goods: StallGood[],
+  wants: readonly string[],
+  price: (item: string) => number,
+  markup: number,
+  each: number,
+): { index: number; qty: number; gold: number }[] {
+  const buys: { index: number; qty: number; gold: number }[] = [];
+  goods.forEach((g, index) => {
+    const left = g.qty - g.sold;
+    if (left <= 0 || !wants.includes(g.item)) return;
+    const qty = Math.min(left, each);
+    buys.push({ index, qty, gold: Math.round(price(g.item) * markup) * qty });
+  });
+  return buys;
+}
 export type StallTastes = { loves: string[]; likes: string[]; hates: string[] };
 export type StallVisit =
   | { kind: 'sale'; index: number; qty: number; gold: number; pref: 'love' | 'like' | 'neutral' }

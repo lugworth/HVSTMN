@@ -1,5 +1,20 @@
 # Handoff: HRVSTMN
 
+## Market regulars (mechanics task 10), 2026-11-18
+
+- Two regulars shop at the Saturday stall from a weekly list (`MARKET_SHOPPERS`): **Doug** comes
+  at noon for two pantry staples (eggs, or `PANTRY_STAPLES` crops in season), buys up to 3 of each
+  at 1.6x the shipping price; **Lillia** comes at 3 PM for one unusual flower of the season
+  (`MARKET_FLOWERS`, none in winter) and buys up to 2 at 2x. Each visit is +3 friendship.
+- The lists come from `marketWants(marketDay, ...)` in `rules.ts`, seeded by the market's
+  absolute day, so they hold all week and need no save data. `Game.market_next()`,
+  `market_wants()`, `market_clue()` and `market_wanted_by()` expose them.
+- Clues: Today's Plan (`Saturday regulars:` / compact `▣ Wants`) all week, the market sign on
+  other days, the stocking menu's info lines, and "Doug wants this" / "Lillia wants this" in the
+  good picker. No clue for a Saturday that is a festival.
+- Their visits are kept in `stall.callers`, apart from the villagers in `stall.seen`. Older saves
+  with an open stall and no `callers` still get their regulars.
+
 ## Quit safety, fishing, request board and terrain contrast, 2026-11-16
 
 This repository (`lugworth/HVSTMN`, Vercel project `hrvstmnr2`) was rebuilt from
