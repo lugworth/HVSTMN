@@ -96,6 +96,7 @@ import {
   STALL_SIGN,
   COMPANION,
   SEED_SAVING,
+  MAKER_SPOTS,
   MARKET_SHOPPERS,
   PANTRY_STAPLES,
   MARKET_FLOWERS,
@@ -112,7 +113,7 @@ import {
   PUBLIC_WORKS,
 } from './constants';
 import type { ValleyLandmark } from './constants';
-import type { CatchOdds } from './rules';
+import type { CatchOdds, MakerStep } from './rules';
 import {
   CoordSet,
   parseCoordKey,
@@ -257,6 +258,20 @@ export function worksState(d: Partial<PublicWorks> | null | undefined = null): P
   return { delivered: { ...(d?.delivered || {}) }, crop: d?.crop ?? null, done_day: d?.done_day ?? null, built: !!d?.built };
 }
 
+/** Keep only well-formed batches for installed Makers (a save may be old, edited or cut short). */
+function sanitizeMakerJobs(raw: unknown, makers: string[]): Record<string, { steps: MakerStep[]; ready: number }> {
+  const out: Record<string, { steps: MakerStep[]; ready: number }> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [name, job] of Object.entries(raw as Record<string, any>)) {
+    if (!makers.includes(name) || !job || !Array.isArray(job.steps) || !Number.isFinite(job.ready)) continue;
+    const steps = job.steps.filter(
+      (st: any) => st && typeof st.input === 'string' && typeof st.output === 'string' && ITEMS[st.output] && Number.isInteger(st.qty) && st.qty > 0,
+    );
+    if (steps.length) out[name] = { steps: steps.map((st: any) => ({ input: st.input, output: st.output, qty: st.qty })), ready: job.ready };
+  }
+  return out;
+}
+
 /** [input noun, output noun, message colour] per Maker. */
 const MAKER_NOUNS: Record<string, [string, string, string]> = {
   'Mayonnaise Maker': ['eggs', 'mayonnaise', '0A'],
@@ -264,7 +279,6 @@ const MAKER_NOUNS: Record<string, [string, string, string]> = {
   'Yarn Maker': ['wool', 'yarn', '0E'],
 };
 
-/** Total items and sell value added by a Maker batch. */
 /** 'Potato', 'Potato and Egg', 'Potato, Egg and Corn'. */
 function andList(items: string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
@@ -275,6 +289,7 @@ function aOrAn(word: string): string {
   return /^[AEIOU]/i.test(word) ? 'an' : 'a';
 }
 
+/** Total items and sell value added by a Maker batch. */
 function makerGain(steps: { input: string; output: string; qty: number }[]): [number, number] {
   let n = 0;
   let gain = 0;
@@ -453,6 +468,8 @@ export class Game {
   tv_watched_saturday: string | null = null;
   tv_order: [string, number] | null = null;
   makers: string[] = [];
+  /** A batch inside each walk-up Maker: what went in (grade by grade) and the absolute minute it is done. */
+  maker_jobs: Record<string, { steps: MakerStep[]; ready: number }> = {};
   museum: string[] = [];
   museum_rewards: number[] = [];
   requests: VillagerRequest[] = [];
@@ -528,7 +545,7 @@ export class Game {
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
     'heart_events_seen', 'rival_events_seen', 'married', 'marriage_day', 'child_name', 'child_days',
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
-    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers',
+    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
     'requests', 'next_request_id', 'requests_done',
     'mastery_xp', 'mastery_claimed',
@@ -657,6 +674,8 @@ export class Game {
     this.tv_watched_saturday = null;
     this.tv_order = null;
     this.makers = [];
+    this.maker_jobs = {};
+    this.place_makers();
     this.museum = [];
     this.museum_rewards = [];
     this.requests = [];
@@ -996,6 +1015,9 @@ export class Game {
       };
       this.public_works = worksState(d.public_works);
       this.apply_public_works();
+      this.makers = Array.isArray(this.makers) ? this.makers.filter((m) => m in MAKER_SPOTS) : [];
+      this.maker_jobs = sanitizeMakerJobs(this.maker_jobs, this.makers);
+      this.place_makers();
       this.shortcuts = Array.isArray(this.shortcuts) ? this.shortcuts.filter((id) => SHORTCUT_IDS.includes(id)) : [];
       for (const id of this.shortcuts) open_shortcut(this.maps, id);
       this.prune_forage();
@@ -2572,6 +2594,11 @@ export class Game {
       await this.mill_menu();
       return;
     }
+    if (tile === 'maker') {
+      const maker = this.maker_at(tx, ty);
+      if (maker) await this.maker_menu(maker);
+      return;
+    }
     if (signId === 'trash' || tile === 'trash') {
       await this.trash_can_menu();
       return;
@@ -3346,15 +3373,15 @@ export class Game {
       const info = [
         `  Chickens: ${this.chickens}/${this.coop_cap()}   Fed: ${this.fed}   Affection: ${this.chicken_aff}/100`,
         `  Eggs waiting: ${this.eggs}   Incubator: ${this.incubator_days > 0 ? `${this.incubator_days}d left` : 'Empty'}   Feed: ${this.inv['Chicken Feed'] || 0}`,
+        ...(this.makers.includes('Mayonnaise Maker')
+          ? [`  Mayonnaise Maker (outside, west of the door): ${this.maker_status('Mayonnaise Maker')}`]
+          : []),
       ];
       const opts = [
         'Fill feed boxes',
         'Collect eggs (Quality based on affection)',
         'Place Egg in Incubator (3 days to hatch)',
       ];
-      if (this.makers.includes('Mayonnaise Maker')) {
-        opts.push(`Use Mayonnaise Maker: ${this.maker_preview('Mayonnaise Maker')}`);
-      }
       opts.push('Grazing / Outdoor Bell (+Outdoor Hours)', 'Leave');
       const sel = await this.menu('Chicken Coop', opts, 0, info);
       if (sel === null || opts[sel] === 'Leave') return;
@@ -3400,10 +3427,6 @@ export class Game {
             this.msg(`Placed ${eggItem} in the Incubator! A chick will hatch in 3 days.`, '09');
           }
         }
-      } else if (act.startsWith('Use Mayonnaise Maker')) {
-        if (!this.run_maker('Mayonnaise Maker')) {
-          await this.say('You have no Eggs in your rucksack to put into the Mayonnaise Maker.', null);
-        }
       } else if (act.startsWith('Grazing')) {
         if (this.weather !== 'Sunny') {
           await this.say('Only let chickens outside on Sunny days! Rain makes them unhappy.', null);
@@ -3417,40 +3440,164 @@ export class Game {
     }
   }
 
-  /** Short menu label: what a Maker would take now and how much value it adds. */
-  maker_preview(maker: string): string {
-    const steps = makerBatch(maker, this.inv);
-    const noun = MAKER_NOUNS[maker];
-    if (!steps.length) return `no ${noun[0]}`;
-    const [n, gain] = makerGain(steps);
-    return `${n} ${noun[0]}, +${gain}G`;
+  /** Minutes since the start of the game's calendar; it runs on through the night. */
+  now_abs(): number {
+    return this.absday() * 1440 + this.minutes;
+  }
+
+  /** Stand each installed Maker on the farm (and take away any the current farm doesn't own). */
+  place_makers(): void {
+    const m = this.maps['farm'];
+    if (!m) return;
+    for (const [name, spot] of Object.entries(MAKER_SPOTS)) {
+      if (this.makers.includes(name)) m.set(spot.x, spot.y, 'maker');
+      else if (m.tile(spot.x, spot.y) === 'maker') m.set(spot.x, spot.y, 'grass');
+    }
+  }
+
+  /** The installed Maker standing at a farm tile, if any. */
+  maker_at(x: number, y: number): string | null {
+    if (this.mapname !== 'farm') return null;
+    const hit = Object.entries(MAKER_SPOTS).find(([name, sp]) => sp.x === x && sp.y === y && this.makers.includes(name));
+    return hit ? hit[0] : null;
+  }
+
+  /** 'idle' (empty), 'working' (a batch inside, not done yet) or 'ready' (a batch waiting to be collected). */
+  maker_state(maker: string): 'idle' | 'working' | 'ready' {
+    const job = this.maker_jobs[maker];
+    if (!job) return 'idle';
+    return this.now_abs() >= job.ready ? 'ready' : 'working';
+  }
+
+  /** When a batch finishing at absolute minute `ready` is done: 'at 2:00PM', 'by morning', 'tomorrow at 9:00AM'. */
+  maker_when(ready: number): string {
+    const day = Math.floor(ready / 1440);
+    const at = fmt_time(ready % 1440).trim();
+    const today = this.absday();
+    if (day <= today) return `at ${at}`;
+    if (day === today + 1 && ready % 1440 <= 6 * 60) return 'by morning';
+    if (day === today + 1) return `tomorrow at ${at}`;
+    return `on ${absdayLabel(day, false)} at ${at}`;
+  }
+
+  /** '1h 20m' until a batch is done. */
+  maker_left(ready: number): string {
+    const left = Math.max(0, ready - this.now_abs());
+    const h = Math.floor(left / 60);
+    const mm = left % 60;
+    return h ? `${h}h ${mm.toString().padStart(2, '0')}m` : `${mm}m`;
   }
 
   /**
-   * Process every quality tier a Maker accepts in one go. Returns the message, or null if nothing to do.
-   * The message stays one short line (it must fit the single desktop message row): a lone tier is
-   * named, several tiers are summarised; the per-tier result is visible in the rucksack.
+   * Put every grade of a Maker's raw goods from the rucksack into it. The batch keeps each grade
+   * apart, so a Golden Egg still comes out as Golden Mayonnaise. Returns the message, or null if the
+   * Maker isn't installed, already holds a batch, or there is nothing to load.
    */
-  run_maker(maker: string): string | null {
-    if (!this.makers.includes(maker)) return null;
+  load_maker(maker: string): string | null {
+    if (!this.makers.includes(maker) || this.maker_jobs[maker]) return null;
     const steps = makerBatch(maker, this.inv);
     if (!steps.length) return null;
-    for (const st of steps) {
-      this.take(st.input, st.qty);
-      this.give(st.output, st.qty);
-    }
-    const [n, gain] = makerGain(steps);
-    const line =
-      steps.length === 1
-        ? `${maker} made ${n} x ${steps[0].output}! (+${gain}G)`
-        : `${maker} made ${n} ${MAKER_NOUNS[maker][1]} in ${steps.length} grades! (+${gain}G)`;
+    for (const st of steps) this.take(st.input, st.qty);
+    const ready = this.now_abs() + MAKER_SPOTS[maker].hours * 60;
+    this.maker_jobs[maker] = { steps, ready };
+    const [n] = makerGain(steps);
+    const line = `Loaded ${n} ${MAKER_NOUNS[maker][0]} into the ${maker}: ready ${this.maker_when(ready)}.`;
     this.msg(line, MAKER_NOUNS[maker][2]);
     return line;
   }
 
-  /** Raw goods in the rucksack that an installed Maker could process right now. */
+  /**
+   * Take a finished batch out, grade by grade. The message stays one short line (it must fit the
+   * single desktop message row): a lone grade is named, several are summarised; the machine's menu
+   * listed each grade before collecting, and the rucksack shows them after.
+   */
+  collect_maker(maker: string): string | null {
+    if (this.maker_state(maker) !== 'ready') return null;
+    const { steps } = this.maker_jobs[maker];
+    delete this.maker_jobs[maker];
+    for (const st of steps) this.give(st.output, st.qty);
+    const [n, gain] = makerGain(steps);
+    const line =
+      steps.length === 1
+        ? `Collected ${n} x ${steps[0].output} from the ${maker}! (+${gain}G)`
+        : `Collected ${n} ${MAKER_NOUNS[maker][1]} in ${steps.length} grades! (+${gain}G)`;
+    this.msg(line, MAKER_NOUNS[maker][2]);
+    return line;
+  }
+
+  /** One line per grade, for the machine's menu: '3 x Golden Egg → Golden Mayonnaise'. */
+  maker_grade_lines(steps: MakerStep[], done: boolean): string[] {
+    return steps.map((st) => (done ? `    ${st.qty} x ${st.output}` : `    ${st.qty} x ${st.input} → ${st.output}`));
+  }
+
+  /** A Maker's status in a few words, for the coop and barn menus and Today's Plan. */
+  maker_status(maker: string, short: boolean = false): string {
+    const job = this.maker_jobs[maker];
+    const st = this.maker_state(maker);
+    const noun = MAKER_NOUNS[maker];
+    const head = short ? `${maker.replace(/ Maker$/, '')}: ` : '';
+    if (st === 'ready') return `${head}ready to collect`;
+    if (job) return `${head}${makerGain(job.steps)[0]} ${noun[0]} in, ready ${this.maker_when(job.ready)}`;
+    const [n] = makerGain(makerBatch(maker, this.inv));
+    if (short) return `${head}${n} ${noun[0]} to load`;
+    return n ? `empty (${n} ${noun[0]} in your rucksack to load)` : 'empty';
+  }
+
+  /** Walk up to a Maker on the farm: load a batch, see when it is done, collect it there. */
+  async maker_menu(maker: string): Promise<void> {
+    const noun = MAKER_NOUNS[maker];
+    while (true) {
+      const st = this.maker_state(maker);
+      const job = this.maker_jobs[maker];
+      if (st === 'ready') {
+        const [n, gain] = makerGain(job.steps);
+        const info = ['  Done! Ready to collect:', ...this.maker_grade_lines(job.steps, true), `  Adds ${gain}G over the raw ${noun[0]}.`];
+        const opts = [`Collect ${n} ${noun[1]}`, 'Leave'];
+        const sel = await this.menu(maker, opts, 0, info);
+        if (sel !== 0) return;
+        this.collect_maker(maker);
+        if (!makerBatch(maker, this.inv).length) return;
+        continue;
+      }
+      if (st === 'working') {
+        const info = [
+          `  Working: ready ${this.maker_when(job.ready)} (${this.maker_left(job.ready)} left).`,
+          ...this.maker_grade_lines(job.steps, false),
+        ];
+        await this.menu(maker, ['Leave'], 0, info);
+        return;
+      }
+      const steps = makerBatch(maker, this.inv);
+      if (!steps.length) {
+        await this.say(
+          `The ${maker} is empty. It takes every grade of ${noun[0]} in your rucksack and needs ${MAKER_SPOTS[maker].hours} hours.`,
+          null,
+        );
+        return;
+      }
+      const [n, gain] = makerGain(steps);
+      const ready = this.now_abs() + MAKER_SPOTS[maker].hours * 60;
+      const info = [
+        `  From your rucksack (each grade stays apart):`,
+        ...this.maker_grade_lines(steps, false),
+        `  Takes ${MAKER_SPOTS[maker].hours} hours: ready ${this.maker_when(ready)}, +${gain}G.`,
+      ];
+      const sel = await this.menu(maker, [`Load ${n} ${noun[0]}`, 'Leave'], 0, info);
+      if (sel !== 0) return;
+      this.load_maker(maker);
+      return;
+    }
+  }
+
+  /** Makers that want the player: batches ready to collect, plus raw goods an empty Maker could take. */
   maker_ready_count(): number {
-    return py_sum(this.makers.map((m) => py_sum(makerBatch(m, this.inv).map((st) => st.qty))));
+    let n = 0;
+    for (const m of this.makers) {
+      const st = this.maker_state(m);
+      if (st === 'ready') n += makerGain(this.maker_jobs[m].steps)[0];
+      else if (st === 'idle') n += makerGain(makerBatch(m, this.inv))[0];
+    }
+    return n;
   }
 
   barn_cap(): number {
@@ -3476,19 +3623,16 @@ export class Game {
         .join(', ');
       const info = [
         `  Animals: ${this.animals.length}/${this.barn_cap()}   Hungry: ${unfed}   Fodder: ${this.inv['Fodder'] || 0}`,
-        `  Tools: ${tools || 'none'}   Makers: ${this.makers.filter((m) => m !== 'Mayonnaise Maker').join(', ') || 'none'}`,
+        `  Tools: ${tools || 'none'}`,
+        ...['Cheese Maker', 'Yarn Maker']
+          .filter((m) => this.makers.includes(m))
+          .map((m) => `  ${m} (outside the door): ${this.maker_status(m)}`),
       ];
       const opts = [
         'Fill fodder boxes',
         'Ring Grazing Bell (Graze Outside in Sun)',
         ...this.animals.map((a) => this.animal_line(a)),
       ];
-      if (this.makers.includes('Cheese Maker')) {
-        opts.push(`Use Cheese Maker: ${this.maker_preview('Cheese Maker')}`);
-      }
-      if (this.makers.includes('Yarn Maker')) {
-        opts.push(`Use Yarn Maker: ${this.maker_preview('Yarn Maker')}`);
-      }
       opts.push('Leave');
       const sel = await this.menu('Livestock Barn', opts, 0, info);
       if (sel === null || opts[sel] === 'Leave') return;
@@ -3505,14 +3649,6 @@ export class Game {
             a.aff = Math.min(100, a.aff + 2);
           }
           this.msg(`Your livestock grazed in the pasture! (Outdoor hours: ${this.outdoor_hours}h)`, '0B');
-        }
-      } else if (choice.startsWith('Use Cheese Maker')) {
-        if (!this.run_maker('Cheese Maker')) {
-          await this.say("You have no Milk from your cows in your rucksack. (Shop milk won't set.)", null);
-        }
-      } else if (choice.startsWith('Use Yarn Maker')) {
-        if (!this.run_maker('Yarn Maker')) {
-          await this.say('You have no Wool in your rucksack.', null);
         }
       } else {
         const animalIdx = sel - 2;
@@ -4121,9 +4257,9 @@ export class Game {
 
   async order_maker(): Promise<void> {
     const makers = [
-      ['Mayonnaise Maker', 'Coop Expansion', 'Converts Eggs into Mayonnaise in the Coop.'],
-      ['Cheese Maker', 'Barn Expansion', 'Converts Milk into Cheese in the Barn.'],
-      ['Yarn Maker', 'Barn Expansion', 'Converts Wool into Yarn in the Barn.'],
+      ['Mayonnaise Maker', 'Coop Expansion', 'Load eggs at the machine; mayonnaise is ready 4 hours later.'],
+      ['Cheese Maker', 'Barn Expansion', 'Load milk at the machine; cheese is ready 8 hours later.'],
+      ['Yarn Maker', 'Barn Expansion', 'Load wool at the machine; yarn is ready 6 hours later.'],
     ];
     const sel = await this.menu(
       'Saibara — Order Maker (20,000G + 1 Adamantite)',
@@ -4151,7 +4287,8 @@ export class Game {
       this.gold -= 20000;
       this.take('Adamantite', 1);
       this.makers.push(mName);
-      await this.say(`Done! I installed the ${mName} for you. (${desc})`, 'Saibara');
+      this.place_makers();
+      await this.say(`Done! I set the ${mName} up outside your ${MAKER_SPOTS[mName].by}. (${desc})`, 'Saibara');
     }
   }
 
@@ -4494,8 +4631,10 @@ export class Game {
     lines.push(`  Water  ${this.crop_water_count()} crop${this.crop_water_count() === 1 ? '' : 's'} still dry`);
     lines.push(`  Feed   ${this.animal_feed_count()} animal${this.animal_feed_count() === 1 ? '' : 's'} still hungry`);
     lines.push(`  Ready  ${this.ready_livestock_count()} product${this.ready_livestock_count() === 1 ? '' : 's'} to collect`);
-    const makerReady = this.maker_ready_count();
-    if (makerReady) lines.push(`  Makers ${makerReady} item${makerReady === 1 ? '' : 's'} ready to process`);
+    for (const mk of this.makers) {
+      const st = this.maker_state(mk);
+      if (st !== 'idle' || makerBatch(mk, this.inv).length) lines.push(`  Makers ${this.maker_status(mk, true)}`);
+    }
     lines.push(`  Museum ${this.museum.length}/${this.museum_total()} donated`);
     if (this.requests.length) {
       const r = this.requests[0];
@@ -4897,6 +5036,16 @@ export class Game {
       const st = this.stall_state();
       return { label: 'STALL', summary: st === 'ready' ? 'Stock your stall' : st === 'open' ? 'Check your stall' : 'Read the market sign' };
     }
+    if (tile === 'maker') {
+      const maker = this.maker_at(tx, ty);
+      if (maker) {
+        const st = this.maker_state(maker);
+        const job = this.maker_jobs[maker];
+        if (st === 'ready') return { label: 'COLLECT', summary: `Collect from the ${maker}` };
+        if (st === 'working') return { label: 'CHECK', summary: `${maker}: ready ${this.maker_when(job.ready)}` };
+        return { label: 'LOAD', summary: `Load the ${maker}` };
+      }
+    }
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone'].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
@@ -4937,6 +5086,13 @@ export class Game {
     if (tile === 'tv') return { key: 'x', label: 'WATCH' };
     if (tile === 'cal') return { key: 'x', label: 'CALENDAR' };
     if (tile === 'stall') return { key: 'x', label: 'STALL' };
+    if (tile === 'maker') {
+      const maker = this.maker_at(tx, ty);
+      if (maker) {
+        const st = this.maker_state(maker);
+        return { key: 'x', label: st === 'ready' ? 'COLLECT' : st === 'working' ? 'CHECK' : 'LOAD' };
+      }
+    }
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone'].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
@@ -6544,6 +6700,12 @@ export class Game {
       // grey when shut, orange while it can be stocked, green while it is trading
       const st = this.stall_state();
       return [TILES.stall[0], st === 'open' ? '0B' : st === 'ready' ? '09' : '03', TILES.stall[2], st === 'open' || st === 'ready'];
+    }
+    if (t === 'maker') {
+      // grey when empty, orange while a batch works, green once it is ready to collect
+      const maker = name === 'farm' ? Object.keys(MAKER_SPOTS).find((mk) => MAKER_SPOTS[mk].x === x && MAKER_SPOTS[mk].y === y) : null;
+      const st = maker ? this.maker_state(maker) : 'idle';
+      return [TILES.maker[0], st === 'ready' ? '0B' : st === 'working' ? '09' : '03', TILES.maker[2], st !== 'idle'];
     }
     const obj = this.objs[name]?.[pKey];
     if (obj && OBJ_GLYPH[obj]) {

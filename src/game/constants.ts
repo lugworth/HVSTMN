@@ -2585,7 +2585,7 @@ Object.assign(TILES, {
   "phone": ["P", "0C", "01", false],
   "trash": ["U", "03", "01", false],
   "stall": ["⌂", "03", "01", false],
-  "maker": ["M", "0C", "01", false],
+  "maker": ["⚙", "0C", "01", false],
   "incub": ["O", "09", "01", false],
 });
 
@@ -3476,6 +3476,17 @@ export const PUBLIC_WORKS = {
 export const COMPANION = { helper: 'Moondrop Flower', crop: 'Cucumber', bonus: 1 } as const;
 
 // ---------------------------------------------------------------- seed saving (mechanics task 19)
+/**
+ * Where each Maker stands on the farm once Saibara installs it (mechanics task 30), and how many
+ * in-game hours a batch takes. The Mayonnaise Maker is under the coop, west of its door; the Cheese
+ * and Yarn Makers flank the barn door. The clock keeps running through the night for a batch.
+ */
+export const MAKER_SPOTS: Record<string, { x: number; y: number; hours: number; by: string }> = {
+  'Mayonnaise Maker': { x: 18, y: 6, hours: 4, by: 'coop' },
+  'Cheese Maker': { x: 30, y: 6, hours: 8, by: 'barn' },
+  'Yarn Maker': { x: 34, y: 6, hours: 6, by: 'barn' },
+};
+
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
