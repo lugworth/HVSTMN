@@ -741,3 +741,16 @@ export function stallVisit(
   const qty = Math.min(best.g.qty - best.g.sold, pref === 'love' ? 2 : 1);
   return { kind: 'sale', index: best.index, qty, gold: Math.round(price(best.g.item) * markup[pref]) * qty, pref };
 }
+
+/**
+ * When a crop sown on `day` ripens if watered every day (mechanics task 24): the first harvest day
+ * and each regrowth picking after it, all within a `seasonDays`-day season. Crops wither when the
+ * season turns, so a first harvest past the last day is `null` (too late to ripen).
+ */
+export function plantingForecast(day: number, grow: number, regrow: number, seasonDays: number = 30): { first: number | null; repeats: number[] } {
+  const first = day + grow;
+  if (first > seasonDays) return { first: null, repeats: [] };
+  const repeats: number[] = [];
+  if (regrow > 0) for (let d = first + regrow; d <= seasonDays; d += regrow) repeats.push(d);
+  return { first, repeats };
+}

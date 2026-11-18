@@ -4,6 +4,7 @@ import { ITEMS } from './constants';
 import {
   stallVisit,
   marketWants,
+  plantingForecast,
   marketVisit,
   innSceneFor,
   innCardsWin,
@@ -484,5 +485,19 @@ describe('market regulars and their lists (task 10)', () => {
     assert.deepEqual(marketVisit(goods, ['Potato', 'Egg'], price, markup, each), [], 'sold out of everything on the list');
     assert.deepEqual(marketVisit(goods, ['Cabbage'], price, markup, each), [], 'nothing on the list was put out');
     assert.ok(markup > 1.5 && MARKET_SHOPPERS.flower.markup > markup, 'regulars pay more than any villager, Lillia most of all');
+  });
+});
+
+describe('planting forecast (task 24)', () => {
+  test('first harvest after the growing days, then every regrowth until the season ends', () => {
+    assert.deepEqual(plantingForecast(1, 4, 0), { first: 5, repeats: [] }, 'turnips sown on the 1st');
+    assert.deepEqual(plantingForecast(10, 9, 5), { first: 19, repeats: [24, 29] }, 'cucumbers sown on the 10th');
+    assert.deepEqual(plantingForecast(1, 8, 2), { first: 9, repeats: [11, 13, 15, 17, 19, 21, 23, 25, 27, 29] });
+  });
+
+  test('the season edge: ready on the 30th counts, a day later does not', () => {
+    assert.deepEqual(plantingForecast(26, 4, 0), { first: 30, repeats: [] });
+    assert.deepEqual(plantingForecast(27, 4, 0), { first: null, repeats: [] }, 'withers at the change of season');
+    assert.deepEqual(plantingForecast(21, 9, 5), { first: 30, repeats: [] }, 'no time to regrow');
   });
 });

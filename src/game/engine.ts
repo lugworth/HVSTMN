@@ -152,6 +152,7 @@ import {
   getMilkQuality,
   getWoolQuality,
   makerBatch,
+  plantingForecast,
   rollSpringMineDrop,
   rollLakeMineDrop,
   CURSED_TOOL_FLOORS,
@@ -2213,6 +2214,43 @@ export class Game {
     if (sel === 1) this.save_seeds(crop);
   }
 
+  // ---------------------------------------------------------------- planting forecast (mechanics task 24)
+  /**
+   * When a crop sown now (or on the first day of its season, if that is another season) would be
+   * picked, watered every day. Null for Grass, which is cut for fodder rather than harvested.
+   */
+  crop_forecast(crop: string): { season: string; from: number; first: number | null; repeats: number[]; grow: number; regrow: number } | null {
+    const d = CROPS[crop];
+    if (!d || crop === 'Grass') return null;
+    const season = d[0] === 'All' ? this.season_name : d[0];
+    const from = season === this.season_name ? this.day : 1;
+    return { season, from, grow: d[2], regrow: d[3], ...plantingForecast(from, d[2], d[3]) };
+  }
+
+  /** "Sown today: first harvest Spring 16, then every 5d: 21 and 26 (last Spring 26)." and the like. */
+  crop_forecast_lines(crop: string): string[] {
+    const f = this.crop_forecast(crop);
+    if (!f) return [];
+    const when = f.season === this.season_name ? 'Sown today' : `Sown on ${f.season} 1`;
+    if (f.first === null) {
+      return [`${when}: too late, it needs ${f.grow} days and ${f.season} ends on the 30th.`];
+    }
+    if (!f.regrow) return [`${when}: ready ${f.season} ${f.first}.`];
+    if (!f.repeats.length) {
+      return [`${when}: ready ${f.season} ${f.first}; no regrowth before ${f.season} ends.`];
+    }
+    const last = f.repeats[f.repeats.length - 1];
+    return [`${when}: ready ${f.season} ${f.first}, then every ${f.regrow}d: ${f.repeats.length + 1} pickings, the last on ${f.season} ${last}.`];
+  }
+
+  /** A few words for the Facing row: "ready Spring 16" or "too late to ripen". */
+  crop_forecast_short(crop: string): string | null {
+    const f = this.crop_forecast(crop);
+    if (!f || f.season !== this.season_name) return null;
+    if (f.first === null) return 'too late to ripen';
+    return f.repeats.length ? `ready ${f.season.slice(0, 3)} ${f.first}, ${f.repeats.length + 1} pickings` : `ready ${f.season.slice(0, 3)} ${f.first}`;
+  }
+
   // ---------------------------------------------------------------- companion planting (mechanics task 17)
   /** The eight farm tiles that touch this one. */
   companion_ring(pKey: string): string[] {
@@ -3322,7 +3360,9 @@ export class Game {
         if (sell) parts.push(`Ships ${sell}G`);
         if (eat) parts.push(`${eat > 0 ? '+' : ''}${eat} Stamina`);
         const preserve = this.preserve_note(i);
-        return preserve ? [parts.join('  ·  '), preserve] : [parts.join('  ·  ')];
+        if (preserve) return [parts.join('  ·  '), preserve];
+        const forecast = i.endsWith(' Seeds') ? this.crop_forecast_lines(i.slice(0, -6)) : [];
+        return [parts.join('  ·  '), ...forecast];
       };
       const sel = await this.menu('▣ Rucksack', opts, 0, info, null, {
         style: { kind: 'hud', accent: '09' },
@@ -4265,10 +4305,15 @@ export class Game {
       `Won's Exotic Shop   ${this.gold}G`,
       items.map(([name, p]) => `${name} (${p}G)`),
       0,
-      (s) =>
-        items[s]?.[0] === `${COMPANION.helper} Seeds`
-          ? [`Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop}`, `gives ${1 + COMPANION.bonus} a picking.`]
-          : [],
+      (s) => {
+        const name = items[s]?.[0] || '';
+        const crop = name.endsWith(' Seeds') ? name.slice(0, -6) : '';
+        const lines = crop ? this.crop_forecast_lines(crop) : [];
+        if (name === `${COMPANION.helper} Seeds`) {
+          lines.push(`Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop}`, `gives ${1 + COMPANION.bonus} a picking.`);
+        }
+        return lines;
+      },
     );
     if (sel === null) return;
     const [name, price, lim] = items[sel];
@@ -4418,6 +4463,7 @@ export class Game {
       const regrow = d[3] ? `, regrows every ${d[3]}d` : '';
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
       const lines = [`  ${d[2]} days to grow${regrow} — ships for ${d[4]}G each (sows 3x3)`];
+      lines.push(...this.crop_forecast_lines(c).map((l) => `  ${l}`));
       if (c === COMPANION.crop || c === COMPANION.helper) {
         lines.push(`  Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop} gives ${1 + COMPANION.bonus} a picking.`);
       }
@@ -5091,6 +5137,10 @@ export class Game {
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     const pairing = this.companion_preview(this.tool, tx, ty);
     if (pairing) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${pairing.text}` };
+    if (this.tool.endsWith(' Seeds') && this.mapname === 'farm' && this.tilled.has(pKey) && !this.crops[pKey]) {
+      const when = this.crop_forecast_short(short);
+      if (when) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${when}` };
+    }
     return withTarget('Use', short.length > 7 ? short.toLowerCase() : short.toLowerCase(), short.length > 7 ? 'USE' : `USE ${short.toUpperCase()}`);
   }
 

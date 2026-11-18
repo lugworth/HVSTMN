@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## Planting forecast (mechanics task 24), 2026-11-18
+
+- `plantingForecast(day, grow, regrow)` in `rules.ts`: first harvest `day + grow` (watered daily;
+  a crop sown and watered today grows overnight), then every `regrow` days up to day 30; `first`
+  is null when it would ripen after the season turns (crops wither then). `Game.crop_forecast()`
+  forecasts from today, or from day 1 of the crop's own season for off-season bags (Won's shop).
+- Shown in Jeff's seed list and Won's shop ("Sown today: ready Spring 19, then every 5d: 3
+  pickings, the last on Spring 29." / "too late, it needs 9 days and Spring ends on the 30th."),
+  the rucksack info for a seed bag, and the Facing row while aiming a bag at tilled soil
+  ("Sow cucumber · ready Spr 19, 3 pickings"). No forecast for Grass (cut for fodder).
+
 ## Orders for finished goods (mechanics task 32), 2026-11-18
 
 - `ORDERS` in `constants.ts`: Doug's supper basket (Bread, Pickled Turnip, Dried Herbs; 650G; needs
