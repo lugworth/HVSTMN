@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## Orders for finished goods (mechanics task 32), 2026-11-18
+
+- `ORDERS` in `constants.ts`: Doug's supper basket (Bread, Pickled Turnip, Dried Herbs; 650G; needs
+  a Kitchen), Doug's cheese board (Bread, 2 Cheese of any grade, Dried Herbs; 1500G; Kitchen + Cheese
+  Maker) and Manna's scarf yarn (2 Yarn of any grade; 1200G; Yarn Maker). An order is only posted
+  when everything in it can be made (`Game.order_possible()`); one at a time, `ORDER_DAYS` (7) to
+  fill, then `ORDER_GAP` (2) days before the next. State: `order` ({ id, delivered[], deadline }),
+  `order_next`, `order_last`; saved and sanitized (`sanitizeOrder`).
+- It sits first on the Rose Square board ("★ Doug's order: …"). Its page lists each piece as
+  ✓ handed over, in your rucksack, or missing N, with where it comes from; "Hand over what you have"
+  gives the pieces you hold (lowest grade first). The reward, +8 friendship and a Good Neighbor
+  count come with the last piece. Today's Plan and the side panel show what is still needed.
+
 ## Preserves (mechanics task 31), 2026-11-18
 
 - `PRESERVES` in `constants.ts`: Pickled Turnip (2 Turnip, no utensil), **Dried Herbs** (new: 3
