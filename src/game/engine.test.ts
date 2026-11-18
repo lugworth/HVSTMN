@@ -1935,7 +1935,9 @@ describe('companion planting (task 17)', () => {
     await g.won_shop();
     const at = opts.findIndex((o) => o.startsWith('Moondrop Flower Seeds'));
     assert.match(info(at).join(' '), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
-    assert.deepEqual(info(opts.findIndex((o) => o.startsWith('Toy Flower Seeds'))), []);
+    const toy = info(opts.findIndex((o) => o.startsWith('Toy Flower Seeds')));
+    assert.ok(!toy.some((l: string) => /Companion/.test(l)), 'no pairing for Toy Flowers');
+    assert.deepEqual(toy, ['Sown today: ready Spring 13.'], 'just the planting forecast (task 24)');
   });
 });
 
@@ -2486,5 +2488,72 @@ describe('orders for finished goods (task 32)', () => {
     const p = fresh();
     p.applySaveData(old);
     assert.equal(p.order, null);
+  });
+});
+
+describe('planting forecast (task 24)', () => {
+  test("Jeff's seed list says when a bag sown today is picked", async () => {
+    const g = fresh();
+    g.day = 10;
+    const infos: Record<string, string[]> = {};
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any = null) => {
+      opts.forEach((o, i) => (infos[o.split(' Seeds')[0]] = info(i)));
+      return null;
+    };
+    await g.buy_seeds();
+    assert.ok(infos.Turnip.includes('  Sown today: ready Spring 14.'), infos.Turnip.join(' | '));
+    assert.ok(infos.Cucumber.includes('  Sown today: ready Spring 19, then every 5d: 3 pickings, the last on Spring 29.'), infos.Cucumber.join(' | '));
+    assert.ok(infos.Cabbage === undefined || infos.Cabbage.some((l) => l.includes('ready Spring 24')));
+  });
+
+  test('late in the season the list warns when a crop will not ripen in time', async () => {
+    const g = fresh();
+    g.day = 25;
+    const infos: Record<string, string[]> = {};
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any = null) => {
+      opts.forEach((o, i) => (infos[o.split(' Seeds')[0]] = info(i)));
+      return null;
+    };
+    await g.buy_seeds();
+    assert.ok(infos.Turnip.includes('  Sown today: ready Spring 29.'));
+    assert.ok(infos.Potato.includes('  Sown today: too late, it needs 7 days and Spring ends on the 30th.'), infos.Potato.join(' | '));
+    assert.ok(infos.Cucumber.includes('  Sown today: too late, it needs 9 days and Spring ends on the 30th.'));
+  });
+
+  test("Won's seeds for another season forecast from that season's first day", async () => {
+    const g = fresh();
+    let lines: string[] = [];
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any = null) => {
+      lines = info(opts.findIndex((o) => o.startsWith('Pineapple Seeds')));
+      return null;
+    };
+    await g.won_shop();
+    assert.deepEqual(lines, ['Sown on Summer 1: ready Summer 21, then every 5d: 2 pickings, the last on Summer 26.']);
+  });
+
+  test('the rucksack and the Facing row forecast the bag in hand', async () => {
+    const g = fresh();
+    g.day = 3;
+    g.inv = { 'Turnip Seeds': 2, 'Grass Seeds': 1 };
+    const infos: Record<string, string[]> = {};
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      if (title === '▣ Rucksack') opts.forEach((_o, i) => (infos[i] = info(i)));
+      return null;
+    };
+    await g.rucksack();
+    const all = Object.values(infos);
+    assert.ok(all.some((l) => l.includes('Sown today: ready Spring 7.')), JSON.stringify(all));
+    assert.ok(!all.some((l) => l.some((x) => x.includes('Sown') && x.includes('Grass'))), 'no forecast for grass');
+
+    g.warp('farm', 20, 15, [1, 0]);
+    g.tilled.add('21,15');
+    delete g.objs.farm['21,15'];
+    g.tool = 'Turnip Seeds';
+    assert.equal(g.facing_action().summary.split(' · ')[1], 'ready Spr 7');
+    g.inv['Cucumber Seeds'] = 1;
+    g.tool = 'Cucumber Seeds';
+    assert.equal(g.facing_action().summary.split(' · ')[1], 'ready Spr 12, 4 pickings');
+    g.day = 28;
+    assert.equal(g.facing_action().summary.split(' · ')[1], 'too late to ripen');
   });
 });
