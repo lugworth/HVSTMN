@@ -99,6 +99,8 @@ import {
   MAKER_SPOTS,
   MARKET_SHOPPERS,
   PANTRY_STAPLES,
+  PRESERVES,
+  PRESERVE_SEASONS,
   MARKET_FLOWERS,
   INN_EVENING_HOURS,
   INN_LISTEN_FRIEND,
@@ -3290,10 +3292,11 @@ export class Game {
           ];
         }
         const [sell, eat, cat] = ITEMS[i] || [0, 0, 'item'];
-        const parts = [cat.toUpperCase()];
+        const parts = [PRESERVES.includes(i) ? 'PRESERVE' : cat.toUpperCase()];
         if (sell) parts.push(`Ships ${sell}G`);
         if (eat) parts.push(`${eat > 0 ? '+' : ''}${eat} Stamina`);
-        return [parts.join('  ·  ')];
+        const preserve = this.preserve_note(i);
+        return preserve ? [parts.join('  ·  '), preserve] : [parts.join('  ·  ')];
       };
       const sel = await this.menu('▣ Rucksack', opts, 0, info, null, {
         style: { kind: 'hud', accent: '09' },
@@ -5316,7 +5319,8 @@ export class Game {
   /** The regulars' lists for the market on absolute day `day` (the same all week). */
   market_wants(day: number = this.market_next()): MarketWants {
     const season = Math.floor((((day % 120) + 120) % 120) / 30);
-    return marketWants(day, season, PANTRY_STAPLES, (i) => CROPS[i]?.[0] === SEASONS[season], MARKET_FLOWERS, MARKET_SHOPPERS.pantry.wants);
+    const keeps = PRESERVE_SEASONS.includes(season) ? PRESERVES : [];
+    return marketWants(day, season, PANTRY_STAPLES, (i) => CROPS[i]?.[0] === SEASONS[season], MARKET_FLOWERS, MARKET_SHOPPERS.pantry.wants, keeps);
   }
 
   /** "Doug wants Potato and Egg; Lillia wants a Toy Flower." Null when that Saturday is a festival. */
@@ -5326,6 +5330,17 @@ export class Game {
     const parts = [`${MARKET_SHOPPERS.pantry.name} wants ${andList(w.pantry)}`];
     if (w.flower) parts.push(`${MARKET_SHOPPERS.flower.name} wants ${aOrAn(w.flower)} ${w.flower}`);
     return parts.join('; ') + '.';
+  }
+
+  /**
+   * The line that tells a preserve apart (task 31): who wants it at the coming market, or when Doug
+   * starts asking for preserves. Null for anything that isn't a preserve.
+   */
+  preserve_note(item: string): string | null {
+    if (!PRESERVES.includes(item)) return null;
+    const who = this.market_clue() ? this.market_wanted_by(item) : null;
+    if (who) return `Keeps for winter. ${who} wants ${item} at this Saturday's market.`;
+    return `Keeps for winter. ${MARKET_SHOPPERS.pantry.name} buys preserves for the inn in Fall and Winter.`;
   }
 
   /** Which regular is after this good at the coming market, if any. */
@@ -8810,6 +8825,8 @@ export class Game {
         const d = dishes[s - 1];
         const [, ut, st, sell] = RECIPES[d];
         const lines = [`  ${this.recipe_line(d)}`, `  +${st} Stamina, ships ${sell}G`];
+        const preserve = this.preserve_note(d);
+        if (preserve) lines.push(`  ${preserve}`);
         if (ut && !(ut in this.inv)) {
           lines.push(`  Needs a ${ut} (Supermarket / TV Shopping)`);
         }

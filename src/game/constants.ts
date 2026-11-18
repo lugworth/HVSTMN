@@ -588,6 +588,11 @@ export const ITEMS: Record<string, any> = {
     15,
     "dish"
   ],
+  "Dried Herbs": [
+    50,
+    10,
+    "dish"
+  ],
   "Fried Potatoes": [
     200,
     25,
@@ -2239,6 +2244,17 @@ export const RECIPES: Record<string, any> = {
     15,
     160
   ],
+  "Dried Herbs": [
+    [
+      [
+        "Medicinal Herb",
+        3
+      ]
+    ],
+    null,
+    10,
+    50
+  ],
   "Fried Potatoes": [
     [
       [
@@ -3517,6 +3533,15 @@ export const MARKET_SHOPPERS = {
   pantry: { name: 'Doug', hour: 12, each: 3, markup: 1.6, wants: 2 },
   flower: { name: 'Lillia', hour: 15, each: 2, markup: 2 },
 } as const;
+/**
+ * Preserves (mechanics task 31): kitchen goods that keep. Pickled Turnip and Dried Herbs need no
+ * utensil (spring turnips and spring herbs); Strawberry Jam needs a Pot. Their use in town: when
+ * the fields go quiet, Doug stocks the inn's pantry, so in Fall and Winter one of his two picks at
+ * the Saturday stall is always a preserve.
+ */
+export const PRESERVES = ['Pickled Turnip', 'Dried Herbs', 'Strawberry Jam'];
+/** The seasons (0 Spring … 3 Winter) when Doug asks for a preserve. */
+export const PRESERVE_SEASONS = [2, 3];
 /** What Doug may ask for: eggs any week, these crops in their own season. */
 export const PANTRY_STAPLES = ['Egg', 'Potato', 'Turnip', 'Cabbage', 'Onion', 'Corn', 'Tomato', 'Carrot', 'Sweet Potato', 'Spinach'];
 /** The unusual flower Lillia hunts for, by season (each one grows or can be foraged then). None in winter. */

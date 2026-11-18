@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## Preserves (mechanics task 31), 2026-11-18
+
+- `PRESERVES` in `constants.ts`: Pickled Turnip (2 Turnip, no utensil), **Dried Herbs** (new: 3
+  Medicinal Herb → 50G, no utensil; herbs are spring forage) and Strawberry Jam (3 Strawberry, Pot).
+  All three are made in the Kitchen (Gotz's upgrade), like every recipe.
+- Their use in town: in Fall and Winter (`PRESERVE_SEASONS`) Doug stocks the inn's pantry, so his
+  first pick at the Saturday stall is always a preserve (`marketWants(..., keeps)` in `rules.ts`);
+  the second is a staple (eggs in winter). He pays his 1.6x premium, as for any wanted good.
+- The rucksack labels them PRESERVE, and both the rucksack and the kitchen say "Keeps for winter."
+  plus who wants it this week, or that Doug buys preserves in Fall and Winter (`Game.preserve_note()`).
+
 ## Walk-up Makers (mechanics task 30), 2026-11-18
 
 - Saibara's Mayonnaise, Cheese and Yarn Makers are now machines on the farm (`maker` tile, `⚙`), at

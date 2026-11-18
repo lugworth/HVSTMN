@@ -62,7 +62,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [ ] **28. Animal enrichment.** Give chickens a perch and cows a shade tree. Add an observable behavior and a small care benefit when an animal uses it.
 - [ ] **29. A pet’s morning clue.** The dog can notice a fresh trail or the cat can sit near a useful spot. Treat it as a hint about something already present in the valley.
 - [x] **30. Makers you can walk up to.** Load a batch into a visible machine, see when it will finish, and collect it there. Keep product quality visible through loading and collection.
-- [ ] **31. A few preserves.** Add two or three goods, such as pickled turnips and dried herbs, with a distinct use in meals, requests, or the market.
+- [x] **31. A few preserves.** Add two or three goods, such as pickled turnips and dried herbs, with a distinct use in meals, requests, or the market.
 - [ ] **32. Orders for finished goods.** Let the inn request a small bundle of bread, cheese, and herbs, or a seamstress ask for yarn. Reuse the request board and show which pieces are still missing.
 
 ## Trails, fishing, and mines

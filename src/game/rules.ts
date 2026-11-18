@@ -667,7 +667,8 @@ const marketSeed = (day: number, salt: number) => {
 /**
  * What the regulars want on the market held on absolute day `marketDay`, in `season`. Doug wants
  * `count` different staples: eggs, or a crop in season (`inSeason` says which crops are). Lillia
- * wants one of the season's unusual flowers, or nothing in winter.
+ * wants one of the season's unusual flowers, or nothing in winter. With `keeps` (the preserves, in
+ * Fall and Winter), Doug's first pick is always one of them and the rest are staples.
  */
 export function marketWants(
   marketDay: number,
@@ -676,10 +677,13 @@ export function marketWants(
   inSeason: (item: string) => boolean,
   flowers: readonly (readonly string[])[],
   count: number,
+  keeps: readonly string[] = [],
 ): MarketWants {
-  const pool = staples.filter((i) => i === 'Egg' || inSeason(i));
+  const pool = staples.filter((i) => (i === 'Egg' || inSeason(i)) && !keeps.includes(i));
   const pantry: string[] = [];
-  for (let k = 0; pantry.length < Math.min(count, pool.length); k++) {
+  // a preserve first when the season calls for one (task 31), then staples as before
+  if (keeps.length && count > 0) pantry.push(keeps[Math.floor(marketSeed(marketDay, 7) * keeps.length)]);
+  for (let k = 0; pantry.length < Math.min(count, pool.length + (keeps.length ? 1 : 0)); k++) {
     const pick = pool[Math.floor(marketSeed(marketDay, k + 1) * pool.length)];
     if (!pantry.includes(pick)) pantry.push(pick);
   }
