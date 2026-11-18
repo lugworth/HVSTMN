@@ -1,5 +1,13 @@
 # Handoff: HRVSTMN
 
+## Seed saving (mechanics task 19), 2026-11-18
+
+- One recipe (`SEED_SAVING` in `constants.ts`): **3 Cucumber → 1 bag of Cucumber Seeds**, from the
+  rucksack (Cucumber > "Save seeds (3 → 1 bag)"). A preview menu shows the trade before anything is
+  used (the bag's growth, Jeff's 200G price against the 180G the cucumbers would ship for, and what
+  you hold); "Keep the Cucumber" is the highlighted answer and number keys are off. Jeff's shop
+  mentions it under Cucumber Seeds. `Game.seed_recipe()`, `seed_saving_preview()`, `save_seeds()`.
+
 ## Display font, 2026-11-18
 
 - The player asked for a second font family. **Pixelify Sans** (SIL OFL 1.1, `public/fonts/

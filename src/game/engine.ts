@@ -95,6 +95,7 @@ import {
   STALL_MARKUP,
   STALL_SIGN,
   COMPANION,
+  SEED_SAVING,
   MARKET_SHOPPERS,
   PANTRY_STAPLES,
   MARKET_FLOWERS,
@@ -2115,6 +2116,53 @@ export class Game {
     return rollSpringMineDrop(this.mine_floor, allBlessed, rngPct);
   }
 
+  // ---------------------------------------------------------------- seed saving (mechanics task 19)
+  seed_recipe(crop: string): { crop: string; need: number; bags: number } | null {
+    return SEED_SAVING.find((r) => r.crop === crop) ?? null;
+  }
+
+  /** What saving seeds from this crop costs and gives, in lines for the preview. */
+  seed_saving_preview(crop: string): string[] {
+    const r = this.seed_recipe(crop);
+    if (!r) return [];
+    const d = CROPS[crop];
+    const bag = `${crop} Seeds`;
+    const regrow = d[3] ? `, regrows every ${d[3]}d` : '';
+    return [
+      `Gives ${r.bags} bag of ${bag}: sows 3x3, ${d[2]} days to grow${regrow}.`,
+      `Jeff sells the bag for ${d[1] * r.bags}G; ${r.need} ${crop} would ship for ${ITEMS[crop][0] * r.need}G.`,
+      `You have ${this.inv[crop] || 0} ${crop} and ${this.inv[bag] || 0} ${bag}. Sow in ${d[0]}.`,
+    ];
+  }
+
+  /** Dry the seeds: take the crop, give the bag. False if there are too few or no recipe. */
+  save_seeds(crop: string): boolean {
+    const r = this.seed_recipe(crop);
+    if (!r || (this.inv[crop] || 0) < r.need) return false;
+    this.take(crop, r.need);
+    if (this.held === crop && !this.inv[crop]) this.held = null;
+    this.give(`${crop} Seeds`, r.bags);
+    this.msg(`You set ${r.need} ${crop} aside and dried the seeds: +${r.bags} ${crop} Seeds.`, '0B');
+    return true;
+  }
+
+  /** Preview first; the highlighted answer keeps the crop, so a stray key never uses it up. */
+  async seed_saving_menu(crop: string): Promise<void> {
+    const r = this.seed_recipe(crop);
+    if (!r) return;
+    if ((this.inv[crop] || 0) < r.need) {
+      await this.say(`Seed saving takes ${r.need} ${crop}; you have ${this.inv[crop] || 0}. Harvest a few more and set them aside.`, null);
+      return;
+    }
+    const opts = [`Keep the ${crop}`, `Save seeds from ${r.need} ${crop}`];
+    const sel = await this.menu(`Save ${crop} seeds?`, opts, 0, this.seed_saving_preview(crop), null, {
+      style: { kind: 'hud', accent: '0B' },
+      alignToMap: true,
+      noDigits: true,
+    });
+    if (sel === 1) this.save_seeds(crop);
+  }
+
   // ---------------------------------------------------------------- companion planting (mechanics task 17)
   /** The eight farm tiles that touch this one. */
   companion_ring(pKey: string): string[] {
@@ -3244,6 +3292,8 @@ export class Game {
       if (item === 'Teleport Stone') {
         sub.push('Teleport');
       }
+      const recipe = this.seed_recipe(item);
+      if (recipe) sub.push(`Save seeds (${recipe.need} → ${recipe.bags} bag)`);
       sub.push('Cancel');
       const s2 = await this.menu(
         `▣ ${item}`,
@@ -3274,6 +3324,8 @@ export class Game {
       } else if (sub[s2] === 'Teleport') {
         await this.use_teleport_stone();
         return;
+      } else if (sub[s2].startsWith('Save seeds')) {
+        await this.seed_saving_menu(item);
       } else if (sub[s2] === 'Put away') {
         this.held = null;
         this.msg(`You put away the ${item}.`);
@@ -4203,6 +4255,8 @@ export class Game {
       if (c === COMPANION.crop || c === COMPANION.helper) {
         lines.push(`  Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop} gives ${1 + COMPANION.bonus} a picking.`);
       }
+      const saved = this.seed_recipe(c);
+      if (saved) lines.push(`  Or save your own: ${saved.need} ${c} make ${saved.bags} bag (Rucksack).`);
       if (gate.progressText) {
         lines.push(`  Unlock Gate: ${gate.progressText}`);
       } else {

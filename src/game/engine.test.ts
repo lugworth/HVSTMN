@@ -33,6 +33,7 @@ import {
   PUBLIC_WORKS,
   COMPANION,
   CROPS,
+  SEED_SAVING,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -1923,5 +1924,107 @@ describe('companion planting (task 17)', () => {
     const at = opts.findIndex((o) => o.startsWith('Moondrop Flower Seeds'));
     assert.match(info(at).join(' '), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
     assert.deepEqual(info(opts.findIndex((o) => o.startsWith('Toy Flower Seeds'))), []);
+  });
+});
+
+describe('seed saving (task 19)', () => {
+  const recipe = SEED_SAVING[0];
+  /** Answers each menu in turn with the option whose text starts with the given prefix (null: cancel). */
+  const answering = (g: any, picks: (string | null)[]) => {
+    const seen: { title: string; opts: string[]; info: any }[] = [];
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      seen.push({ title, opts, info: typeof info === 'function' ? info(0) : info });
+      const want = picks.shift();
+      if (want === undefined || want === null) return null;
+      const i = opts.findIndex((o) => o.trim().startsWith(want));
+      assert.ok(i >= 0, `"${want}" offered in ${title}: ${opts.join(' | ')}`);
+      return i;
+    };
+    return seen;
+  };
+
+  test('one recipe to start: three Cucumbers make one bag of Cucumber Seeds', () => {
+    assert.deepEqual(SEED_SAVING, [{ crop: 'Cucumber', need: 3, bags: 1 }]);
+    const ship = ITEMS.Cucumber[0] * recipe.need;
+    const shop = CROPS.Cucumber[1] * recipe.bags;
+    assert.ok(ship < shop && shop - ship <= ship * 0.25, `a fair trade, not free seed (${ship}G of crop for a ${shop}G bag)`);
+  });
+
+  test('saving takes the crop and gives the bag, only when there is enough', () => {
+    const g = fresh();
+    g.inv = { Cucumber: 2 };
+    assert.equal(g.save_seeds('Cucumber'), false);
+    assert.deepEqual(g.inv, { Cucumber: 2 }, 'nothing used up');
+    g.inv.Cucumber = 4;
+    g.held = 'Cucumber';
+    assert.equal(g.save_seeds('Cucumber'), true);
+    assert.equal(g.inv.Cucumber, 1);
+    assert.equal(g.inv['Cucumber Seeds'], 1);
+    assert.equal(g.held, 'Cucumber', 'still holding the one left');
+    assert.equal(g.save_seeds('Turnip'), false, 'no recipe for turnips yet');
+  });
+
+  test('the rucksack offers it for Cucumbers, previews the trade, and keeps the crop by default', async () => {
+    const g = fresh();
+    g.inv = { Cucumber: 3, Turnip: 3 };
+    // Cucumber > Save seeds > (preview) Keep > close
+    let seen = answering(g, ['Cucumber', 'Save seeds', 'Keep the Cucumber', null]);
+    await g.rucksack();
+    const preview = seen.find((m) => m.title === 'Save Cucumber seeds?')!;
+    assert.deepEqual(preview.opts, ['Keep the Cucumber', 'Save seeds from 3 Cucumber'], 'keeping is the highlighted answer');
+    assert.match(preview.info.join(' '), /Gives 1 bag of Cucumber Seeds: sows 3x3, 9 days to grow, regrows every 5d/);
+    assert.match(preview.info.join(' '), /Jeff sells the bag for 200G; 3 Cucumber would ship for 180G/);
+    assert.equal(g.inv.Cucumber, 3, 'kept');
+    // now save them
+    seen = answering(g, ['Cucumber', 'Save seeds', 'Save seeds from', null]);
+    await g.rucksack();
+    assert.deepEqual([g.inv.Cucumber, g.inv['Cucumber Seeds']], [undefined, 1]);
+    // no such option on a turnip
+    seen = answering(g, ['Turnip', null, null]);
+    await g.rucksack();
+    assert.ok(!seen[1].opts.some((o) => o.trim().startsWith('Save seeds')));
+  });
+
+  test('a stray number key does not save the seeds', async () => {
+    const g = fresh();
+    g.inv = { Cucumber: 3 };
+    g.scr.pushKey('2');
+    g.scr.pushKey('esc');
+    await g.seed_saving_menu('Cucumber');
+    assert.equal(g.inv.Cucumber, 3);
+  });
+
+  test('too few cucumbers: it says how many it takes instead', async () => {
+    const g = fresh();
+    g.inv = { Cucumber: 1 };
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    await g.seed_saving_menu('Cucumber');
+    assert.match(said[0], /takes 3 Cucumber; you have 1/);
+  });
+
+  test('a saved bag sows like a bought one', async () => {
+    const g = fresh();
+    g.season = 0;
+    g.inv = { Cucumber: 3 };
+    g.save_seeds('Cucumber');
+    g.warp('farm', 19, 15, [1, 0]);
+    for (let y = 14; y <= 16; y++) for (let x = 20; x <= 22; x++) { delete g.objs.farm[`${x},${y}`]; g.tilled.add(`${x},${y}`); }
+    await g.sow('Cucumber Seeds', [21, 15]);
+    assert.equal(Object.values(g.crops).filter((c: any) => c[0] === 'Cucumber').length, 9);
+    assert.equal(g.inv['Cucumber Seeds'] || 0, 0);
+  });
+
+  test("Jeff's shop mentions saving your own", async () => {
+    const g = fresh();
+    g.season = 0;
+    let rows: string[] = [];
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any) => {
+      rows = opts.map((o, i) => [o, ...info(i)].join(' '));
+      return null;
+    };
+    await g.buy_seeds();
+    assert.match(rows.find((r) => r.startsWith('Cucumber Seeds'))!, /Or save your own: 3 Cucumber make 1 bag \(Rucksack\)/);
+    assert.ok(!/save your own/.test(rows.find((r) => r.startsWith('Turnip Seeds'))!));
   });
 });

@@ -3475,6 +3475,14 @@ export const PUBLIC_WORKS = {
  */
 export const COMPANION = { helper: 'Moondrop Flower', crop: 'Cucumber', bonus: 1 } as const;
 
+// ---------------------------------------------------------------- seed saving (mechanics task 19)
+/**
+ * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
+ * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
+ * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.
+ */
+export const SEED_SAVING: { crop: string; need: number; bags: number }[] = [{ crop: 'Cucumber', need: 3, bags: 1 }];
+
 // ---------------------------------------------------------------- Saturday stall (mechanics task 09)
 export const STALL_DAY = 5; // WEEKDAYS index: Sat
 /** Stock the stall before noon; shoppers come by on the hour until it closes. */

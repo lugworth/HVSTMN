@@ -47,7 +47,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 - [x] **17. Companion planting.** Give one flower or crop a clear benefit for an adjacent different crop. Try a single pairing first, with the benefit shown when the player aims a seed bag.
 - [ ] **18. Compost from leftovers.** Turn weeds and unwanted crops into a soil dressing. Mark the improved tile and give it a small bonus on its next harvest.
-- [ ] **19. Save seeds from the harvest.** Put one good crop aside for future plantings. Limit the initial yield so seeds compete with selling or cooking the crop.
+- [x] **19. Save seeds from the harvest.** Put one good crop aside for future plantings. Limit the initial yield so seeds compete with selling or cooking the crop.
 - [ ] **20. Discover a few hybrids.** Let a villager help cross two specific seeds, then log combinations once discovered. Start with one hybrid per season and a visible payoff such as a new dish.
 - [ ] **21. A small orchard.** Fruit trees take longer to establish and produce at predictable times. Reserve room for a walking path and let fruit feed a kitchen or preserve recipe.
 - [ ] **22. Hives with seasonal honey.** Nearby blossoms change the honey’s flavor and who likes it as a gift. A hive with no flowers can still produce basic honey.
