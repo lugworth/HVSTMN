@@ -3466,6 +3466,15 @@ export const PUBLIC_WORKS = {
   helpers: ['Gotz', 'Basil'],
 };
 
+// ---------------------------------------------------------------- companion planting (mechanics task 17)
+/**
+ * One pairing to start with: a Moondrop Flower in bloom draws bees to the Cucumber vines around it
+ * (the eight tiles that touch it), and each of those gives one more cucumber every picking. Both
+ * are spring crops on sale from the first day (Cucumber at Jeff's, Moondrop at Won's), and the
+ * flower blooms in 6 days, before the vines are ready at 9.
+ */
+export const COMPANION = { helper: 'Moondrop Flower', crop: 'Cucumber', bonus: 1 } as const;
+
 // ---------------------------------------------------------------- Saturday stall (mechanics task 09)
 export const STALL_DAY = 5; // WEEKDAYS index: Sat
 /** Stock the stall before noon; shoppers come by on the hour until it closes. */

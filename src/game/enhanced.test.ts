@@ -1879,3 +1879,18 @@ describe('terrain reads by value in black and white', () => {
     assert.ok(meanBg(winter, 4) < meanBg(winter, GRASS), 'the field still shows as the darker ground');
   });
 });
+
+describe('companion planting mark (task 17)', () => {
+  test('a tile in a companion pairing under a seed bag gets a small blossom; others do not', () => {
+    const s = scene({ palette: 'mono' });
+    for (const [x, comp] of [[10, true], [12, false]] as const) {
+      s.put(x, 10, '=', '09', '00');
+      s.tag(x, 10, { t: 'field', wx: x, wy: 10, k: 'soil', hlArea: true, ...(comp ? { companion: true } : {}) });
+    }
+    const f = computeFrame(s, 0);
+    assert.equal(f[10][10].detail?.ch, '✿');
+    const [r, g, b] = hexToRgb(f[10][10].detail!.fg);
+    assert.ok(r > g && b > g, `the mark keeps its blossom colour in black and white (${f[10][10].detail!.fg})`);
+    assert.equal(f[10][12].detail, undefined);
+  });
+});

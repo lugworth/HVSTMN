@@ -44,6 +44,8 @@ export type CellTag = {
   hl?: boolean;
   /** Secondary cells covered by an upgraded tool's area of effect. */
   hlArea?: boolean;
+  /** A seed-bag aim would put this cell in a companion pairing (task 17). */
+  companion?: boolean;
   /** Faced cell has a meaningful context action (interaction or WATER/DIG/CRACK/CAST). */
   actionTarget?: boolean;
   /** For zoomed tiles: which sub-cell of the tile this is, and the tile width in cells. */

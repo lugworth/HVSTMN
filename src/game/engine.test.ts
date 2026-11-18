@@ -31,7 +31,10 @@ import {
   GRAY_QUEST_FRIEND,
   VALLEY_LANDMARKS,
   PUBLIC_WORKS,
+  COMPANION,
+  CROPS,
 } from './constants';
+import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
 
 const store: Record<string, string> = {};
@@ -1771,5 +1774,154 @@ describe('market regulars at the stall (task 10)', () => {
     await steady(b, async () => b.advance(3 * 60));
     assert.deepEqual(b.stall.callers, ['Doug']);
     assert.equal(b.stall.goods[0].sold, 3);
+  });
+});
+
+describe('companion planting (task 17)', () => {
+  const RIPE = (crop: string) => CROPS[crop][2];
+  /** A spring farm with a tilled 7x3 strip at (20..26, 14..16), the player facing (21, 15) from the left. */
+  const field = () => {
+    const g = fresh();
+    g.season = 0;
+    g.day = 3;
+    g.minutes = 9 * 60;
+    for (let y = 14; y <= 16; y++) for (let x = 20; x <= 26; x++) {
+      const k = `${x},${y}`;
+      delete g.objs.farm[k];
+      g.tilled.add(k);
+    }
+    g.warp('farm', 19, 15, [1, 0]);
+    [g.px, g.py] = [20, 15]; // on the strip's first tile, facing (21, 15)
+    return g;
+  };
+  const plant = (g: any, x: number, y: number, crop: string, age: number) => { g.crops[`${x},${y}`] = [crop, age]; };
+
+  test('a Cucumber beside a Moondrop in bloom gives two a picking, and keeps regrowing', async () => {
+    const g = field();
+    plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
+    plant(g, 22, 16, 'Moondrop Flower', RIPE('Moondrop Flower')); // diagonal counts
+    assert.equal(g.companion_bonus('21,15'), COMPANION.bonus);
+    g.inv = {};
+    await g.interact();
+    assert.equal(g.inv.Cucumber, 2);
+    assert.match(g.msgs.at(-1)[0], /You harvested 2 Cucumber! The Moondrop Flower beside it drew the bees/);
+    assert.equal(g.crops['21,15'][1], RIPE('Cucumber') - CROPS.Cucumber[3], 'it regrows as usual');
+  });
+
+  test('no bonus without a blooming Moondrop next to it', async () => {
+    const g = field();
+    plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
+    plant(g, 23, 15, 'Moondrop Flower', RIPE('Moondrop Flower')); // two tiles away
+    assert.equal(g.companion_bonus('21,15'), 0, 'two tiles away is too far');
+    plant(g, 22, 15, 'Moondrop Flower', 2); // next to it, still growing
+    assert.equal(g.companion_bonus('21,15'), 0, 'not in bloom yet');
+    plant(g, 22, 15, 'Toy Flower', RIPE('Toy Flower'));
+    assert.equal(g.companion_bonus('21,15'), 0, 'only the Moondrop');
+    plant(g, 22, 15, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    assert.equal(g.companion_bonus('22,15'), 0, 'the flower itself gets nothing');
+    g.inv = {};
+    await g.interact();
+    assert.equal(g.inv.Cucumber, 2);
+  });
+
+  test('the bonus fills the Basket up to its capacity, with any spare berry kept in the rucksack', async () => {
+    const g = field();
+    plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
+    plant(g, 21, 14, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    g.inv = { Basket: 1 };
+    g.held = 'Basket';
+    g.basket = { Turnip: BASKET_CAPACITY - 1 };
+    await g.interact();
+    assert.equal(g.basket.Cucumber, 1);
+    assert.equal(g.inv.Cucumber, 1);
+  });
+
+  test('Harvest Sprites collect the bonus too, even when they pick the flower in the same pass', () => {
+    const g = field();
+    plant(g, 22, 15, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
+    plant(g, 23, 15, 'Cucumber', RIPE('Cucumber'));
+    plant(g, 25, 15, 'Cucumber', RIPE('Cucumber')); // not touching the flower
+    const sprite = Object.keys(g.sprite_jobs)[0];
+    g.sprite_jobs[sprite] = { task: 'Harvesting', days: 2, skill: 10 };
+    g.bin = {};
+    g.run_sprites_work([]);
+    assert.equal(g.bin.Cucumber, 2 + 2 + 1);
+    assert.equal(g.bin['Moondrop Flower'], 1);
+  });
+
+  test('aiming Cucumber seeds marks the tiles that would sit beside a Moondrop and says so', () => {
+    const g = field();
+    plant(g, 23, 15, 'Moondrop Flower', 1); // any stage: it will bloom
+    g.inv = { 'Cucumber Seeds': 1 };
+    g.tool = 'Cucumber Seeds';
+    const p = g.companion_preview('Cucumber Seeds', 21, 15);
+    assert.deepEqual(p.cells.sort(), ['22,14', '22,15', '22,16']);
+    assert.match(g.facing_action().summary, /^Sow cucumber · 3 by Moondrop: 2 a picking$/);
+    g.render();
+    const marked = g.scr.tags.flat().filter((t: any) => t?.companion).map((t: any) => `${t.wx},${t.wy}`).sort();
+    assert.deepEqual(marked, ['22,14', '22,15', '22,16']);
+    assert.equal(g.companion_preview('Turnip Seeds', 21, 15), null, 'other bags show nothing');
+    g.tool = 'Hoe';
+    g.render();
+    assert.equal(g.scr.tags.flat().filter((t: any) => t?.companion).length, 0, 'no marks without the bag');
+  });
+
+  test('aiming Moondrop seeds marks the Cucumber plants the flowers would help', () => {
+    const g = field();
+    plant(g, 23, 14, 'Cucumber', 2);
+    plant(g, 26, 16, 'Cucumber', 2); // too far from the 3x3 at (21,15)
+    g.inv = { 'Moondrop Flower Seeds': 1 };
+    g.tool = 'Moondrop Flower Seeds';
+    assert.deepEqual(g.companion_preview(g.tool, 21, 15).cells, ['23,14']);
+    assert.match(g.facing_action().summary, /^Sow moondrop flower · helps 1 Cucumber: \+1 a picking$/);
+  });
+
+  test('sowing next to the pair says so; checking a cucumber tells you about its flower', async () => {
+    const g = field();
+    plant(g, 23, 15, 'Moondrop Flower', 1);
+    g.inv = { 'Cucumber Seeds': 1 };
+    g.tool = 'Cucumber Seeds';
+    await g.sow('Cucumber Seeds', [21, 15]);
+    assert.match(g.msgs.at(-1)[0], /You sowed Cucumber seeds on 9 tiles\. 3 Cucumber plants are paired with Moondrop Flower\./);
+    g.tool = 'Hoe';
+    g.face = [1, 0];
+    g.px = 21; g.py = 15; // facing (22, 15), a new cucumber beside the young flower
+    await g.interact();
+    assert.match(g.msgs.at(-1)[0], /will draw bees once it blooms/);
+    g.crops['23,15'][1] = RIPE('Moondrop Flower');
+    await g.interact();
+    assert.match(g.msgs.at(-1)[0], /A Moondrop Flower in bloom beside it: 2 a picking/);
+  });
+
+  test("Jeff's seed shop explains the pairing for Cucumber seeds", () => {
+    const g = fresh();
+    g.season = 0;
+    const seen: string[][] = [];
+    g.menu = async (_t: string, opts: string[], _s = 0, info: any) => {
+      for (let i = 0; i < opts.length; i++) seen.push([opts[i], ...info(i)]);
+      return null;
+    };
+    return g.buy_seeds().then(() => {
+      const line = (name: string) => seen.find((r) => r[0].startsWith(name))!.join(' ');
+      assert.match(line('Cucumber Seeds'), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
+      assert.ok(!/Companion:/.test(line('Turnip Seeds')));
+      assert.ok(!line('Cucumber Seeds').includes('LOCKED'), 'cucumber seeds are on sale from the first day');
+    });
+  });
+
+  test("Won's shop explains the pairing where Moondrop seeds are sold", async () => {
+    const g = fresh();
+    let info: any = null;
+    let opts: string[] = [];
+    g.menu = async (_t: string, o: string[], _s = 0, i: any) => {
+      opts = o;
+      info = i;
+      return null;
+    };
+    await g.won_shop();
+    const at = opts.findIndex((o) => o.startsWith('Moondrop Flower Seeds'));
+    assert.match(info(at).join(' '), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
+    assert.deepEqual(info(opts.findIndex((o) => o.startsWith('Toy Flower Seeds'))), []);
   });
 });
