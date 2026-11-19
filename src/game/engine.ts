@@ -99,6 +99,8 @@ import {
   COMPOST_SCRAPS,
   COMPOST_BONUS,
   TRAP_SPOT,
+  MUSHROOM_FLUSH,
+  FLUSH_COUNT,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -524,6 +526,9 @@ export class Game {
   composted: string[] = [];
   /** The crab pot off the pier (task 39): the day it was set and its bait, or null while it is up. */
   trap: { day: number; bait: string | null } | null = null;
+  /** The absolute day of the last mushroom flush in Cedar Hollow, and where it came up (task 35). */
+  flush_day: number = -1;
+  flush_spots: string[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -601,7 +606,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -740,6 +745,8 @@ export class Game {
     this.compost_scraps = 0;
     this.composted = [];
     this.trap = null;
+    this.flush_day = -1;
+    this.flush_spots = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1090,6 +1097,8 @@ export class Game {
       this.order = sanitizeOrder(this.order);
       this.reminders = sanitizeReminders(this.reminders, this.absday());
       this.compost_scraps = Math.max(0, Math.floor(Number(this.compost_scraps) || 0));
+      this.flush_day = Number.isInteger(this.flush_day) ? this.flush_day : -1;
+      this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       const tr: any = this.trap;
       this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
@@ -3171,7 +3180,10 @@ export class Game {
       'Turn Off',
     ]);
     if (sel === 0) {
-      await this.say(`Tomorrow's weather forecast for Mineral Town: ${this.tomorrow}! Plan your watering and animals accordingly.`, 'Weather Channel');
+      await this.say(
+        `Tomorrow's weather forecast for Mineral Town: ${this.tomorrow}! Plan your watering and animals accordingly.${this.flush_coming() ? " And after today's rain, look for mushrooms in Cedar Hollow tomorrow morning." : ''}`,
+        'Weather Channel',
+      );
     } else if (sel === 1) {
       await this.say(`Mineral Town News:${this.fest_news() || ' All is peaceful in Mineral Town today.'}`, 'News Channel');
     } else if (sel === 2) {
@@ -4975,6 +4987,14 @@ export class Game {
       lines.push(`  ★ ${when === 'today' ? 'Today' : when === 'tomorrow' ? 'Tomorrow' : `${absdayLabel(r.day, false)} (${when})`}: ${r.text}`);
     }
     if (soon.length) lines.push('');
+    const flush = this.flush_left();
+    if (flush) {
+      lines.push(`  Hollow ${flush} mushroom${flush === 1 ? '' : 's'} came up in Cedar Hollow after the rain.`);
+      lines.push('');
+    } else if (this.flush_coming()) {
+      lines.push('  Rain   Mushrooms will come up in Cedar Hollow tomorrow morning.');
+      lines.push('');
+    }
     const pot = this.trap_state();
     if (pot !== 'up') {
       lines.push(pot === 'ready' ? '  Pot    The crab pot off the beach pier is ready to haul.' : '  Pot    Crab pot set off the beach pier: haul it tomorrow.');
@@ -7001,6 +7021,7 @@ export class Game {
       }
     }
 
+    const rainedYesterday = this.weather === 'Rain' || this.weather === 'Typhoon';
     this.weather = this.tomorrow;
     for (const map of OUTDOOR_MAPS) {
       const wet = this.weather === 'Rain' || this.weather === 'Typhoon' ? 1 : (this.wetness[map] || 0) * 0.55;
@@ -7095,6 +7116,7 @@ export class Game {
       }
     }
     this.spawn_forage();
+    if (rainedYesterday) this.mushroom_flush(report);
     this.spawn_digs();
     this.talked = new Set();
     this.gifted = new Set();
@@ -7184,6 +7206,48 @@ export class Game {
         if (woods.tile(x, y) === 'grass' && !woods.near(x, y, ['path', 'bridge'], 0) && !(k in (this.forage['woods'] || {}))) objs[k] = 'branch';
       }
     }
+  }
+
+  // ---------------------------------------------------------------- weather worth exploring (mechanics task 35)
+  /** Mushrooms that come up in Cedar Hollow after rain this season (none in winter). */
+  flush_pool(season: string = this.season_name): string[] {
+    return MUSHROOM_FLUSH[season] ?? [];
+  }
+
+  /** The morning after rain: extra mushrooms come up in Cedar Hollow. Returns how many. */
+  mushroom_flush(report: string[]): number {
+    const pool = this.flush_pool();
+    const woods = this.maps['woods'];
+    if (!pool.length || !woods) return 0;
+    const rng = py_rng();
+    const fr = (this.forage['woods'] ||= {});
+    const objs = this.objs['woods'] || {};
+    const spots: string[] = [];
+    for (let tries = 0; spots.length < FLUSH_COUNT && tries < 400; tries++) {
+      const [x, y] = [rng.randint(2, woods.w - 3), rng.randint(2, woods.h - 3)];
+      const k = pkey(x, y);
+      if (woods.tile(x, y) !== 'grass' || woods.near(x, y, ['path', 'bridge', 'pond'], 0) || k in fr || k in objs) continue;
+      fr[k] = rng.choice(pool);
+      spots.push(k);
+    }
+    if (!spots.length) return 0;
+    this.flush_day = this.absday();
+    this.flush_spots = spots;
+    report.push(`After yesterday's rain, mushrooms have come up in Cedar Hollow (${spots.length} to pick).`);
+    return spots.length;
+  }
+
+  /** Flush mushrooms still waiting in Cedar Hollow today. */
+  flush_left(): number {
+    if (this.flush_day !== this.absday()) return 0;
+    const fr = this.forage['woods'] || {};
+    return this.flush_spots.filter((k) => this.flush_pool().includes(fr[k])).length;
+  }
+
+  /** Rain today, and tomorrow is not winter: the flush is coming. */
+  flush_coming(): boolean {
+    const [s] = this.fest_date(1);
+    return (this.weather === 'Rain' || this.weather === 'Typhoon') && this.flush_pool(SEASONS[s]).length > 0;
   }
 
   /** A free patch of open field on the farm (no soil, crop or object), or null. */

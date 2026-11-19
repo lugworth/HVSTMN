@@ -46,6 +46,8 @@ import {
   COMPOST_SCRAPS,
   COMPOST_BONUS,
   TRAP_SPOT,
+  MUSHROOM_FLUSH,
+  FLUSH_COUNT,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3002,5 +3004,93 @@ describe('a crab pot off the pier (task 39)', () => {
     const o = fresh();
     o.applySaveData(snap);
     assert.equal(o.trap, null);
+  });
+});
+
+describe('weather worth exploring: a mushroom flush after rain (task 35)', () => {
+  const sleepThrough = async (g: any) => {
+    quiet(g);
+    for (let i = 0; i < 20; i++) g.scr.pushKey('enter');
+    await g.new_day('sleep');
+  };
+
+  test('a rainy day is forecast on the TV and in Today\'s Plan', async () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.weather = 'Rain';
+    assert.equal(g.flush_coming(), true);
+    assert.ok(g.today_lines().includes('  Rain   Mushrooms will come up in Cedar Hollow tomorrow morning.'));
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    g.menu = async () => 0;
+    await g.tv_menu();
+    assert.match(said[0], /look for mushrooms in Cedar Hollow tomorrow morning\.$/);
+    g.weather = 'Sunny';
+    assert.equal(g.flush_coming(), false);
+    said.length = 0;
+    await g.tv_menu();
+    assert.doesNotMatch(said[0], /mushrooms/);
+  });
+
+  test('the morning after rain, mushrooms come up in Cedar Hollow and the report says so', async () => {
+    const g = fresh();
+    g.weather = 'Rain';
+    g.tomorrow = 'Sunny';
+    const before = Object.keys(g.forage.woods || {}).length;
+    const reports: string[] = [];
+    const real = g.mushroom_flush.bind(g);
+    g.mushroom_flush = (r: string[]) => {
+      const n = real(r);
+      reports.push(...r);
+      return n;
+    };
+    await sleepThrough(g);
+    assert.equal(g.flush_day, g.absday());
+    assert.equal(g.flush_spots.length, FLUSH_COUNT);
+    for (const k of g.flush_spots) {
+      assert.ok(MUSHROOM_FLUSH.Spring.includes(g.forage.woods[k]), `${g.forage.woods[k]} at ${k}`);
+      const [x, y] = k.split(',').map(Number);
+      assert.equal(g.maps.woods.tile(x, y), 'grass');
+    }
+    assert.ok(Object.keys(g.forage.woods).length >= FLUSH_COUNT, `more forage than the usual ${before}`);
+    assert.ok(reports.includes(`After yesterday's rain, mushrooms have come up in Cedar Hollow (${FLUSH_COUNT} to pick).`), reports.join(' | '));
+    assert.equal(g.flush_left(), FLUSH_COUNT);
+    assert.ok(g.today_lines().includes(`  Hollow ${FLUSH_COUNT} mushrooms came up in Cedar Hollow after the rain.`));
+
+    // pick one: the count drops; the next day the note is gone
+    delete g.forage.woods[g.flush_spots[0]];
+    assert.equal(g.flush_left(), FLUSH_COUNT - 1);
+    g.day += 1;
+    assert.equal(g.flush_left(), 0);
+  });
+
+  test('no flush after a dry day, and none in winter', async () => {
+    const g = fresh();
+    g.weather = 'Sunny';
+    g.tomorrow = 'Sunny';
+    await sleepThrough(g);
+    assert.equal(g.flush_day, -1);
+    const w = fresh();
+    w.season = 3;
+    w.day = 5;
+    assert.equal(w.mushroom_flush([]), 0);
+    w.weather = 'Snow';
+    assert.equal(w.flush_coming(), false);
+    const fall = fresh();
+    fall.season = 2;
+    fall.day = 30;
+    fall.weather = 'Rain';
+    assert.equal(fall.flush_coming(), false, 'tomorrow is winter');
+  });
+
+  test('the flush is saved with the day', () => {
+    const g = fresh();
+    g.mushroom_flush([]);
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.equal(h.flush_day, g.flush_day);
+    assert.deepEqual(h.flush_spots, g.flush_spots);
+    assert.equal(h.flush_left(), g.flush_left());
   });
 });

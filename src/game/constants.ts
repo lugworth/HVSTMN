@@ -3585,6 +3585,18 @@ export const COMPOST_BONUS = 1;
 export const TRAP_SPOT: [string, number, number] = ['beach', 32, 20];
 
 /**
+ * Weather worth exploring (mechanics task 35): the morning after a rainy or stormy day (outside
+ * winter), FLUSH_COUNT extra mushrooms come up in Cedar Hollow, from this season's list. The TV
+ * forecast and Today's Plan say so on the rainy day; the morning report says so when it happens.
+ */
+export const MUSHROOM_FLUSH: Record<string, string[]> = {
+  Spring: ['Mushroom', 'Chanterelle'],
+  Summer: ['Mushroom', 'Chanterelle'],
+  Fall: ['Mushroom', 'Chanterelle', 'Truffle'],
+};
+export const FLUSH_COUNT = 5;
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.
