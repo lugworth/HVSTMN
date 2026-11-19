@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## A pet's morning clue (mechanics task 29), 2026-11-19
+
+- Each morning (`Game.dog_morning()` in `new_day`, after the forage, flush and dig spawns) a dog
+  with at least `DOG_CLUE_AFF` (30; a new farm's dog starts at 25, so a couple of pets) picks up a
+  scent pointing at something already there: a mushroom from today's rain flush if any, else a
+  random fresh dig spot away from the farm. Nothing is invented; with nothing out there, no clue.
+- It is named by area (`area_name()`: thirds of the map, "the north-west of Willow Bend") in the
+  morning report, Today's Plan ("Dog    Picked up a scent: …") and the doghouse menu, until it is
+  dug up or picked (`dog_clue_live()`) or the day ends. The doghouse also says a dog you spend time
+  with will start sniffing things out. `dog_clue` is saved and sanitized.
+
 ## Weather worth exploring (mechanics task 35), 2026-11-19
 
 - The morning after a Rain or Typhoon day, outside winter, `Game.mushroom_flush()` (called from

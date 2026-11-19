@@ -3597,6 +3597,13 @@ export const MUSHROOM_FLUSH: Record<string, string[]> = {
 export const FLUSH_COUNT = 5;
 
 /**
+ * A pet's morning clue (mechanics task 29): a dog with at least DOG_CLUE_AFF affection picks up a
+ * scent each morning, pointing at something already out in the valley: a mushroom from a rain flush,
+ * or a fresh dig spot away from the farm.
+ */
+export const DOG_CLUE_AFF = 30;
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.
