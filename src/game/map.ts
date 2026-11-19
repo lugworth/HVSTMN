@@ -694,6 +694,8 @@ export function build_house_upgraded(flags: Set<string> | string[]): GameMap {
   m.set(5, 1, 'tv');
   m.set(8, 1, 'cal');
   m.set(12, 1, 'bin');
+  // the mantel for festival souvenirs and keepsakes (mechanics task 45)
+  m.set(14, 1, 'mantel');
   m.rect(3, 4, 3, 2, 'table');
   // Flower Vase on the table
   m.set(3, 4, 'vase');

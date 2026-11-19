@@ -1,5 +1,15 @@
 # Handoff: HRVSTMN
 
+## A mantel for festival souvenirs (mechanics task 45), 2026-11-19
+
+- Every farmhouse has a `mantel` tile (`♕`, house (14, 1) on the north wall; grey when bare, lit once
+  it holds something). `Game.keepsake(key, name, text)` adds one per key to `souvenirs` (saved):
+  a ribbon for each festival prize (`fest_win`, per year), the program from your first festival
+  (`fest_run`), a carved plank when the footbridge is finished (`works_day`), and the curator's
+  letter for each museum case he thanks you for (task 03).
+- X at the mantel (`mantel_menu()`): each keepsake with its date; the info pane and choosing one show
+  the full date and its one-line memory. A bare mantel says what will stand there.
+
 ## Shared memories in Villager Notes (mechanics task 07), 2026-11-19
 
 - `Game.remember(npc, text, key?)` keeps a moment in `memories` (saved, sanitized, at most

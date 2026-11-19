@@ -1988,6 +1988,12 @@ export const TILES: Record<string, any> = {
     "01",
     false
   ],
+  "mantel": [
+    "♕",
+    "0A",
+    "01",
+    false
+  ],
   "bath": [
     "U",
     "0C",

@@ -82,7 +82,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [ ] **42. Name farm plots.** Put a small sign next to a field and use its name in the daily list, such as “North Turnips have four dry tiles.”
 - [ ] **43. A rainy-night coffee or tea counter.** Brew from three or four ingredients at Doug’s Inn. The drink a regular asks for starts a short conversation that can continue next week.
 - [ ] **44. Places to stop and sit.** Give the Town Green bench, a porch, and the Ridge lookout a little scene at sunset or in light rain. A friend may be there on the right evening.
-- [ ] **45. A mantel for festival souvenirs.** Display a ribbon, letter, or tiny sculpture from a day you remember. Interacting with it shows the date and a one-line memory.
+- [x] **45. A mantel for festival souvenirs.** Display a ribbon, letter, or tiny sculpture from a day you remember. Interacting with it shows the date and a one-line memory.
 - [ ] **46. Valley postcards.** Save a clean capture of the current scene with the location, season, and date. Keep a small album and allow a local export.
 - [ ] **47. Family routines at home.** A spouse cooks breakfast on a rainy day, tends flowers in spring, or leaves a note before heading out. Let their routine make the house feel occupied.
 - [ ] **48. An indoor winter hobby.** Try a small stamp-printing bench. Combine a few geometric marks and put the finished print on your wall or give it to a neighbor.
