@@ -342,6 +342,24 @@ export interface VillagerOrder {
   deadline: number;
 }
 
+/** A day pinned on the calendar (task 51): an absolute day and what it is for. */
+export interface CalendarReminder {
+  day: number;
+  text: string;
+}
+/** How many reminders the calendar holds at once. */
+export const REMINDER_MAX = 6;
+
+/** Reminders from a save: well-formed, not yet past, at most REMINDER_MAX, in date order. */
+function sanitizeReminders(raw: unknown, today: number): CalendarReminder[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((r) => r && Number.isInteger(r.day) && r.day >= today && typeof r.text === 'string' && r.text.trim())
+    .map((r) => ({ day: r.day, text: String(r.text).slice(0, 60) }))
+    .sort((a, b) => a.day - b.day)
+    .slice(0, REMINDER_MAX);
+}
+
 export const MASTERY_DISCIPLINES = ['farming', 'foraging', 'fishing', 'mining', 'ranching'] as const;
 export type MasteryDiscipline = (typeof MASTERY_DISCIPLINES)[number];
 export const MASTERY_RANKS = [
@@ -497,6 +515,7 @@ export class Game {
   museum_rewards: number[] = [];
   requests: VillagerRequest[] = [];
   order: VillagerOrder | null = null;
+  reminders: CalendarReminder[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -574,7 +593,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -709,6 +728,7 @@ export class Game {
     this.requests = [];
     this.order = null;
     this.order_next = 0;
+    this.reminders = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1057,6 +1077,7 @@ export class Game {
       this.prune_forage();
       this.prune_requests();
       this.order = sanitizeOrder(this.order);
+      this.reminders = sanitizeReminders(this.reminders, this.absday());
       this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
@@ -2750,10 +2771,7 @@ export class Game {
     } else if (tile === 'tv') {
       await this.tv_menu();
     } else if (tile === 'cal') {
-      const left = 30 - this.day;
-      const nxt = SEASONS[(this.season + 1) % 4];
-      await this.say(`Today is ${this.date_str()}. ${left} day${left !== 1 ? 's' : ''} until ${nxt}.`, 'Calendar');
-      await this.fest_calendar();
+      await this.calendar_menu();
     } else if (tile === 'counter' || tile === 'bookcase') {
       await this.interior_interact(tile, [tx, ty]);
     } else if (tile === 'kitchen' || tile === 'bath' || tile === 'shelf' || tile === 'vase' || tile === 'fireplace') {
@@ -4764,6 +4782,12 @@ export class Game {
       lines.push('         (Hide this list in the Diary.)');
       lines.push('');
     }
+    const soon = this.reminders.filter((r) => r.day - this.absday() <= 7);
+    for (const r of soon.slice(0, 3)) {
+      const when = this.day_from_now(r.day);
+      lines.push(`  ★ ${when === 'today' ? 'Today' : when === 'tomorrow' ? 'Tomorrow' : `${absdayLabel(r.day, false)} (${when})`}: ${r.text}`);
+    }
+    if (soon.length) lines.push('');
     lines.push(`  Ship   ${binValue ? `${binValue}G waiting` : 'empty'}`);
     lines.push(`         ${ship}`);
     lines.push(`  Water  ${this.crop_water_count()} crop${this.crop_water_count() === 1 ? '' : 's'} still dry`);
@@ -4971,6 +4995,8 @@ export class Game {
       if (this.order_template()) {
         all.push(...wrapLabeled('★ Order ', '0E', `${this.order_template()!.npc}: ${andList(this.order_still_needed())}`, '05'));
       }
+      const pinned = this.reminders.find((r) => r.day - this.absday() <= 1);
+      if (pinned) all.push(...wrapLabeled('★ Pinned', '0C', `${this.day_from_now(pinned.day) === 'today' ? 'Today' : 'Tomorrow'}: ${pinned.text}`, '05'));
       if (this.gray_quest === 1) {
         all.push(...wrapLabeled('◆ Gray  ', '0C', `Wants ${GRAY_COPPER_QTY}×Copper (have ${this.inv['Copper'] || 0})`, '05'));
       } else if (this.gray_quest === 2) {
@@ -6127,6 +6153,112 @@ export class Game {
     return parts.length ? '  ' + parts.join(' ') : '';
   }
 
+  // ---------------------------------------------------------------- calendar reminders (mechanics task 51)
+  /** 'today', 'tomorrow', 'in 3d' for an absolute day. */
+  day_from_now(day: number): string {
+    const off = day - this.absday();
+    return off <= 0 ? 'today' : off === 1 ? 'tomorrow' : `in ${off}d`;
+  }
+
+  /**
+   * What can be pinned: festivals and birthdays in the next 30 days, the next Saturday market, and
+   * the day each crop on the farm is first ready (if it is watered every day and beats the season).
+   */
+  reminder_options(): CalendarReminder[] {
+    const today = this.absday();
+    const out: CalendarReminder[] = [];
+    for (let off = 0; off < 30; off++) {
+      const [ss, dd] = this.fest_date(off);
+      const f = FESTIVALS[`${ss},${dd}`];
+      if (f) out.push({ day: today + off, text: f[0] });
+      for (const n of this.birthdays(off)) out.push({ day: today + off, text: `${n}'s birthday` });
+    }
+    let market = this.market_next();
+    if (market === today && this.stall_state() !== 'ready' && this.stall_state() !== 'open') market += 7;
+    if (!this.fest_on(market - today)) out.push({ day: market, text: 'Saturday market' });
+    const ready: Record<string, { day: number; n: number }> = {};
+    for (const [crop, age] of Object.values(this.crops)) {
+      if (crop === 'Grass') continue;
+      const left = CROPS[crop][2] - age;
+      if (left <= 0 || this.day + left > 30) continue;
+      const day = today + left;
+      const r = (ready[crop] ||= { day, n: 0 });
+      r.day = Math.min(r.day, day);
+      r.n += 1;
+    }
+    for (const [crop, r] of Object.entries(ready)) out.push({ day: r.day, text: `${crop} ready (${r.n} tile${r.n === 1 ? '' : 's'})` });
+    out.sort((a, b) => a.day - b.day || a.text.localeCompare(b.text));
+    return out.filter((o) => !this.reminders.some((r) => r.day === o.day && r.text === o.text));
+  }
+
+  /** Pin a day; false if the calendar is full or it is already pinned. */
+  reminder_add(r: CalendarReminder): boolean {
+    if (this.reminders.length >= REMINDER_MAX) return false;
+    if (this.reminders.some((x) => x.day === r.day && x.text === r.text)) return false;
+    this.reminders.push({ day: r.day, text: r.text });
+    this.reminders.sort((a, b) => a.day - b.day);
+    return true;
+  }
+
+  /** The morning: say what is pinned for today, then drop days that have passed. */
+  reminder_day(report: string[]): void {
+    const today = this.absday();
+    for (const r of this.reminders) if (r.day === today) report.push(`Reminder: ${r.text} today.`);
+    this.reminders = this.reminders.filter((r) => r.day >= today);
+  }
+
+  /** The calendar on the wall: the date, what's coming up, and the days you pinned. */
+  async calendar_menu(): Promise<void> {
+    while (true) {
+      const left = 30 - this.day;
+      const nxt = SEASONS[(this.season + 1) % 4];
+      const info = [
+        `  Today is ${this.date_str()}. ${left} day${left !== 1 ? 's' : ''} until ${nxt}.`,
+        ...(this.reminders.length
+          ? this.reminders.map((r) => `  ★ ${absdayLabel(r.day, false)} (${this.day_from_now(r.day)}): ${r.text}`)
+          : ['  Nothing pinned yet. Pinned days show in Today\'s Plan.']),
+      ];
+      const opts = [
+        'Upcoming events & birthdays',
+        `Pin a reminder (${this.reminders.length}/${REMINDER_MAX})`,
+        ...(this.reminders.length ? ['Unpin a reminder'] : []),
+        'Leave',
+      ];
+      const sel = await this.menu('Calendar', opts, 0, info);
+      if (sel === null || opts[sel] === 'Leave') return;
+      const choice = opts[sel];
+      if (choice.startsWith('Upcoming')) {
+        await this.fest_calendar();
+      } else if (choice.startsWith('Pin')) {
+        if (this.reminders.length >= REMINDER_MAX) {
+          await this.say(`The calendar holds ${REMINDER_MAX} reminders. Unpin one first.`, 'Calendar');
+          continue;
+        }
+        const pool = this.reminder_options().slice(0, 12);
+        if (!pool.length) {
+          await this.say('Nothing coming up to pin right now.', 'Calendar');
+          continue;
+        }
+        const pick = await this.menu(
+          'Pin which day?',
+          pool.map((r) => `${absdayLabel(r.day, false)} (${this.day_from_now(r.day)}): ${r.text}`),
+        );
+        if (pick !== null && this.reminder_add(pool[pick])) {
+          this.msg(`Pinned: ${pool[pick].text}, ${absdayLabel(pool[pick].day, false)}.`, '0C');
+        }
+      } else if (choice.startsWith('Unpin')) {
+        const pick = await this.menu(
+          'Unpin which day?',
+          this.reminders.map((r) => `${absdayLabel(r.day, false)}: ${r.text}`),
+        );
+        if (pick !== null) {
+          const [gone] = this.reminders.splice(pick, 1);
+          this.msg(`Unpinned: ${gone.text}.`, '0C');
+        }
+      }
+    }
+  }
+
   async fest_calendar(): Promise<void> {
     const lines: string[] = [];
     for (let off = 0; off < 31; off++) {
@@ -6732,6 +6864,7 @@ export class Game {
 
     // Rose Square request board
     this.request_day(report);
+    this.reminder_day(report);
 
     // Spawn daily weeds & mountain/beach forage
     if (this.season !== 3) {

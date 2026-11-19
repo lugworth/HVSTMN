@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## Calendar reminders (mechanics task 51), 2026-11-19
+
+- The farmhouse calendar is now a menu (`Game.calendar_menu()`): the date and days left in the
+  season, your pinned days, "Upcoming events & birthdays" (the old list), "Pin a reminder (n/6)" and
+  "Unpin a reminder". `reminder_options()` offers festivals and birthdays in the next 30 days, the
+  next Saturday market (skipped on a festival), and the day each crop on the farm is first ready if
+  watered daily ("Turnip ready (2 tiles)"), in date order and minus what is already pinned.
+- `reminders` ({ day: absday, text }[], at most `REMINDER_MAX` = 6) is saved and sanitized (past,
+  broken and extra entries dropped, sorted). Pins within 7 days show in Today's Plan
+  ("★ Tomorrow: Saturday market"); today/tomorrow also in the side panel's plan; the morning report
+  says "Reminder: … today." (`reminder_day()` in `new_day`, which then drops past days). All on the
+  game clock (absolute days).
+
 ## First-morning checklist (mechanics task 50), 2026-11-19
 
 - A new farm starts with `first_steps = { till, sow, water }` all false. `Game.first_steps_update()`
