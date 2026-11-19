@@ -132,6 +132,12 @@ import {
   VALLEY_SHORT,
   VALLEY_LANDMARKS,
   PUBLIC_WORKS,
+  FAVORS,
+  FAVOR_FRIENDSHIP,
+  FAVOR_HOURS,
+  FAVOR_GAP,
+  FAVOR_WATER_MAX,
+  FAVOR_SHOPS,
 } from './constants';
 import type { ValleyLandmark } from './constants';
 import type { CatchOdds, MakerStep } from './rules';
@@ -564,6 +570,10 @@ export class Game {
   notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
   /** Seats rested at today (task 44): seat id → absolute day. */
   seats_rested: Record<string, number> = {};
+  /** A favor a neighbor promised (task 05): who, and the absolute day it happens. */
+  favor: { npc: string; day: number } | null = null;
+  /** When each neighbor last offered a favor (absolute day), so offers stay occasional. */
+  favor_offered: Record<string, number> = {};
   /** Named farm plots (task 42): where each sign stands, its name, and the tile it replaced. */
   plots: { key: string; name: string; tile: string }[] = [];
   /** Absolute day the board may post its next order. */
@@ -643,7 +653,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -790,6 +800,8 @@ export class Game {
     this.souvenirs = [];
     this.notebook = [];
     this.seats_rested = {};
+    this.favor = null;
+    this.favor_offered = {};
     this.clear_plots();
     this.plots = [];
     this.order_last = null;
@@ -1154,6 +1166,11 @@ export class Game {
             .slice(0, PLOT_MAX)
         : [];
       this.place_plots();
+      const fv: any = this.favor;
+      this.favor = fv && typeof fv === 'object' && FAVORS[fv.npc] && Number.isInteger(fv.day) && fv.day >= this.absday() ? { npc: fv.npc, day: fv.day } : null;
+      this.favor_offered = Object.fromEntries(
+        Object.entries(this.favor_offered && typeof this.favor_offered === 'object' ? this.favor_offered : {}).filter(([k, v]) => FAVORS[k] && Number.isInteger(v)),
+      ) as Record<string, number>;
       this.seats_rested = Object.fromEntries(
         Object.entries(this.seats_rested && typeof this.seats_rested === 'object' ? this.seats_rested : {}).filter(([k, v]) => SEATS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
@@ -3462,6 +3479,17 @@ export class Game {
       return;
     }
 
+    if (n !== this.married && !this.milestone_line(n) && this.favor_available(n)) {
+      emitNpcEmote('heart');
+      if (!this.talked.has(n)) {
+        this.talked.add(n);
+        this.friend[n] = clamp((this.friend[n] || 0) + 2, 0, 100);
+      }
+      await this.offer_favor(n);
+      await this.check_heart_and_rival_events(n);
+      return;
+    }
+
     let line = '';
     if (n === this.married && this.mapname === 'house') {
       line = py_rng().choice(SPOUSE_LINES);
@@ -3493,6 +3521,90 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- favors from close neighbors (mechanics task 05)
+  /** Whether `n` would offer a favor if you talked now: a close friend, on a free afternoon, nothing already arranged. */
+  favor_available(n: string): boolean {
+    const f = FAVORS[n];
+    if (!f || this.favor) return false;
+    if ((this.friend[n] || 0) < FAVOR_FRIENDSHIP) return false;
+    const [a, b] = FAVOR_HOURS;
+    if (this.minutes < a * 60 || this.minutes >= b * 60) return false;
+    if (this.fest_on() || this.fest_on(1)) return false;
+    const last = this.favor_offered[n];
+    if (last !== undefined && this.absday() - last < FAVOR_GAP) return false;
+    if (f.kind === 'feed') return this.chickens > 0;
+    if (f.kind === 'water') return Object.keys(this.crops).length > 0 && !['Rain', 'Typhoon'].includes(this.tomorrow);
+    return true;
+  }
+
+  /** The neighbor offers; accepting books it for tomorrow. Declining is fine: they ask again another week. */
+  async offer_favor(n: string): Promise<void> {
+    const f = FAVORS[n];
+    this.favor_offered[n] = this.absday();
+    await this.say(f.offer, n);
+    const sel = await this.menu(`${n} offers a favor`, ['Yes, thank you', "No, I'll manage"], 0, [`Tomorrow: ${f.plan}.`]);
+    if (sel === 0) {
+      this.favor = { npc: n, day: this.absday() + 1 };
+      this.markDirty(false);
+      await this.say("Then it's a promise. See you tomorrow!", n);
+      this.msg(`Arranged: ${f.plan} tomorrow (see Today's Plan).`, '0A');
+    } else {
+      await this.say('All right. Just ask if you change your mind next week.', n);
+    }
+  }
+
+  /** The morning a favor falls due: do it, report it, and keep it in Villager Notes. Old favors are cleared. */
+  favor_morning(report: string[]): void {
+    if (this.favor && this.favor.day < this.absday()) this.favor = null;
+    const fv = this.favor;
+    if (!fv || fv.day !== this.absday()) return;
+    const f = FAVORS[fv.npc];
+    if (f.kind === 'feed') {
+      if (this.chickens <= 0) {
+        report.push(`${fv.npc} came by at dawn, but your coop was empty.`);
+        this.favor = null;
+        return;
+      }
+      this.fed = this.chickens;
+    } else if (f.kind === 'water') {
+      const dry = Object.keys(this.crops).filter((k) => !this.wet.has(k)).slice(0, FAVOR_WATER_MAX);
+      if (!dry.length) {
+        report.push(`${fv.npc} came by early, but your field was already watered.`);
+        this.favor = null;
+        return;
+      }
+      for (const k of dry) this.wet.add(k);
+    }
+    report.push(f.done);
+    this.remember(fv.npc, f.memory, `favor:${fv.npc}:${fv.day}`);
+  }
+
+  /** Today's hours for each shop on Mary's note, for the whole day (not just from now). */
+  favor_hours(): string[] {
+    const fest = this.fest_on();
+    return FAVOR_SHOPS.map((bid) => {
+      const [o, c, closed] = HOURS[bid];
+      const when = fest && !['church', 'sprites'].includes(bid)
+        ? 'closed (festival)'
+        : closed.includes(this.weekday)
+          ? 'closed today'
+          : `${fmt_hour(o)}–${fmt_hour(c)}`;
+      return `${BUILDINGS[bid]}: ${when}`;
+    });
+  }
+
+  /** The Today's Plan line for an arranged favor, or null. Mary's note adds the hours on the day. */
+  favor_line(): { text: string; hours: string[] } | null {
+    const fv = this.favor;
+    if (!fv) return null;
+    const f = FAVORS[fv.npc];
+    const d = fv.day - this.absday();
+    if (d === 1) return { text: `Tomorrow: ${f.plan}.`, hours: [] };
+    if (d !== 0) return null;
+    if (f.kind === 'hours') return { text: `${fv.npc}'s note on today's shop hours:`, hours: this.favor_hours() };
+    return { text: `Today: ${f.plan} (done this morning).`, hours: [] };
   }
 
   // ---------------------------------------------------------------- named farm plots (mechanics task 42)
@@ -5480,6 +5592,11 @@ export class Game {
     } else if (this.gray_quest === 2) {
       lines.push(`  Note   ${this.gray_note()}`);
     }
+    const favor = this.favor_line();
+    if (favor) {
+      lines.push(`  Favor  ${favor.text}`);
+      for (const h of favor.hours) lines.push(`         ${h}`);
+    }
     const works = this.works_line();
     if (works) lines.push(`  Bridge ${works}`);
     const pinRoute = this.pin_route();
@@ -5668,6 +5785,11 @@ export class Game {
         all.push(...wrapLabeled('◆ Gray  ', '0C', `Wants ${GRAY_COPPER_QTY}×Copper (have ${this.inv['Copper'] || 0})`, '05'));
       } else if (this.gray_quest === 2) {
         all.push(...wrapLabeled('◆ Forge ', '0C', this.gray_note(), '05'));
+      }
+      const favor = this.favor_line();
+      if (favor) {
+        all.push(...wrapLabeled('♥ Favor ', '0A', favor.text, '05'));
+        for (const h of favor.hours) all.push(...wrapLabeled('        ', '04', h, '05'));
       }
       if (works) all.push(...wrapLabeled('═ Bridge', '09', works, '05'));
       if (pinRoute) all.push(...wrapLabeled('◈ Pin   ', '0E', `${pinRoute.landmark.name}: ${pinRoute.text}`, '05'));
@@ -7560,6 +7682,7 @@ export class Game {
     this.fed = 0;
 
     this.barn_new_day(report);
+    this.favor_morning(report);
 
     // Blacksmith completion
     if (this.upgrading && this.absday() >= this.upgrading[1]) {
