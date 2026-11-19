@@ -46,6 +46,8 @@ export type CellTag = {
   hlArea?: boolean;
   /** A seed-bag aim would put this cell in a companion pairing (task 17). */
   companion?: boolean;
+  /** Tilled soil dressed with compost (task 18). */
+  compost?: boolean;
   /** Faced cell has a meaningful context action (interaction or WATER/DIG/CRACK/CAST). */
   actionTarget?: boolean;
   /** For zoomed tiles: which sub-cell of the tile this is, and the tile width in cells. */

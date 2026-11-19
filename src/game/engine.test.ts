@@ -43,6 +43,8 @@ import {
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
+  COMPOST_SCRAPS,
+  COMPOST_BONUS,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -2741,5 +2743,121 @@ describe('reminders on the calendar (task 51)', () => {
     const o = fresh();
     o.applySaveData(snap);
     assert.deepEqual(o.reminders, []);
+  });
+});
+
+describe('compost from leftovers (task 18)', () => {
+  /** On the farm facing east at (21, 15), with that tile cleared. */
+  const field = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.warp('farm', 20, 15, [1, 0]);
+    for (let x = 19; x <= 24; x++) for (let y = 13; y <= 17; y++) delete g.objs.farm[`${x},${y}`];
+    g.stamina = g.max_stamina;
+    return g;
+  };
+
+  test('weeds cut on the farm go on the heap, and the heap rots down overnight', async () => {
+    const g = field();
+    g.objs.farm['21,15'] = 'weed';
+    g.tool = 'Sickle';
+    await g.handle('space');
+    assert.equal(g.compost_scraps, 1);
+    assert.equal(g.msgs.at(-1)[0], `Swish! Cut 1 weed for the compost heap (heap 1/${COMPOST_SCRAPS}).`);
+    g.compost_scraps = COMPOST_SCRAPS * 2 + 1;
+    const report: string[] = [];
+    g.compost_day(report);
+    assert.equal(g.inv.Compost, 2);
+    assert.equal(g.compost_scraps, 1);
+    assert.deepEqual(report, ['The compost heap rotted down: +2 Compost. Spread it on tilled soil for a bigger next harvest.']);
+    const quiet: string[] = [];
+    g.compost_day(quiet);
+    assert.deepEqual(quiet, [], 'nothing to say with too few scraps');
+  });
+
+  test('unwanted crops can go on the heap from the rucksack', async () => {
+    const g = field();
+    g.inv = { Turnip: 3, 'Small Fish': 1 };
+    g.menu = async (title: string, opts: string[]) => {
+      if (title === '▣ Rucksack') return g._rs++ === 0 ? opts.findIndex((o: string) => o.includes('Turnip')) : null;
+      return opts.indexOf('Compost all 3');
+    };
+    g._rs = 0;
+    await g.rucksack();
+    assert.equal(g.inv.Turnip, undefined);
+    assert.equal(g.compost_scraps, 3);
+    assert.equal(g.compost_crop('Small Fish', 1), 0, 'only crops');
+  });
+
+  test('spread on tilled soil: the tile is marked, the next harvest gives one more, then it is used up', async () => {
+    const g = field();
+    g.inv = { Compost: 1 };
+    g.tool = 'Compost';
+    assert.ok(g.tool_list().includes('Compost'));
+    assert.equal(g.facing_action().summary, 'Spread compost on tilled soil');
+    await g.handle('space');
+    assert.equal(g.msgs.at(-1)[0], 'Spread compost on tilled soil on your farm.');
+    assert.equal(g.inv.Compost, 1);
+
+    g.tilled.add('21,15');
+    assert.deepEqual(g.context_action(), { key: 'space', label: 'SPREAD' });
+    assert.equal(g.facing_action().summary, `Spread compost · +${COMPOST_BONUS} next harvest`);
+    await g.handle('space');
+    assert.deepEqual(g.composted, ['21,15']);
+    assert.equal(g.inv.Compost, undefined);
+    assert.equal(g.tool, 'Hoe', 'back to a tool once the compost is gone');
+    assert.equal(g.msgs.at(-1)[0], `You spread compost: the next harvest here gives ${1 + COMPOST_BONUS}.`);
+    g.inv.Compost = 1;
+    g.tool = 'Compost';
+    assert.equal(g.facing_action().summary, 'Already composted');
+    await g.handle('space');
+    assert.equal(g.msgs.at(-1)[0], 'That soil is already dressed with compost.');
+    assert.equal(g.inv.Compost, 1, 'nothing used');
+
+    // the cell is marked for the renderer
+    g.render();
+    let marked = false;
+    for (const row of g.scr.tags) for (const t of row) if (t?.wx === 21 && t?.wy === 15 && t.compost) marked = true;
+    assert.ok(marked, 'the composted tile carries the compost tag');
+
+    g.crops['21,15'] = ['Turnip', 4];
+    await g.interact();
+    assert.equal(g.inv.Turnip, 1 + COMPOST_BONUS);
+    assert.match(g.msgs.at(-1)[0], /The compost paid off\.$/);
+    assert.deepEqual(g.composted, [], 'used up');
+  });
+
+  test('a regrowing crop gets the bonus once, and Harvest Sprites count it too', () => {
+    const g = field();
+    g.tilled.add('21,15');
+    g.composted = ['21,15'];
+    g.crops['21,15'] = ['Tomato', 9];
+    g.sprite_jobs = Object.fromEntries(Object.keys(g.sprite_jobs).map((n, i) => [n, i === 0 ? { task: 'Harvesting', days: 2, skill: 10 } : { task: 'none', days: 0, skill: 10 }]));
+    g.bin = {};
+    g.run_sprites_work([]);
+    assert.equal(g.bin.Tomato, 1 + COMPOST_BONUS);
+    assert.deepEqual(g.composted, []);
+    g.crops['21,15'][1] = 9;
+    g.run_sprites_work([]);
+    assert.equal(g.bin.Tomato, 1 + COMPOST_BONUS + 1, 'the next picking is a plain one');
+  });
+
+  test('the heap and the dressed tiles survive a reload; flattened soil loses its compost', async () => {
+    const g = field();
+    g.tilled.add('21,15');
+    g.tilled.add('22,15');
+    g.composted = ['21,15', '22,15'];
+    g.compost_scraps = 3;
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    snap.composted.push('99,99', 7);
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.composted, ['21,15', '22,15'], 'only tilled tiles');
+    assert.equal(h.compost_scraps, 3);
+    g.tool = 'Hammer';
+    delete g.crops['21,15'];
+    await g.handle('space');
+    assert.equal(g.tilled.has('21,15'), false, 'the hammer flattened the soil');
+    assert.deepEqual(g.composted, ['22,15'], 'and its compost went with it');
   });
 });

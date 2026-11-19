@@ -1195,6 +1195,9 @@ const ICONS: Record<string, [string, string]> = {
 };
 // Farm HUD chrome: weathered wood from the dark end of the Isotope orange ramp. The rails stay
 // about as quiet as the grey rules they replace; the sign board is dark enough for white text.
+/** Compost-dressed soil: a deep loam under the tile, and warm crumbs on bare soil. */
+const COMPOST_SOIL = '#2a1608';
+const COMPOST_CRUMB = '#b8743c';
 /** The blossom that marks a companion pairing under a seed bag's aim. */
 const COMPANION_MARK = '#ff80c0';
 const FENCE_RAIL = toIsotope(mix('#ff9900', '#000000', 0.6));
@@ -1449,6 +1452,11 @@ export function computeFrame(
         }
         // a seed bag's aim marks the tiles in a companion pairing with a small blossom (task 17)
         if (tag.companion) o.detail = { ch: '✿', fg: COMPANION_MARK };
+        // compost-dressed soil is darker and richer, with a few warm crumbs if nothing else is drawn (task 18)
+        if (tag.compost) {
+          o.bg = mix(o.bg, COMPOST_SOIL, 0.45);
+          if (!o.detail) o.detail = { ch: '∴', fg: COMPOST_CRUMB };
+        }
       } else if (tag && tag.t === 'ui') {
         const k = tag.k || '';
         uiCell = true;

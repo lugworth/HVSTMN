@@ -533,6 +533,11 @@ export const ITEMS: Record<string, any> = {
     0,
     "material"
   ],
+  "Compost": [
+    0,
+    0,
+    "material"
+  ],
   "Milker": [
     0,
     0,
@@ -3562,6 +3567,14 @@ export const ORDERS: {
 /** Days an order stays on the board, and the days before the next one after it is filled or lapses. */
 export const ORDER_DAYS = 7;
 export const ORDER_GAP = 2;
+
+/**
+ * Compost (mechanics task 18): weeds cut on the farm and crops you add from the rucksack go on the
+ * heap; overnight every COMPOST_SCRAPS scraps rot down into one Compost. Spread on tilled soil, it
+ * gives COMPOST_BONUS more at that tile's next harvest, then it is used up.
+ */
+export const COMPOST_SCRAPS = 5;
+export const COMPOST_BONUS = 1;
 
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows

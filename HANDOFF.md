@@ -1,5 +1,19 @@
 # Handoff: HRVSTMN
 
+## Compost from leftovers (mechanics task 18), 2026-11-19
+
+- Weeds cut with the Sickle on the farm, and crops added from the rucksack ("Compost one" /
+  "Compost all N"), go on the heap (`compost_scraps`). Overnight (`compost_day()` in `new_day`)
+  every `COMPOST_SCRAPS` (5) scraps become one **Compost** item ("material").
+- Compost joins the tool list while you hold some; SPACE on tilled farm soil spreads it
+  (`spread_compost()`), adding the tile to `composted`. That tile's next harvest (by hand, Basket
+  or Harvest Sprites) gives `COMPOST_BONUS` (1) more, then the dressing is used up; flattening the
+  soil drops it. Action label SPREAD; Facing "Spread compost · +1 next harvest" / "Already
+  composted"; checking a crop says "Composted: +1 at the next picking."
+- The renderer marks dressed soil (`CellTag.compost`): darker loam under the tile and warm `∴`
+  crumbs when nothing else is drawn there. `compost_scraps` and `composted` are saved; on load
+  `composted` keeps only tilled tiles.
+
 ## Calendar reminders (mechanics task 51), 2026-11-19
 
 - The farmhouse calendar is now a menu (`Game.calendar_menu()`): the date and days left in the

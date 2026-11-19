@@ -96,6 +96,8 @@ import {
   STALL_SIGN,
   COMPANION,
   SEED_SAVING,
+  COMPOST_SCRAPS,
+  COMPOST_BONUS,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -516,6 +518,9 @@ export class Game {
   requests: VillagerRequest[] = [];
   order: VillagerOrder | null = null;
   reminders: CalendarReminder[] = [];
+  /** Scraps on the compost heap, and the farm tiles dressed with compost (task 18). */
+  compost_scraps: number = 0;
+  composted: string[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -593,7 +598,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -729,6 +734,8 @@ export class Game {
     this.order = null;
     this.order_next = 0;
     this.reminders = [];
+    this.compost_scraps = 0;
+    this.composted = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1078,6 +1085,8 @@ export class Game {
       this.prune_requests();
       this.order = sanitizeOrder(this.order);
       this.reminders = sanitizeReminders(this.reminders, this.absday());
+      this.compost_scraps = Math.max(0, Math.floor(Number(this.compost_scraps) || 0));
+      this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
       this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
@@ -1838,7 +1847,7 @@ export class Game {
   tool_list(): string[] {
     const tools = TOOLS.filter((t) => !(this.upgrading && this.upgrading[0] === t));
     const seeds = py_sorted(Object.keys(this.inv).filter((i) => i.endsWith(' Seeds')));
-    return [...tools, ...seeds];
+    return [...tools, ...seeds, ...((this.inv['Compost'] || 0) > 0 ? ['Compost'] : [])];
   }
 
   cycle_tool(d: number): void {
@@ -1988,6 +1997,10 @@ export class Game {
       await this.sow(t, [tx, ty]);
       return;
     }
+    if (t === 'Compost') {
+      this.spread_compost(tx, ty);
+      return;
+    }
 
     this.record_tool_use(t);
     if (t === 'Watering Can') this.fx_add('splash', tx, ty);
@@ -2020,7 +2033,12 @@ export class Game {
         this.give('Fodder', fodderGained);
         this.msg(`Cut pasture grass! +${fodderGained} Fodder.`, '0B');
       } else if (cutCount > 0) {
-        this.msg(`Swish! Cut ${cutCount} weed${cutCount > 1 ? 's' : ''}.`);
+        if (this.mapname === 'farm') {
+          this.compost_scraps += cutCount;
+          this.msg(`Swish! Cut ${cutCount} weed${cutCount > 1 ? 's' : ''} for the compost heap (${this.compost_heap_line()}).`);
+        } else {
+          this.msg(`Swish! Cut ${cutCount} weed${cutCount > 1 ? 's' : ''}.`);
+        }
       } else if (this.mapname === 'farm' && this.crops[pKey]) {
         this.msg("Careful! That's a growing crop.");
         return;
@@ -2106,6 +2124,7 @@ export class Game {
       } else if (this.mapname === 'farm' && this.tilled.has(pKey) && !this.crops[pKey]) {
         this.tilled.delete(pKey);
         this.wet.delete(pKey);
+        this.composted = this.composted.filter((k) => k !== pKey);
         this.msg('You flattened the tilled soil.');
       }
       await this.spend(2);
@@ -2325,6 +2344,61 @@ export class Game {
     if (!f || f.season !== this.season_name) return null;
     if (f.first === null) return 'too late to ripen';
     return f.repeats.length ? `ready ${f.season.slice(0, 3)} ${f.first}, ${f.repeats.length + 1} pickings` : `ready ${f.season.slice(0, 3)} ${f.first}`;
+  }
+
+  // ---------------------------------------------------------------- compost (mechanics task 18)
+  /** 'heap 3/5' or 'heap: 1 Compost by morning, 2/5 more' */
+  compost_heap_line(): string {
+    const ready = Math.floor(this.compost_scraps / COMPOST_SCRAPS);
+    const rest = this.compost_scraps % COMPOST_SCRAPS;
+    return ready ? `heap: ${ready} Compost by morning, ${rest}/${COMPOST_SCRAPS} more` : `heap ${rest}/${COMPOST_SCRAPS}`;
+  }
+
+  /** Extra harvest from a composted tile (its next picking only). */
+  compost_bonus(pKey: string): number {
+    return this.composted.includes(pKey) ? COMPOST_BONUS : 0;
+  }
+
+  /** Put crops from the rucksack on the heap. Returns how many went on. */
+  compost_crop(item: string, qty: number): number {
+    if (ITEMS[item]?.[2] !== 'crop') return 0;
+    const n = Math.min(qty, this.inv[item] || 0);
+    if (n <= 0) return 0;
+    this.take(item, n);
+    this.compost_scraps += n;
+    this.msg(`${n} ${item} went on the compost heap (${this.compost_heap_line()}).`, '0B');
+    return n;
+  }
+
+  /** Spread one Compost on the tilled tile ahead. */
+  spread_compost(tx: number, ty: number): boolean {
+    const k = pkey(tx, ty);
+    if ((this.inv['Compost'] || 0) <= 0) return false;
+    if (this.mapname !== 'farm' || !this.tilled.has(k)) {
+      this.msg('Spread compost on tilled soil on your farm.', '08');
+      return false;
+    }
+    if (this.composted.includes(k)) {
+      this.msg('That soil is already dressed with compost.', '08');
+      return false;
+    }
+    this.take('Compost', 1);
+    this.composted.push(k);
+    this.fx_add('dust', tx, ty);
+    const crop = this.crops[k]?.[0];
+    this.msg(`You spread compost: ${crop ? `this ${crop}'s` : 'the'} next harvest here gives ${1 + COMPOST_BONUS}.`, '0B');
+    if (!this.inv['Compost']) this.tool = 'Hoe';
+    return true;
+  }
+
+  /** Overnight the heap rots down: every COMPOST_SCRAPS scraps make one Compost. */
+  compost_day(report: string[]): void {
+    const n = Math.floor(this.compost_scraps / COMPOST_SCRAPS);
+    this.composted = this.composted.filter((k) => this.tilled.has(k));
+    if (!n) return;
+    this.compost_scraps -= n * COMPOST_SCRAPS;
+    this.give('Compost', n);
+    report.push(`The compost heap rotted down: +${n} Compost. Spread it on tilled soil for a bigger next harvest.`);
   }
 
   // ---------------------------------------------------------------- companion planting (mechanics task 17)
@@ -2666,8 +2740,12 @@ export class Game {
           this.msg('Use your Sickle to cut ripe pasture Grass into Fodder.');
           return;
         }
-        const n = 1 + this.companion_bonus(pKey);
-        const helped = n > 1 ? ` The ${COMPANION.helper} beside it drew the bees.` : '';
+        const companion = this.companion_bonus(pKey);
+        const compost = this.compost_bonus(pKey);
+        const n = 1 + companion + compost;
+        const helped =
+          (companion ? ` The ${COMPANION.helper} beside it drew the bees.` : '') + (compost ? ' The compost paid off.' : '');
+        if (compost) this.composted = this.composted.filter((k) => k !== pKey);
         if (this.held === 'Basket' && getBasketTotal(this.basket) < BASKET_CAPACITY) {
           const room = Math.min(n, BASKET_CAPACITY - getBasketTotal(this.basket));
           this.basket[crop] = (this.basket[crop] || 0) + room;
@@ -2685,7 +2763,9 @@ export class Game {
         this.mastery_add('farming');
         this.fx_add('sparkle', tx, ty, 0.7);
       } else {
-        this.msg(`${crop}: ${days - age} more day${days - age > 1 ? 's' : ''} to go.${this.wet.has(pKey) ? '' : ' (needs water)'}${this.companion_note(pKey)}`);
+        this.msg(
+          `${crop}: ${days - age} more day${days - age > 1 ? 's' : ''} to go.${this.wet.has(pKey) ? '' : ' (needs water)'}${this.companion_note(pKey)}${this.compost_bonus(pKey) ? ' Composted: +1 at the next picking.' : ''}`,
+        );
       }
       return;
     }
@@ -3435,6 +3515,7 @@ export class Game {
         const preserve = this.preserve_note(i);
         if (preserve) return [parts.join('  ·  '), preserve];
         const forecast = i.endsWith(' Seeds') ? this.crop_forecast_lines(i.slice(0, -6)) : [];
+        if (i === 'Compost') forecast.push(`Equip it (Tab) and spread it on tilled soil: +${COMPOST_BONUS} at that tile's next harvest.`);
         return [parts.join('  ·  '), ...forecast];
       };
       const sel = await this.menu('▣ Rucksack', opts, 0, info, null, {
@@ -3463,6 +3544,10 @@ export class Game {
       }
       const recipe = this.seed_recipe(item);
       if (recipe) sub.push(`Save seeds (${recipe.need} → ${recipe.bags} bag)`);
+      if (ITEMS[item]?.[2] === 'crop') {
+        sub.push('Compost one');
+        if ((this.inv[item] || 0) > 1) sub.push(`Compost all ${this.inv[item]}`);
+      }
       sub.push('Cancel');
       const s2 = await this.menu(
         `▣ ${item}`,
@@ -3495,6 +3580,10 @@ export class Game {
         return;
       } else if (sub[s2].startsWith('Save seeds')) {
         await this.seed_saving_menu(item);
+      } else if (sub[s2] === 'Compost one') {
+        this.compost_crop(item, 1);
+      } else if (sub[s2].startsWith('Compost all')) {
+        this.compost_crop(item, this.inv[item] || 0);
       } else if (sub[s2] === 'Put away') {
         this.held = null;
         this.msg(`You put away the ${item}.`);
@@ -5193,6 +5282,9 @@ export class Game {
       if (age < CROPS[crop][2] && this.tool === 'Watering Can' && !this.wet.has(pKey)) {
         return withTarget('Water', name, 'WATER');
       }
+      if (this.tool === 'Compost' && !this.composted.includes(pKey)) {
+        return { label: 'SPREAD', summary: `Compost the ${name} · +${COMPOST_BONUS} next harvest` };
+      }
       const hasCrop = age >= CROPS[crop][2];
       return withTarget(hasCrop ? 'Harvest' : 'Check', name, hasCrop ? 'HARVEST' : 'CHECK', false);
     }
@@ -5226,6 +5318,11 @@ export class Game {
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     const pairing = this.companion_preview(this.tool, tx, ty);
     if (pairing) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${pairing.text}` };
+    if (this.tool === 'Compost') {
+      if (this.composted.includes(pKey)) return { label: 'SPREAD', summary: 'Already composted' };
+      const ok = this.mapname === 'farm' && this.tilled.has(pKey);
+      return { label: 'SPREAD', summary: ok ? `Spread compost · +${COMPOST_BONUS} next harvest` : 'Spread compost on tilled soil' };
+    }
     if (this.tool.endsWith(' Seeds') && this.mapname === 'farm' && this.tilled.has(pKey) && !this.crops[pKey]) {
       const when = this.crop_forecast_short(short);
       if (when) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${when}` };
@@ -5251,6 +5348,7 @@ export class Game {
     if (this.mapname === 'farm' && pKey in this.crops) {
       const [crop, age] = this.crops[pKey];
       if (age < CROPS[crop][2] && this.tool === 'Watering Can' && !this.wet.has(pKey)) return { key: 'space', label: 'WATER' };
+      if (this.tool === 'Compost' && !this.composted.includes(pKey)) return { key: 'space', label: 'SPREAD' };
       return { key: 'x', label: age >= CROPS[crop][2] ? 'HARVEST' : 'CHECK' };
     }
     if (pKey in (this.forage[this.mapname] || {})) return { key: 'x', label: 'PICK' };
@@ -5274,6 +5372,7 @@ export class Game {
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
     if (this.mapname === 'river' && tile === 'water' && this.tool !== 'Watering Can') return { key: 'x', label: 'SKIP' };
+    if (this.tool === 'Compost') return { key: 'space', label: 'SPREAD' };
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     return { key: 'space', label: short.length > 7 ? 'USE' : `USE ${short.toUpperCase()}` };
   }
@@ -6701,11 +6800,12 @@ export class Game {
         }
       } else if (job.task === 'Harvesting') {
         // settle companion bonuses first, so picking a flower in the same pass does not cancel them
-        const bonus = Object.fromEntries(Object.keys(this.crops).map((k) => [k, this.companion_bonus(k)]));
+        const bonus = Object.fromEntries(Object.keys(this.crops).map((k) => [k, this.companion_bonus(k) + this.compost_bonus(k)]));
         for (const [k, [crop, age]] of Object.entries(this.crops)) {
           const [days, regrow] = [CROPS[crop][2], CROPS[crop][3]];
           if (age >= days && crop !== 'Grass') {
             this.bin[crop] = (this.bin[crop] || 0) + 1 + bonus[k];
+            if (this.compost_bonus(k)) this.composted = this.composted.filter((c) => c !== k);
             harvested += 1;
             if (regrow) {
               this.crops[k][1] = days - regrow;
@@ -6865,6 +6965,7 @@ export class Game {
     // Rose Square request board
     this.request_day(report);
     this.reminder_day(report);
+    this.compost_day(report);
 
     // Spawn daily weeds & mountain/beach forage
     if (this.season !== 3) {
@@ -7106,6 +7207,7 @@ export class Game {
         tag.k = `crop:${stage}${wet ? ':wet' : ''}`;
         tag.cropName = crop;
       }
+      if (this.composted.includes(pKey)) tag.compost = true;
       return tag;
     }
     if (name === 'mountain' && this.season === 3 && t === 'water' && x >= 13 && x <= 17 && y >= 7 && y <= 14) {
