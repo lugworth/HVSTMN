@@ -2570,6 +2570,8 @@ export const BOOKS: string[] = [
 export const HELP: string[] = [
   "MOVE      arrows / WASD / hjkl",
   "USE TOOL  space or z (uses equipped tool or sows seeds)",
+  "ROW       c   hoe or can a row ahead: press to preview, again or hold",
+  "          Set the stamina reserve in the Diary.",
   "ACT       x / e / enter   talk, gift held item, harvest, forage,",
   "                          ship, enter doors, soak in Hot Spring",
   "TOOLS     tab / shift-tab cycle,  1-6 pick tool",
@@ -3715,6 +3717,17 @@ export const SEATS: Record<string, { map: string; x: number; y: number; title: s
 };
 /** Stamina from a good sit, once a day per seat. */
 export const SEAT_REST = 15;
+
+/**
+ * Work a row (mechanics task 54): C previews up to ROW_MAX tiles ahead that the Hoe or Watering Can can
+ * work in one walk; each further press (hold it to repeat) works one tile and steps on. The row stops at
+ * an obstacle, an empty can, or when the next tile would take stamina below the chosen reserve.
+ */
+export const ROW_MAX = 6;
+export const ROW_STAMINA_RESERVE = 10;
+export const ROW_RESERVES = [10, 30, 50] as const;
+export const ROW_STEP_STAMINA = 2;
+export const ROW_TOOLS = ['Hoe', 'Watering Can'];
 
 /**
  * Named farm plots (mechanics task 42): a Plot Sign stands on open field; the tilled tiles within

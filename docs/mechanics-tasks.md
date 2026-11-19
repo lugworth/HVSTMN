@@ -94,7 +94,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **51. Reminders on the calendar.** Pin a birthday, market, or personal harvest day and surface it in Today’s Plan. Keep reminders in the game clock.
 - [x] **52. A relaxed day setting.** Give players more real time per in-game hour. Keep the 5 PM shipping cutoff and shop schedules tied to the in-game clock.
 - [x] **53. A seed pouch shortcut.** Favorite one seed bag for quick planting and return to the previously equipped tool with one action.
-- [ ] **54. Work along a row.** Preview a short line of reachable tiles and hold to till or water it. Stop at obstacles, an empty can, or the chosen stamina limit.
+- [x] **54. Work along a row.** Preview a short line of reachable tiles and hold to till or water it. Stop at obstacles, an empty can, or the chosen stamina limit.
 - [x] **55. A morning save backup.** Keep a few recent dawn snapshots and show the date and farm name before restoring. Use the existing import and export format as a starting point.
 - [ ] **56. Readable prompts at small sizes.** Offer a larger text setting and pair map colors with symbols and names. Try it with touch controls in portrait and landscape.
 
