@@ -3855,7 +3855,7 @@ describe('favors from close neighbors (task 05)', () => {
     const g = neighborly();
     const { said } = await talkTo(g, 'Mary', 1);
     assert.equal(g.favor, null);
-    assert.match(said[said.length - 1], /next week/);
+    assert.ok(said.some((l: string) => /next week/.test(l)));
     g.talked.clear();
     g.day += FAVOR_GAP - 1;
     assert.ok(!g.favor_available('Mary'));
@@ -3890,6 +3890,29 @@ describe('favors from close neighbors (task 05)', () => {
     r.favor_morning(wet);
     assert.match(wet[0], /already watered/);
     assert.ok(!r.memories.some((m: any) => m.npc === 'Cliff'), 'nothing done, nothing to remember');
+    assert.equal(r.favor, null);
+    assert.ok(!r.today_lines().some((l: string) => l.startsWith('  Favor')), 'the plan does not claim it was done');
+  });
+
+  test('Cliff does not offer to water when tomorrow brings rain', () => {
+    const g = neighborly();
+    assert.ok(g.favor_available('Cliff'));
+    for (const w of ['Rain', 'Typhoon']) {
+      g.tomorrow = w;
+      assert.ok(!g.favor_available('Cliff'), w);
+    }
+    assert.ok(g.favor_available('Rick'), 'other favors are unaffected');
+  });
+
+  test('an empty coop on the morning: reported, nothing claimed', () => {
+    const g = neighborly();
+    g.favor = { npc: 'Rick', day: g.absday() };
+    g.chickens = 0;
+    const report: string[] = [];
+    g.favor_morning(report);
+    assert.match(report[0], /coop was empty/);
+    assert.equal(g.favor, null);
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Favor')));
   });
 
   test("Mary's note lists the day's shop hours, closed days included", () => {

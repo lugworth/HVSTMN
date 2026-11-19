@@ -3486,6 +3486,7 @@ export class Game {
         this.friend[n] = clamp((this.friend[n] || 0) + 2, 0, 100);
       }
       await this.offer_favor(n);
+      await this.check_heart_and_rival_events(n);
       return;
     }
 
@@ -3534,7 +3535,7 @@ export class Game {
     const last = this.favor_offered[n];
     if (last !== undefined && this.absday() - last < FAVOR_GAP) return false;
     if (f.kind === 'feed') return this.chickens > 0;
-    if (f.kind === 'water') return Object.keys(this.crops).length > 0;
+    if (f.kind === 'water') return Object.keys(this.crops).length > 0 && !['Rain', 'Typhoon'].includes(this.tomorrow);
     return true;
   }
 
@@ -3563,6 +3564,7 @@ export class Game {
     if (f.kind === 'feed') {
       if (this.chickens <= 0) {
         report.push(`${fv.npc} came by at dawn, but your coop was empty.`);
+        this.favor = null;
         return;
       }
       this.fed = this.chickens;
@@ -3570,6 +3572,7 @@ export class Game {
       const dry = Object.keys(this.crops).filter((k) => !this.wet.has(k)).slice(0, FAVOR_WATER_MAX);
       if (!dry.length) {
         report.push(`${fv.npc} came by early, but your field was already watered.`);
+        this.favor = null;
         return;
       }
       for (const k of dry) this.wet.add(k);
