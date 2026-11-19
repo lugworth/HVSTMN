@@ -3338,3 +3338,87 @@ describe('shared memories in Villager Notes (task 07)', () => {
     assert.deepEqual(h.memories, g.memories);
   });
 });
+
+describe('a mantel for festival souvenirs (task 45)', () => {
+  const atMantel = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.warp('house', 14, 2, [0, -1]);
+    g.warp_fx = null;
+    return g;
+  };
+
+  test('every farmhouse has a mantel on the north wall, bare until a keepsake arrives', async () => {
+    for (const flags of [[], ['Kitchen', 'Extension', 'Bathroom', 'Big Bed']]) {
+      const g = fresh();
+      g.house_flags = flags;
+      g.rebuild_house();
+      assert.equal(g.maps.house.tile(14, 1), 'mantel', flags.join(','));
+    }
+    const g = atMantel();
+    assert.deepEqual(g.glyph(g.maps.house, 14, 1, 'mantel').slice(0, 2), ['♕', '03']);
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'USE' });
+    const said = quiet(g);
+    await g.interact();
+    assert.match(said[0], /^An empty mantel\./);
+  });
+
+  test('festival ribbons, your first festival, the footbridge and curator letters become keepsakes, once each', async () => {
+    const g = fresh();
+    g.fest_win('Horse Race');
+    g.fest_win('Horse Race');
+    assert.deepEqual(g.souvenirs.map((v: any) => v.name), ['Horse Race ribbon']);
+    assert.equal(g.souvenirs[0].text, 'A blue ribbon from the Horse Race. You won it, Year 1.');
+    assert.equal(g.souvenirs[0].day, g.absday());
+
+    g.public_works.done_day = g.absday();
+    g.works_day();
+    assert.equal(g.souvenirs.at(-1).name, 'Carved plank');
+
+    g.museum = [...g.museum_pool('fish')];
+    g.say = async () => {};
+    g.held = null;
+    g.check_heart_and_rival_events = async () => {};
+    await g.talk('Curator');
+    assert.equal(g.souvenirs.at(-1).name, "Curator's letter (Fish)");
+
+    const h = fresh();
+    quiet(h);
+    h.menu = async () => null;
+    h.confirm = async () => false;
+    await h.fest_run(['Flower Festival', 9, 17, 'none']);
+    assert.deepEqual(h.souvenirs.map((v: any) => v.name), ['Flower Festival program']);
+    await h.fest_run(['Harvest Festival', 9, 17, 'none']);
+    assert.equal(h.souvenirs.length, 1, 'only the first festival you attend');
+  });
+
+  test('the mantel shows each keepsake with its date and a one-line memory', async () => {
+    const g = atMantel();
+    g.day = 18;
+    g.fest_win('Horse Race');
+    assert.deepEqual(g.glyph(g.maps.house, 14, 1, 'mantel').slice(0, 2), ['♕', '0A']);
+    const seen: { title: string; opts: string[]; info: string[] }[] = [];
+    let n = 0;
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      seen.push({ title, opts, info: info(0) });
+      return n++ === 0 ? 0 : null;
+    };
+    const said: string[] = [];
+    g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
+    await g.interact();
+    assert.equal(seen[0].title, '♕ Mantel  (1 keepsake)');
+    assert.deepEqual(seen[0].opts, ['Horse Race ribbon  (Spring 18)', 'Leave']);
+    assert.deepEqual(seen[0].info, ['  Spring 18, Year 1', '  A blue ribbon from the Horse Race. You won it, Year 1.']);
+    assert.deepEqual(said, ['Horse Race ribbon: Spring 18, Year 1: A blue ribbon from the Horse Race. You won it, Year 1.']);
+  });
+
+  test('keepsakes survive a reload', () => {
+    const g = fresh();
+    g.fest_win('Egg Hunt');
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    snap.souvenirs.push({ key: 1, name: 'bad' });
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.souvenirs, g.souvenirs);
+  });
+});

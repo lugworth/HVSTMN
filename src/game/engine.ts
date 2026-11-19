@@ -549,6 +549,8 @@ export class Game {
   milestones_said: string[] = [];
   /** Shared memories for Villager Notes (task 07): newest last; `key` keeps one-off moments from repeating. */
   memories: { day: number; npc: string; text: string; key?: string }[] = [];
+  /** Keepsakes on the farmhouse mantel (task 45): what it is, the day, and a one-line memory. */
+  souvenirs: { key: string; name: string; day: number; text: string }[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -626,7 +628,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -770,6 +772,7 @@ export class Game {
     this.dog_clue = null;
     this.milestones_said = [];
     this.memories = [];
+    this.souvenirs = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1124,6 +1127,11 @@ export class Game {
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
       this.memories = sanitizeMemories(this.memories);
+      this.souvenirs = Array.isArray(this.souvenirs)
+        ? this.souvenirs
+            .filter((v: any) => v && typeof v.key === 'string' && typeof v.name === 'string' && typeof v.text === 'string' && Number.isInteger(v.day))
+            .map((v: any) => ({ key: v.key, name: v.name.slice(0, 40), day: v.day, text: v.text.slice(0, 120) }))
+        : [];
       const dc: any = this.dog_clue;
       this.dog_clue =
         dc && Number.isInteger(dc.day) && typeof dc.map === 'string' && this.maps[dc.map] && typeof dc.key === 'string' && (dc.kind === 'dig' || dc.kind === 'mushroom')
@@ -2991,6 +2999,8 @@ export class Game {
       await this.calendar_menu();
     } else if (tile === 'counter' || tile === 'bookcase') {
       await this.interior_interact(tile, [tx, ty]);
+    } else if (tile === 'mantel') {
+      await this.mantel_menu();
     } else if (tile === 'kitchen' || tile === 'bath' || tile === 'shelf' || tile === 'vase' || tile === 'fireplace') {
       await this.use_furniture(tile);
     } else if (tile === 'stall') {
@@ -3412,6 +3422,10 @@ export class Game {
         line = memory.line;
         this.milestones_said.push(memory.key);
         this.remember(n, this.milestone_memory(memory.key), `said:${memory.key}`);
+        if (memory.key.startsWith('Curator:case:')) {
+          const c = memory.key.split(':')[2];
+          this.keepsake(`letter:${c}`, `Curator's letter (${c})`, `The curator's thank-you letter for the finished ${c} case, with your name on the card.`);
+        }
         emitNpcEmote('heart');
       } else {
         line = py_rng().choice(d.lines[tier]);
@@ -3424,6 +3438,32 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- the mantel (mechanics task 45)
+  /** Put a keepsake on the mantel (once per key). */
+  keepsake(key: string, name: string, text: string): boolean {
+    if (this.souvenirs.some((v) => v.key === key)) return false;
+    this.souvenirs.push({ key, name, day: this.absday(), text });
+    return true;
+  }
+
+  /** The farmhouse mantel: pick a keepsake to see its date and the day it remembers. */
+  async mantel_menu(): Promise<void> {
+    if (!this.souvenirs.length) {
+      await this.say('An empty mantel. Festival ribbons and keepsakes from days you remember will stand here.', 'Mantel');
+      return;
+    }
+    while (true) {
+      const opts = [...this.souvenirs.map((v) => `${v.name}  (${absdayLabel(v.day, false)})`), 'Leave'];
+      const sel = await this.menu(`♕ Mantel  (${this.souvenirs.length} keepsake${this.souvenirs.length === 1 ? '' : 's'})`, opts, 0, (i: number) => {
+        const v = this.souvenirs[i];
+        return v ? [`  ${absdayLabel(v.day)}`, `  ${v.text}`] : [];
+      });
+      if (sel === null || sel >= this.souvenirs.length) return;
+      const v = this.souvenirs[sel];
+      await this.say(`${absdayLabel(v.day)}: ${v.text}`, v.name);
+    }
   }
 
   // ---------------------------------------------------------------- shared memories (mechanics task 07)
@@ -5574,7 +5614,7 @@ export class Game {
         return { label: 'LOAD', summary: `Load the ${maker}` };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel'].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return withTarget('Cast', 'your line', 'CAST');
@@ -5635,7 +5675,7 @@ export class Game {
         return { key: 'x', label: st === 'ready' ? 'COLLECT' : st === 'working' ? 'CHECK' : 'LOAD' };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel'].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
@@ -6467,6 +6507,7 @@ export class Game {
   async fest_run(f: [string, number, number, string]): Promise<void> {
     const [name, , end, kind] = f;
     this.fest_attended = true;
+    this.keepsake('first_festival', `${name} program`, `The printed program from the ${name}: your first festival in the valley.`);
     await this.say(`Welcome, everyone, to the ${name}! Ho ho!`, 'Thomas');
     const fn = (this as any)[`fest_ev_${kind}`];
     if (typeof fn === 'function') {
@@ -6661,6 +6702,7 @@ export class Game {
   }
 
   fest_win(name: string): void {
+    this.keepsake(`ribbon:${name}:${this.year}`, `${name} ribbon`, `A blue ribbon from the ${name}. You won it, Year ${this.year}.`);
     if (!this.fest_wins.includes(name)) {
       this.fest_wins.push(name);
     }
@@ -7602,6 +7644,10 @@ export class Game {
       const st = this.stall_state();
       return [TILES.stall[0], st === 'open' ? '0B' : st === 'ready' ? '09' : '03', TILES.stall[2], st === 'open' || st === 'ready'];
     }
+    if (t === 'mantel') {
+      // gold with keepsakes on it, plain wood while it is bare
+      return [TILES.mantel[0], this.souvenirs.length ? '0A' : '03', TILES.mantel[2], this.souvenirs.length > 0];
+    }
     if (name === TRAP_SPOT[0] && x === TRAP_SPOT[1] && y === TRAP_SPOT[2]) {
       // the pot's float: grey while the pot is up on the pier, orange while it soaks, green when it is ready
       const st = this.trap_state();
@@ -7777,6 +7823,7 @@ export class Game {
     if (seen.has('counter')) items.push('Counter: Shop / Talk');
     if (seen.has('incub')) items.push('Incubator');
     if (seen.has('bookcase') || seen.has('shelf')) items.push('Shelves: Read');
+    if (seen.has('mantel')) items.push('♕: Keepsakes');
     if (seen.has('maker')) items.push('Makers');
     items.push('+ Door: Step Outside');
 
@@ -9572,6 +9619,7 @@ export class Game {
     if (w.built || w.done_day === null || this.absday() < w.done_day) return [];
     w.built = true;
     this.apply_public_works();
+    this.keepsake('footbridge', 'Carved plank', 'Gotz carved a spare plank from the Willow Bend footbridge into a little river otter for you.');
     for (const n of PUBLIC_WORKS.helpers) this.friend[n] = clamp((this.friend[n] || 0) + PUBLIC_WORKS.friend, 0, 100);
     return ['Gotz and Basil finished the Willow Bend footbridge! You can cross the river below the dock now.'];
   }
