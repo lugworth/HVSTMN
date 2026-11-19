@@ -115,6 +115,12 @@ import {
   PLOT_SIGN_PRICE,
   PLOT_NAME_MAX,
   EXHIBITS,
+  POCKETS,
+  POCKET_CHANCE,
+  POCKET_MIN_FLOOR,
+  POCKET_MINUTES,
+  POCKET_STAMINA,
+  type PocketKind,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -630,6 +636,10 @@ export class Game {
   plots: { key: string; name: string; tile: string }[] = [];
   /** Museum exhibits the curator has set out (task 16). */
   exhibits_done: string[] = [];
+  /** This floor's sealed side chamber, if it has one (mechanics task 40). Opening it buries the way down. */
+  pocket: { x: number; y: number; kind: PocketKind; opened: boolean } | null = null;
+  /** Rock patterns the player has broken into before, so the next one reads as a clue. */
+  pockets_read: PocketKind[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -707,7 +717,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'postcards', 'contest', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'pocket', 'pockets_read', 'postcards', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -900,6 +910,8 @@ export class Game {
     this.clear_plots();
     this.plots = [];
     this.exhibits_done = [];
+    this.pocket = null;
+    this.pockets_read = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1290,6 +1302,11 @@ export class Game {
         : [];
       this.place_plots();
       this.exhibits_done = Array.isArray(this.exhibits_done) ? this.exhibits_done.filter((id) => EXHIBITS.some((e) => e.id === id)) : [];
+      this.pockets_read = Array.isArray(this.pockets_read) ? [...new Set(this.pockets_read.filter((k) => k in POCKETS))] : [];
+      const pk = this.pocket as { x?: unknown; y?: unknown; kind?: unknown; opened?: unknown } | null;
+      this.pocket = pk && typeof pk === 'object' && Number.isInteger(pk.x) && Number.isInteger(pk.y) && typeof pk.kind === 'string' && pk.kind in POCKETS
+        ? { x: pk.x as number, y: pk.y as number, kind: pk.kind as PocketKind, opened: !!pk.opened }
+        : null;
       const fv: any = this.favor;
       this.favor = fv && typeof fv === 'object' && FAVORS[fv.npc] && Number.isInteger(fv.day) && fv.day >= this.absday() ? { npc: fv.npc, day: fv.day } : null;
       this.favor_offered = Object.fromEntries(
@@ -1344,6 +1361,7 @@ export class Game {
             mineMap.set(lx, ly, 'down');
           }
         }
+        this.restore_pocket(mineMap);
       }
       const targetMap = this.maps[this.mapname];
       if (!targetMap || !targetMap.inside(this.px, this.py)) {
@@ -2105,6 +2123,8 @@ export class Game {
       }
     }
     this.ladder = ladderPos;
+    this.pocket = null;
+    this.place_pocket(m);
     this.mapname = 'mine';
     this.px = 3;
     this.py = 3;
@@ -2512,7 +2532,7 @@ export class Game {
       return;
     }
     const r = py_rng().random();
-    if (r < 0.22 && f < 255) {
+    if (r < 0.22 && f < 255 && !this.pocket?.opened) {
       m.set(tx, ty, 'down');
       this.msg('Your Hoe uncovered a hidden staircase down (>)', '0A');
     } else if (r < 0.48) {
@@ -2534,6 +2554,123 @@ export class Game {
       return rollLakeMineDrop(this.mine_floor, rngPct);
     }
     return rollSpringMineDrop(this.mine_floor, allBlessed, rngPct);
+  }
+
+  // ---------------------------------------------------------------- mine side chambers (mechanics task 40)
+  /** Now and then, seal a side chamber into a wall beside open floor, away from the way in. */
+  place_pocket(m: GameMap): void {
+    const f = this.mine_floor;
+    if (f < POCKET_MIN_FLOOR || f >= 255) return;
+    const rng = py_rng();
+    if (rng.random() >= POCKET_CHANCE) return;
+    const spots: [number, number][] = [];
+    for (let y = 1; y < m.h - 1; y++) {
+      for (let x = 1; x < m.w - 1; x++) {
+        // interior walls only: opening one must not hole the cave's outer edge
+        if (m.tile(x, y) !== 'mwall' || Math.abs(x - 3) + Math.abs(y - 3) < 6) continue;
+        const open = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).some(([dx, dy]) => m.tile(x + dx, y + dy) === 'mfloor');
+        if (open) spots.push([x, y]);
+      }
+    }
+    if (!spots.length) return;
+    const [x, y] = spots[rng.randint(0, spots.length - 1)];
+    const kinds = Object.keys(POCKETS) as PocketKind[];
+    let roll = rng.random() * kinds.reduce((a, k) => a + POCKETS[k].weight, 0);
+    let kind = kinds[0];
+    for (const k of kinds) {
+      roll -= POCKETS[k].weight;
+      if (roll < 0) { kind = k; break; }
+    }
+    m.set(x, y, POCKETS[kind].tile);
+    this.pocket = { x, y, kind, opened: false };
+  }
+
+  /** After loading a save on a mine floor: put the sealed wall back, or keep the shaft buried. */
+  restore_pocket(m: GameMap): void {
+    const p = this.pocket;
+    if (!p || !m.inside(p.x, p.y)) {
+      this.pocket = null;
+      return;
+    }
+    if (!p.opened) {
+      m.set(p.x, p.y, POCKETS[p.kind].tile);
+      return;
+    }
+    this.bury_shaft(m);
+  }
+
+  /** Rubble fills the way down: no ladder, revealed or hidden. */
+  bury_shaft(m: GameMap): void {
+    for (let y = 0; y < m.h; y++) {
+      for (let x = 0; x < m.w; x++) {
+        if (m.t[y][x] === 'down') m.t[y][x] = 'mfloor';
+      }
+    }
+    this.ladder = null;
+  }
+
+  /** What a chamber of this kind holds on this floor. */
+  pocket_loot(kind: PocketKind): { items: Record<string, number>; gold: number } {
+    const f = this.mine_floor;
+    const lake = this.mine_type === 'lake';
+    const rng = py_rng();
+    const items: Record<string, number> = {};
+    let gold = 0;
+    if (kind === 'seam') {
+      for (let n = 0; n < 3; n++) {
+        for (let t = 0; t < 40; t++) {
+          const pct = rng.random() * 100;
+          const it = lake ? rollLakeMineDrop(f, pct) : rollSpringMineDrop(f, false, pct);
+          if (it && it !== 'Junk Ore') {
+            items[it] = (items[it] || 0) + 1;
+            break;
+          }
+        }
+      }
+    } else if (kind === 'geode') {
+      // the rarest stone this floor can give: the first row of its drop table
+      const it = lake ? rollLakeMineDrop(f, 0) : rollSpringMineDrop(f, false, 0);
+      if (it) items[it] = 1;
+    } else {
+      items['Black Grass'] = 2;
+      gold = rng.randint(40, 90);
+    }
+    return { items, gold };
+  }
+
+  /** The sealed wall: read its pattern, then choose between the pocket and the way down. */
+  async pocket_menu(): Promise<void> {
+    const p = this.pocket;
+    if (!p || p.opened) return;
+    const P = POCKETS[p.kind];
+    const ladderSeen = !!this.ladder && this.map.tile(this.ladder[0], this.ladder[1]) === 'down' && !this.objs.mine?.[pkey(this.ladder[0], this.ladder[1])];
+    const info = [
+      `  ${P.look}`,
+      this.pockets_read.includes(p.kind) ? `  Last time, a wall like this hid ${P.holds}.` : `  You haven't broken into a wall like this before.`,
+      `  Breaking in takes ${POCKET_MINUTES} min and shakes the whole floor.`,
+      ladderSeen ? '  The ladder you found would be buried. You would climb out after.' : '  The way down would be buried. You would climb out after.',
+    ];
+    const sel = await this.menu('Side chamber', ['Break in', 'Leave it for the ladder'], 1, info);
+    if (sel !== 0) return;
+    if (this.stamina < POCKET_STAMINA) {
+      this.msg("You're too tired to break through. Rest first.", '0C');
+      return;
+    }
+    this.stamina -= POCKET_STAMINA;
+    await this.advance(POCKET_MINUTES);
+    const loot = this.pocket_loot(p.kind);
+    for (const [it, n] of Object.entries(loot.items)) this.give(it, n);
+    this.gold += loot.gold;
+    this.map.set(p.x, p.y, 'mfloor');
+    p.opened = true;
+    if (!this.pockets_read.includes(p.kind)) this.pockets_read.push(p.kind);
+    this.bury_shaft(this.map);
+    this.mastery_add('mining');
+    this.fx_break(p.x, p.y, 'stone', undefined, 0);
+    const got = [...Object.entries(loot.items).map(([it, n]) => (n > 1 ? `${n} ${it}` : it)), ...(loot.gold ? [`${loot.gold}G in old coins`] : [])];
+    this.msg(`The wall gives way: ${got.join(', ') || 'nothing but dust'}.`, '0E');
+    this.msg('Rock rumbles down the shaft. The way down is buried, so take the ladder up.', '0C');
+    this.markDirty(false);
   }
 
   // ---------------------------------------------------------------- seed saving (mechanics task 19)
@@ -3228,6 +3365,8 @@ export class Game {
       await this.mantel_menu();
     } else if (tile === 'plotsign') {
       await this.plot_menu(pKey);
+    } else if (tile.startsWith('pocket_')) {
+      await this.pocket_menu();
     } else if (tile === 'bench') {
       const seat = Object.entries(SEATS).find(([, st]) => st.map === this.mapname && st.x === tx && st.y === ty);
       if (seat) await this.sit(seat[0]);
@@ -6425,6 +6564,7 @@ export class Game {
         return { label: 'LOAD', summary: `Load the ${maker}` };
       }
     }
+    if (tile.startsWith('pocket_')) return { label: 'LOOK', summary: 'Look at the sealed side chamber' };
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
@@ -6486,6 +6626,7 @@ export class Game {
         return { key: 'x', label: st === 'ready' ? 'COLLECT' : st === 'working' ? 'CHECK' : 'LOAD' };
       }
     }
+    if (tile.startsWith('pocket_')) return { key: 'x', label: 'LOOK' };
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
