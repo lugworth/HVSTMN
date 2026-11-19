@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## Named farm plots (mechanics task 42), 2026-11-19
+
+- Jeff sells **Plot Sign**s (`PLOT_SIGN_PRICE` 50G). Equipped (it joins the tool list while held),
+  SPACE on open field/grass (not tilled, no object or crop) asks for a name (`text_input` with a
+  16-character limit, `PLOT_NAME_MAX`; the default names the farm area, e.g. "West Field") and stands
+  a `plotsign` tile (`⚑`). Up to `PLOT_MAX` (6). `plots` ({ key, name, tile }) is saved; signs are
+  put back on load (`place_plots()`) and cleared for a new farm (`clear_plots()`).
+- A plot is the tilled tiles within `PLOT_RADIUS` (4) of its sign, each counted for its nearest
+  sign (`plot_of()`). Today's Plan adds "Plot   North Turnips: 3 dry tiles, 2 ready to pick" for any
+  plot that needs you. X at a sign shows its status and offers Rename / Take the sign down (the
+  ground and the sign come back).
+- `text_input()` / `read_text()` take an optional max length (default 12, as before).
+
 ## Places to stop and sit (mechanics task 44), 2026-11-19
 
 - `bench` tiles (`╥`): the Town Green (town 22, 6) and the farmhouse porch (farm 9, 6). `SEATS` in

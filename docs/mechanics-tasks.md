@@ -79,7 +79,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 ## Home and downtime
 
 - [ ] **41. Placeable farm details.** Let players put down paths, lamps, benches, and fences on allowed tiles. Preview each piece with the game’s existing one-cell glyphs.
-- [ ] **42. Name farm plots.** Put a small sign next to a field and use its name in the daily list, such as “North Turnips have four dry tiles.”
+- [x] **42. Name farm plots.** Put a small sign next to a field and use its name in the daily list, such as “North Turnips have four dry tiles.”
 - [ ] **43. A rainy-night coffee or tea counter.** Brew from three or four ingredients at Doug’s Inn. The drink a regular asks for starts a short conversation that can continue next week.
 - [x] **44. Places to stop and sit.** Give the Town Green bench, a porch, and the Ridge lookout a little scene at sunset or in light rain. A friend may be there on the right evening.
 - [x] **45. A mantel for festival souvenirs.** Display a ribbon, letter, or tiny sculpture from a day you remember. Interacting with it shows the date and a one-line memory.

@@ -688,7 +688,7 @@ function isTorch(F: Frame, x: number, y: number, tag: CellTag): boolean {
 }
 
 /** Fixtures worth noticing: they keep their colour in the monochrome look. */
-const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench']);
+const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign']);
 
 const isRainy = (F: Frame) => !F.indoor && (F.weather === 'Rain' || F.weather === 'Typhoon');
 const isWet = (F: Frame) => isRainy(F) || (!F.indoor && F.wetness > 0.06);
