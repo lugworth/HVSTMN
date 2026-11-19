@@ -1775,10 +1775,9 @@ describe('high-resolution world micro-detail', () => {
     assert.ok(hi > lo + 80, `expected sub-cell rects when hires=true (${hi} vs ${lo})`);
   });
 
-  test('high-res is off for good: a new screen computes no micro-detail and paints no half-size glyphs', () => {
+  test('high-res is off by default: a new screen computes no micro-detail and paints no half-size glyphs', () => {
     const s = scene({ palette: 'mono' });
     assert.equal(s.hires, false);
-    assert.equal(typeof (s as any).setHires, 'undefined', 'no switch to turn it on');
     const frame = computeFrame(s, 0);
     assert.ok(frame.flat().every((o) => !o.micro), 'no micro-detail computed');
     const fonts = new Set<string>();
@@ -1788,6 +1787,19 @@ describe('high-resolution world micro-detail', () => {
     }) as unknown as CanvasRenderingContext2D;
     drawFrame(canvas, frame, { cw: 11, ch: 23, fontPx: 19, font: 'monospace', dpr: 2, hires: s.hires });
     for (const f of fonts) assert.match(f, /^(bold )?19px /, `only full-size glyphs (${f})`);
+  });
+
+  test('the high-res setting switches the micro-detail pass on and tells the page', () => {
+    const s = scene({ palette: 'mono' });
+    const seen: boolean[] = [];
+    s.onHiresChange = (v) => seen.push(v);
+    s.setHires(true);
+    s.setHires(true);
+    assert.deepEqual(seen, [true], 'one notice per change');
+    assert.ok(computeFrame(s, 0).flat().some((o) => o.micro), 'micro-detail computed');
+    s.setHires(false);
+    assert.deepEqual(seen, [true, false]);
+    assert.ok(computeFrame(s, 0).flat().every((o) => !o.micro));
   });
 
   test('micro changes invalidate both frameSignature and frameDirtyRect', () => {

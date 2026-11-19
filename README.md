@@ -68,9 +68,9 @@ keeping its light and shade. Only things of interest keep their colour as accent
 villagers and animals, ripe crops, forage and flowers, doors, lit windows, bins, signs, fixtures,
 stairs, fires, torches and ore, and a few seasonal touches.
 
-**One look:** every map cell is drawn as a single full-size glyph. The renderer still contains a
-high-resolution mode (half-size texture glyphs and vector micro-detail), but the game never turns it
-on and there is no setting for it.
+**High-res detail (optional):** by default every map cell is drawn as a single full-size glyph.
+Turn on "High-res detail" in the F10 menu (or the Diary) for half-size texture glyphs and vector
+micro-detail: contoured roofs, cliffs, tree lines and walls. The choice is remembered on the device.
 
 ### How the Enhanced renderer works
 

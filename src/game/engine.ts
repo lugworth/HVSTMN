@@ -1706,6 +1706,15 @@ export class Game {
         ? [{ key: 'dawn', raw: 'Restore a Morning Backup', label: 'Restore a Morning Backup', icon: '☼', iconCol: '0A', right: `${dawns.length} kept`, rightCol: '0A' }]
         : []),
       {
+        key: 'hires',
+        raw: `Graphics: High-res Detail ${this.scr.hires ? 'On' : 'Off'}`,
+        label: 'High-res Detail',
+        icon: '❖',
+        iconCol: '0C',
+        right: this.scr.hires ? 'ON' : 'OFF',
+        rightCol: this.scr.hires ? '0B' : '03',
+      },
+      {
         key: 'cues',
         raw: `Accessible Cues: ${this.scr.accessibleCues ? 'On' : 'Off'}`,
         label: 'Accessible State Cues',
@@ -1817,6 +1826,9 @@ export class Game {
         (i) => [`An in-game hour takes ${Math.round(DAY_PACES[all[i]].secs * 6)} s of real time.`, 'Shop hours, the 5 PM pickup and festivals keep the in-game clock.'],
       );
       if (sel !== null) this.set_pace(all[sel]);
+    } else if (key === 'hires') {
+      this.scr.setHires(!this.scr.hires);
+      this.msg(`High-res detail: ${this.scr.hires ? 'On' : 'Off'}.`, '0C');
     } else if (key === 'cues') {
       this.scr.accessibleCues = !this.scr.accessibleCues;
       this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');

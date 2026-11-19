@@ -155,6 +155,7 @@ export default function GameScreen() {
   const [dpadDir, setDpadDir] = useState<Dir | null>(null);
   const [reducedMotion, setReducedMotionState] = useState(false);
   const reducedMotionRef = useRef(false);
+  const [hires, setHiresState] = useState(false);
   const [crt, setCrtState] = useState(false);
   const crtRef = useRef(false);
   const [paletteMode, setPaletteModeState] = useState<PaletteMode>('mono');
@@ -342,6 +343,14 @@ export default function GameScreen() {
     }
   }, []);
 
+  const toggleHires = useCallback(() => {
+    // Screen.setHires -> onHiresChange (set up with the screen) updates the checkbox and storage
+    const s = screenRef.current;
+    if (!s) return;
+    s.setHires(!s.hires);
+    s.onRender?.();
+  }, []);
+
   const toggleCrt = useCallback(() => {
     // Screen.setCrt -> onCrtChange (set up with the screen) updates the checkbox and storage
     screenRef.current?.setCrt(!crtRef.current);
@@ -518,6 +527,7 @@ export default function GameScreen() {
             checked: pace === p,
             run: () => gameRef.current?.set_pace(p),
           })),
+          { id: 'detail', label: 'High-res detail', kind: 'checkbox', checked: hires, run: toggleHires },
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
           ...(isTouch
@@ -572,12 +582,23 @@ export default function GameScreen() {
     screen.reducedMotion = motionOff;
     reducedMotionRef.current = motionOff;
     setReducedMotionState(motionOff);
-    // High-res detail is gone; forget a choice saved while it was a setting.
+    let hiresOn = false;
     try {
-      window.localStorage.removeItem('hrvstmn-hires');
+      hiresOn = window.localStorage.getItem('hrvstmn-hires') === 'on';
     } catch {
-      // storage unavailable
+      hiresOn = false;
     }
+    screen.hires = hiresOn;
+    setHiresState(hiresOn);
+    screen.onHiresChange = (next) => {
+      setHiresState(next);
+      try {
+        window.localStorage.setItem('hrvstmn-hires', next ? 'on' : 'off');
+      } catch {
+        // storage unavailable; the choice still applies this session
+      }
+      screen.onRender?.();
+    };
     let crtOn = false;
     try {
       crtOn = window.localStorage.getItem('hrvstmn-crt') === 'on';
