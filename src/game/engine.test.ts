@@ -2,7 +2,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { Screen } from './screen';
-import { Game, REMINDER_MAX } from './engine';
+import { Game, REMINDER_MAX, MEMORY_MAX } from './engine';
 import { computeFrame } from './enhanced';
 import { HEDGE_GATE } from './map';
 import {
@@ -50,6 +50,7 @@ import {
   FLUSH_COUNT,
   DOG_CLUE_AFF,
   MILESTONE_LINES,
+  BIRTHDAYS,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3245,5 +3246,95 @@ describe('villagers remember milestones (task 03)', () => {
     const k = fresh();
     k.applySaveData(snap);
     assert.deepEqual(k.milestones_said, []);
+  });
+});
+
+/** A villager's birthday as [season index, day]. */
+const BIRTHDAYS_OF = (n: string): [number, number] => {
+  const d = (BIRTHDAYS as any)[n];
+  return [d[0], d[1]];
+};
+
+describe('shared memories in Villager Notes (task 07)', () => {
+  const gift = async (g: any, n: string, item: string) => {
+    g.say = async () => {};
+    g.check_heart_and_rival_events = async () => {};
+    g.inv[item] = 1;
+    g.held = item;
+    g.gifted = new Set();
+    await g.talk(n);
+  };
+
+  test('a gift they love is kept once; other gifts are not', async () => {
+    const g = fresh();
+    const loved = NPCS.Ann.loves[0];
+    const liked = NPCS.Ann.likes[0];
+    await gift(g, 'Ann', liked);
+    assert.deepEqual(g.memories, []);
+    await gift(g, 'Ann', loved);
+    assert.deepEqual(g.memories, [{ day: g.absday(), npc: 'Ann', text: `Ann loved the ${loved} you brought.`, key: `Ann:love:${loved}` }]);
+    g.day += 1;
+    await gift(g, 'Ann', loved);
+    assert.equal(g.memories.length, 1, 'the same favourite is kept once');
+  });
+
+  test('a remembered birthday, a filled request, an order and a milestone remark are kept', async () => {
+    const g = fresh();
+    const [season, day] = BIRTHDAYS_OF('Ann');
+    g.season = season;
+    g.day = day;
+    await gift(g, 'Ann', NPCS.Ann.likes[0]);
+    assert.match(g.memories.at(-1).text, /^Ann's birthday: you remembered, with an? .+\.$/);
+
+    g.requests = [{ id: 1, npc: 'Gray', item: 'Copper', qty: 2, reward: 300, deadline: g.absday() + 2 }];
+    g.inv = { Copper: 2 };
+    g.request_deliver(0);
+    assert.equal(g.memories.at(-1).text, 'You brought Gray 2 × Copper for the request board.');
+
+    g.house_flags = ['Kitchen'];
+    g.order_last = 'inn_cheese';
+    g.order_refresh();
+    g.inv = { Bread: 1, 'Pickled Turnip': 1, 'Dried Herbs': 1 };
+    g.order_deliver();
+    assert.equal(g.memories.at(-1).text, 'You put together a supper basket for the inn for Doug.');
+
+    g.shipped_total = 100;
+    g.shipped_counts = { Turnip: 1 };
+    g.say = async () => {};
+    g.held = null;
+    await g.talk('Zack');
+    assert.equal(g.memories.at(-1).text, 'Zack remembered picking up your very first shipment.');
+  });
+
+  test('Villager Notes ends with the memories, newest first, and says what will be kept when empty', () => {
+    const g = fresh();
+    let pages = g.memory_pages(50, 20);
+    assert.equal(pages.length, 1);
+    const text = (p: any[]) => p.map((l: any) => (l.kind === 'spans' ? l.spans.map((s: any) => s.text).join('') : l.kind === 'ledger' ? l.label : '')).join('\n');
+    assert.match(text(pages[0]), /Nothing yet\. Gifts they love/);
+    g.remember('Ann', 'First memory.');
+    g.day += 1;
+    g.remember('Kai', 'Second memory.');
+    pages = g.memory_pages(50, 20);
+    const t = text(pages[0]);
+    assert.ok(t.indexOf('Second memory.') < t.indexOf('First memory.'), 'newest first');
+    assert.match(t, /Spring 2, Year 1/);
+    for (let i = 0; i < 30; i++) g.remember('Ann', `Moment ${i}.`);
+    pages = g.memory_pages(50, 12);
+    assert.ok(pages.length > 1, 'long journals turn the page');
+    for (const p of pages) assert.ok(p.length <= 12);
+  });
+
+  test('the journal keeps the latest MEMORY_MAX moments and survives a reload', () => {
+    const g = fresh();
+    for (let i = 0; i < MEMORY_MAX + 5; i++) g.remember('Ann', `Moment ${i}.`);
+    assert.equal(g.memories.length, MEMORY_MAX);
+    assert.equal(g.memories[0].text, 'Moment 5.');
+    assert.equal(g.remember('Nobody', 'x'), false);
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    snap.memories.push({ day: 1, npc: 'Nobody', text: 'x' }, { day: 'x', npc: 'Ann', text: 'y' });
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.memories, g.memories);
   });
 });
