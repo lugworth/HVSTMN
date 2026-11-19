@@ -1,5 +1,15 @@
 # Handoff: HRVSTMN
 
+## A relaxed day setting (mechanics task 52), 2026-11-19
+
+- `DAY_PACES` (constants): Normal (`SECS_PER_10MIN`, 6 s per 10 in-game minutes), Relaxed (1.5x) and
+  Unhurried (2x). `Game.update()` ticks on `pace_secs()`; only real time per in-game hour changes, so
+  the 5 PM pickup, shop hours, festivals and NPC schedules stay on the in-game clock.
+- A per-browser preference (`PACE_KEY` = `hrvstmn-pace`, read by `Game.stored_pace()` in the
+  constructor), not part of the farm save. Set from Diary → Day Pace (a submenu showing real seconds
+  per hour) or the game menu's View section (three radio items; `Game.onPace` keeps the page's
+  checked state in step). `set_pace()` stores it and says how long an hour now takes.
+
 ## Morning save backups (mechanics task 55), 2026-11-19
 
 - Every wake-up (`new_day()`, right after the Slot 1 save) also pushes a snapshot to `hrvstmn-dawn`

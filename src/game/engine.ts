@@ -17,6 +17,8 @@ import {
 } from './map';
 import {
   SECS_PER_10MIN,
+  DAY_PACES,
+  PACE_KEY,
   SAVE_KEY,
   SEASONS,
   WEEKDAYS,
@@ -144,7 +146,7 @@ import {
   FAVOR_WATER_MAX,
   FAVOR_SHOPS,
 } from './constants';
-import type { ValleyLandmark } from './constants';
+import type { ValleyLandmark, DayPace } from './constants';
 import type { CatchOdds, MakerStep } from './rules';
 import {
   CoordSet,
@@ -693,6 +695,45 @@ export class Game {
     this.npc_acc = 0.0;
     this.passing_out = false;
     this.build_interiors();
+    this.pace = Game.stored_pace();
+  }
+
+  // ---------------------------------------------------------------- day pace (mechanics task 52)
+  /** How fast the clock runs: a per-browser preference, never saved with the farm. */
+  pace: DayPace = 'normal';
+  /** Called when the pace changes, so the page's View menu can follow. */
+  onPace: ((p: DayPace) => void) | null = null;
+
+  static stored_pace(): DayPace {
+    try {
+      const v = getBrowserStorage()?.getItem(PACE_KEY);
+      return v && v in DAY_PACES ? (v as DayPace) : 'normal';
+    } catch {
+      return 'normal';
+    }
+  }
+
+  /** Real seconds per 10 in-game minutes at the chosen pace. */
+  pace_secs(): number {
+    return DAY_PACES[this.pace]?.secs ?? SECS_PER_10MIN;
+  }
+
+  /** Real time an in-game hour takes, as "36 s" or "1 min 12 s". */
+  pace_hour(): string {
+    const s = Math.round(this.pace_secs() * 6);
+    return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ''}`;
+  }
+
+  set_pace(p: DayPace): void {
+    if (!(p in DAY_PACES)) return;
+    this.pace = p;
+    try {
+      getBrowserStorage()?.setItem(PACE_KEY, p);
+    } catch {
+      // storage unavailable; the pace still applies this session
+    }
+    this.msg(`Day pace: ${DAY_PACES[p].label} (an in-game hour takes ${this.pace_hour()}).`, '0C');
+    this.onPace?.(p);
   }
 
   setBodyState(state: 'title' | 'playing' | 'paused') {
@@ -1362,8 +1403,9 @@ export class Game {
     if (this.fx.length) this.fx = this.fx.filter((f) => now - f.born < f.life);
     if (!this.map.indoor) {
       this.acc += dt;
-      while (this.acc >= SECS_PER_10MIN) {
-        this.acc -= SECS_PER_10MIN;
+      const tick = this.pace_secs();
+      while (this.acc >= tick) {
+        this.acc -= tick;
         await this.advance(10);
       }
     }
@@ -1605,6 +1647,7 @@ export class Game {
         right: this.scr.accessibleCues ? 'ON' : 'OFF',
         rightCol: this.scr.accessibleCues ? '0B' : '03',
       },
+      { key: 'pace', raw: `Day Pace: ${DAY_PACES[this.pace].label}`, label: 'Day Pace', icon: '◷', iconCol: '0C', right: DAY_PACES[this.pace].label, rightCol: this.pace === 'normal' ? '04' : '0B' },
       ...(this.first_steps
         ? [{ key: 'firststeps', raw: 'Hide First-Morning Checklist', label: 'Hide First-Morning Checklist', icon: '✓', iconCol: '0B', right: 'Hide', rightCol: '04' }]
         : []),
@@ -1694,6 +1737,15 @@ export class Game {
     } else if (key === 'firststeps') {
       this.first_steps = null;
       this.msg('First-morning checklist hidden.', '0C');
+    } else if (key === 'pace') {
+      const all = Object.keys(DAY_PACES) as DayPace[];
+      const sel = await this.menu(
+        'Day Pace',
+        all.map((p) => `${p === this.pace ? '● ' : '○ '}${DAY_PACES[p].label}`),
+        all.indexOf(this.pace),
+        (i) => [`An in-game hour takes ${Math.round(DAY_PACES[all[i]].secs * 6)} s of real time.`, 'Shop hours, the 5 PM pickup and festivals keep the in-game clock.'],
+      );
+      if (sel !== null) this.set_pace(all[sel]);
     } else if (key === 'cues') {
       this.scr.accessibleCues = !this.scr.accessibleCues;
       this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');
