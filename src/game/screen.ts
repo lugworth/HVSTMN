@@ -48,6 +48,8 @@ export type CellTag = {
   companion?: boolean;
   /** Tilled soil dressed with compost (task 18). */
   compost?: boolean;
+  /** The crab pot's float off the beach pier (task 39). */
+  trap?: 'up' | 'set' | 'ready';
   /** Faced cell has a meaningful context action (interaction or WATER/DIG/CRACK/CAST). */
   actionTarget?: boolean;
   /** For zoomed tiles: which sub-cell of the tile this is, and the tile width in cells. */

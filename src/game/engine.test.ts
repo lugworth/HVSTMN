@@ -45,6 +45,7 @@ import {
   ORDER_GAP,
   COMPOST_SCRAPS,
   COMPOST_BONUS,
+  TRAP_SPOT,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -2859,5 +2860,147 @@ describe('compost from leftovers (task 18)', () => {
     await g.handle('space');
     assert.equal(g.tilled.has('21,15'), false, 'the hammer flattened the soil');
     assert.deepEqual(g.composted, ['22,15'], 'and its compost went with it');
+  });
+});
+
+describe('a crab pot off the pier (task 39)', () => {
+  /** On the end of the beach pier, facing the pot. */
+  const pier = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.warp(TRAP_SPOT[0], TRAP_SPOT[1], TRAP_SPOT[2] - 1, [0, 1]);
+    g.warp_fx = null;
+    return g;
+  };
+  const pick = (g: any, want: string | null) => {
+    const seen: { title: string; opts: string[]; info: string[] }[] = [];
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      seen.push({ title, opts, info: info || [] });
+      if (want == null) return null;
+      const i = opts.findIndex((o) => o.startsWith(want));
+      assert.ok(i >= 0, `${want} in ${opts.join(' | ')}`);
+      return i;
+    };
+    return seen;
+  };
+
+  test('one spot: the water just past the end of the pier, marked with a float', () => {
+    const g = pier();
+    assert.equal(g.maps.beach.tile(TRAP_SPOT[1], TRAP_SPOT[2]), 'water');
+    assert.equal(g.maps.beach.tile(TRAP_SPOT[1], TRAP_SPOT[2] - 1), 'bridge', 'reached from the pier end');
+    assert.deepEqual(g.glyph(g.maps.beach, TRAP_SPOT[1], TRAP_SPOT[2], 'water').slice(0, 2), ['¤', '03']);
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'SET' });
+    g.render();
+    let tagged = false;
+    for (const row of g.scr.tags) for (const t of row) if (t?.wx === TRAP_SPOT[1] && t?.wy === TRAP_SPOT[2] && t.trap === 'up') tagged = true;
+    assert.ok(tagged, 'the renderer sees the float');
+  });
+
+  test('the bait decision: a fish as bait, or none; the cheapest fish is offered', async () => {
+    const g = pier();
+    quiet(g);
+    g.inv = { 'Sea Bass': 1, 'Small Fish': 2 };
+    const seen = pick(g, 'Bait with a Small Fish');
+    await g.interact();
+    assert.equal(seen[0].title, 'Crab Pot');
+    assert.deepEqual(seen[0].opts, ['Bait with a Small Fish and lower it', 'Lower it without bait', 'Leave']);
+    assert.deepEqual(g.trap, { day: g.absday(), bait: 'Small Fish' });
+    assert.equal(g.inv['Small Fish'], 1);
+    assert.deepEqual(g.glyph(g.maps.beach, TRAP_SPOT[1], TRAP_SPOT[2], 'water').slice(0, 2), ['¤', '09']);
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'CHECK' });
+    assert.ok(g.today_lines().includes('  Pot    Crab pot set off the beach pier: haul it tomorrow.'));
+
+    const h = pier();
+    h.inv = {};
+    const none = pick(h, 'Lower it without bait');
+    await h.interact();
+    assert.deepEqual(none[0].opts, ['Lower it without bait', 'Leave'], 'no bait option without a fish');
+    assert.ok(none[0].info.includes('  (No fish in your rucksack to use as bait.)'));
+    assert.deepEqual(h.trap, { day: h.absday(), bait: null });
+  });
+
+  test('it is checked on the next trip: not the same day, then hauled', async () => {
+    const g = pier();
+    const said = quiet(g);
+    g.inv = { 'Small Fish': 1 };
+    g.trap_set('Small Fish');
+    pick(g, null);
+    await g.interact();
+    assert.match(said.at(-1)!, /baited with a Small Fish\. Haul it tomorrow or on any later trip\./);
+    assert.equal(g.trap_haul(), null, 'not the same day');
+
+    g.day += 1;
+    assert.equal(g.trap_state(), 'ready');
+    assert.deepEqual(g.glyph(g.maps.beach, TRAP_SPOT[1], TRAP_SPOT[2], 'water').slice(0, 2), ['¤', '0B']);
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'HAUL' });
+    assert.ok(g.today_lines().includes('  Pot    The crab pot off the beach pier is ready to haul.'));
+    const real = Math.random;
+    Math.random = () => 0.5;
+    try {
+      pick(g, 'Leave');
+      await g.interact();
+    } finally {
+      Math.random = real;
+    }
+    assert.equal(g.inv.Crab, 2, 'a baited pot holds two crabs');
+    assert.equal(g.trap, null);
+    assert.equal(g.fish_caught.Crab, 2);
+    assert.match(said.join(' | '), /You hauled up the crab pot: 2 Crab!/);
+  });
+
+  test('baited pots beat unbaited ones', () => {
+    const haul = (bait: string | null, r: number) => {
+      const g = pier();
+      g.inv = bait ? { [bait]: 1 } : {};
+      g.trap_set(bait);
+      g.day += 2;
+      const real = Math.random;
+      Math.random = () => r;
+      try {
+        g.trap_haul();
+      } finally {
+        Math.random = real;
+      }
+      return g.inv;
+    };
+    assert.deepEqual(haul('Small Fish', 0.1), { Crab: 2, Mackerel: 1 });
+    assert.deepEqual(haul('Small Fish', 0.9), { Crab: 2 });
+    assert.deepEqual(haul(null, 0.1), { Crab: 1 });
+    assert.deepEqual(haul(null, 0.5), { 'Small Fish': 1 });
+    assert.deepEqual(haul(null, 0.9), {}, 'sometimes just seaweed');
+  });
+
+  test('the float is drawn on a sunny day, not mirrored over by the pier and the player', () => {
+    for (const state of ['up', 'ready'] as const) {
+      const g = pier();
+      g.weather = 'Sunny';
+      if (state === 'ready') g.trap = { day: g.absday() - 1, bait: 'Small Fish' };
+      g.render();
+      const index = g.scr.tags.flat().findIndex((t: any) => t?.wx === TRAP_SPOT[1] && t?.wy === TRAP_SPOT[2]);
+      assert.ok(index >= 0);
+      const cell = computeFrame(g.scr, 0).flat()[index];
+      assert.equal(cell.ch, '¤', `the ${state} float`);
+    }
+  });
+
+  test('the rod does not cast onto the pot, and the pot survives a reload', async () => {
+    const g = pier();
+    g.tool = 'Fishing Rod';
+    await g.handle('space');
+    assert.match(g.msgs.at(-1)[0], /^That's the crab pot's rope\./);
+    g.inv = { 'Small Fish': 1 };
+    g.trap_set('Small Fish');
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.trap, g.trap);
+    snap.trap = { day: 'x', bait: 'Small Fish' };
+    const k = fresh();
+    k.applySaveData(snap);
+    assert.equal(k.trap, null);
+    delete snap.trap;
+    const o = fresh();
+    o.applySaveData(snap);
+    assert.equal(o.trap, null);
   });
 });

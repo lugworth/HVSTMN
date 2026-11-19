@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## A crab pot off the pier (mechanics task 39), 2026-11-19
+
+- One spot, `TRAP_SPOT` = beach (32, 20): the water just past the end of the Mineral Beach pier,
+  reached from the pier end (32, 19). Face it and press X (`Game.trap_menu()`): "Bait with a <the
+  cheapest fish> and lower it" or "Lower it without bait". It can be hauled on any later day
+  (`trap_state()`: up / set / ready): baited → 2 Crab (30%: plus a Mackerel); unbaited → a Crab
+  (40%), a Small Fish (40%) or just seaweed. Crab is a new fish item (180G). Catches count in
+  `fish_caught`.
+- The float is `¤` (grey up, orange set, green ready) via `CellTag.trap` in the renderer and
+  `glyph()` in the buffer; the calm-water reflection pass skips it. Action label SET / CHECK / HAUL;
+  casting the rod at it says to press X. Today's Plan has a "Pot" line while it is down. `trap`
+  ({ day, bait } | null) is saved and sanitized.
+
 ## Compost from leftovers (mechanics task 18), 2026-11-19
 
 - Weeds cut with the Sickle on the farm, and crops added from the rucksack ("Compost one" /

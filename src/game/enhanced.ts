@@ -1195,6 +1195,10 @@ const ICONS: Record<string, [string, string]> = {
 };
 // Farm HUD chrome: weathered wood from the dark end of the Isotope orange ramp. The rails stay
 // about as quiet as the grey rules they replace; the sign board is dark enough for white text.
+/** The crab pot's float: grey while up, orange while it soaks, green when there is a catch. */
+const TRAP_UP = '#9a9aa8';
+const TRAP_SET = '#ff9900';
+const TRAP_READY = '#33ff66';
 /** Compost-dressed soil: a deep loam under the tile, and warm crumbs on bare soil. */
 const COMPOST_SOIL = '#2a1608';
 const COMPOST_CRUMB = '#b8743c';
@@ -1453,6 +1457,11 @@ export function computeFrame(
         // a seed bag's aim marks the tiles in a companion pairing with a small blossom (task 17)
         if (tag.companion) o.detail = { ch: '✿', fg: COMPANION_MARK };
         // compost-dressed soil is darker and richer, with a few warm crumbs if nothing else is drawn (task 18)
+        // the crab pot's float bobs on the water, lit by its state (task 39)
+        if (tag.trap) {
+          const col = tag.trap === 'ready' ? TRAP_READY : tag.trap === 'set' ? TRAP_SET : TRAP_UP;
+          o = { ...o, ch: '¤', fg: col, bold: true, accent: true, textureGlyph: undefined, texture: undefined, glow: tag.trap === 'up' ? undefined : col, glowR: 5 };
+        }
         if (tag.compost) {
           o.bg = mix(o.bg, COMPOST_SOIL, 0.45);
           if (!o.detail) o.detail = { ch: '∴', fg: COMPOST_CRUMB };
@@ -2129,7 +2138,8 @@ function reflections(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx[
   for (let y = v.y + 1; y < v.y + v.h && y < H; y++) {
     for (let x = v.x; x < v.x + v.w && x < W; x++) {
       const tag = tags[y][x];
-      if (!tag || !WATERY.has(tag.t) || tag.ent) continue;
+      // the crab pot's float stays itself; it is not a mirror of the pier (task 39)
+      if (!tag || !WATERY.has(tag.t) || tag.ent || tag.trap) continue;
       let k = 0;
       for (let d = 1; d <= 4; d++) {
         const n = tags[y - d]?.[x];
