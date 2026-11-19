@@ -50,7 +50,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **19. Save seeds from the harvest.** Put one good crop aside for future plantings. Limit the initial yield so seeds compete with selling or cooking the crop.
 - [ ] **20. Discover a few hybrids.** Let a villager help cross two specific seeds, then log combinations once discovered. Start with one hybrid per season and a visible payoff such as a new dish.
 - [ ] **21. A small orchard.** Fruit trees take longer to establish and produce at predictable times. Reserve room for a walking path and let fruit feed a kitchen or preserve recipe.
-- [ ] **22. Hives with seasonal honey.** Nearby blossoms change the honey’s flavor and who likes it as a gift. A hive with no flowers can still produce basic honey.
+- [x] **22. Hives with seasonal honey.** Nearby blossoms change the honey’s flavor and who likes it as a gift. A hive with no flowers can still produce basic honey.
 - [ ] **23. Rain barrels and irrigation.** Let a barrel collect rain, then use a repaired channel to water one strip on dry mornings. Show its coverage before building.
 - [x] **24. A planting forecast.** Show expected first and repeat harvest days from the seed bag. Indicate if the last harvest falls after the season ends.
 

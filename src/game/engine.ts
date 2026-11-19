@@ -103,6 +103,9 @@ import {
   FLUSH_COUNT,
   DOG_CLUE_AFF,
   MILESTONE_LINES,
+  HIVE_SPOT,
+  HIVE_RANGE,
+  HONEY_FLAVOURS,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -2948,11 +2951,14 @@ export class Game {
     const signId = m.signs[pKey];
     if (signId === 'honey_tree' || (this.mapname === 'farm' && tile === 'tree' && tx === 7 && ty === 6)) {
       if (this.honey_picked) {
-        await this.say('Bees buzz happily around the farm tree. Come back tomorrow for more Honey!', 'Farm Tree');
+        await this.say(`Bees buzz around the hive in the farm tree. ${this.hive_note()} Come back tomorrow for more.`, 'Farm Tree');
       } else {
         this.honey_picked = true;
-        this.give('Honey', 1);
-        let msgTxt = 'You gathered sweet Honey from the farm tree!';
+        const h = this.hive_honey();
+        this.give(h.item, 1);
+        let msgTxt = h.flower
+          ? `You gathered ${h.item} from the hive! The bees found ${h.blooms} ${h.flower}${h.blooms === 1 ? '' : 's'} nearby.`
+          : 'You gathered plain Honey. Flowers in bloom near the tree would flavour it.';
         if (this.season === 2) {
           const appleType = py_rng().random() < 0.15 ? 'SUGDW Apple' : 'Apple';
           this.give(appleType, 1);
@@ -3385,7 +3391,8 @@ export class Game {
       this.take(item);
       let pref: 'love' | 'like' | 'neutral' | 'hate' = 'neutral';
       let line = `Oh, a ${item}? For me? Thanks.`;
-      if (d.loves.includes(item)) {
+      const honeyFans = Object.values(HONEY_FLAVOURS).find((f) => f.item === item)?.fans;
+      if (d.loves.includes(item) || honeyFans?.includes(n)) {
         pref = 'love';
         line = `Oh! ${item}! I love this! Thank you so much!`;
       } else if (d.likes.includes(item)) {
@@ -3451,6 +3458,34 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- hives with seasonal honey (mechanics task 22)
+  /** Flowers in bloom within reach of the hive, by kind. */
+  hive_blooms(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [k, [crop, age]] of Object.entries(this.crops)) {
+      if (!HONEY_FLAVOURS[crop] || age < CROPS[crop][2]) continue;
+      const [x, y] = parseCoordKey(k);
+      if (Math.max(Math.abs(x - HIVE_SPOT[0]), Math.abs(y - HIVE_SPOT[1])) > HIVE_RANGE) continue;
+      out[crop] = (out[crop] || 0) + 1;
+    }
+    return out;
+  }
+
+  /** Today's honey: flavoured by the flower with the most blooms nearby (ties by name), or plain. */
+  hive_honey(): { item: string; flower: string | null; blooms: number } {
+    const best = Object.entries(this.hive_blooms()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    if (!best) return { item: 'Honey', flower: null, blooms: 0 };
+    return { item: HONEY_FLAVOURS[best[0]].item, flower: best[0], blooms: best[1] };
+  }
+
+  /** "Tomorrow's honey will taste of Moondrop." or how to get a flavour. */
+  hive_note(): string {
+    const h = this.hive_honey();
+    return h.flower
+      ? `With ${h.blooms} ${h.flower}${h.blooms === 1 ? '' : 's'} in bloom nearby, it will be ${h.item}.`
+      : `Flowers in bloom within ${HIVE_RANGE} steps of the tree would flavour the honey.`;
   }
 
   // ---------------------------------------------------------------- a field notebook (mechanics task 37)

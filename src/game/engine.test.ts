@@ -51,6 +51,9 @@ import {
   DOG_CLUE_AFF,
   MILESTONE_LINES,
   BIRTHDAYS,
+  HIVE_SPOT,
+  HIVE_RANGE,
+  HONEY_FLAVOURS,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3513,5 +3516,62 @@ describe('a field notebook (task 37)', () => {
     const h = fresh();
     h.applySaveData(snap);
     assert.deepEqual(h.notebook, g.notebook);
+  });
+});
+
+describe('hives with seasonal honey (task 22)', () => {
+  /** On the farm, facing the hive tree from the east. */
+  const atHive = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.warp('farm', HIVE_SPOT[0] + 1, HIVE_SPOT[1], [-1, 0]);
+    g.crops = {};
+    return g;
+  };
+  const bloom = (g: any, crop: string, x: number, y: number) => {
+    g.crops[`${x},${y}`] = [crop, CROPS[crop][2]];
+  };
+
+  test('with no flowers nearby the hive gives plain Honey, and says how to flavour it', async () => {
+    const g = atHive();
+    await g.interact();
+    assert.equal(g.inv.Honey, 1);
+    assert.equal(g.msgs.at(-1)[0], 'You gathered plain Honey. Flowers in bloom near the tree would flavour it.');
+  });
+
+  test('the flower with the most blooms in reach flavours the honey; far or unopened flowers do not count', async () => {
+    const g = atHive();
+    bloom(g, 'Moondrop Flower', 5, 10);
+    bloom(g, 'Moondrop Flower', 6, 10);
+    bloom(g, 'Toy Flower', 7, 10);
+    bloom(g, 'Toy Flower', HIVE_SPOT[0] + HIVE_RANGE + 1, 10); // out of reach
+    g.crops['8,10'] = ['Toy Flower', 0]; // not in bloom yet
+    assert.deepEqual(g.hive_blooms(), { 'Moondrop Flower': 2, 'Toy Flower': 1 });
+    assert.deepEqual(g.hive_honey(), { item: 'Moondrop Honey', flower: 'Moondrop Flower', blooms: 2 });
+    await g.interact();
+    assert.equal(g.inv['Moondrop Honey'], 1);
+    assert.equal(g.msgs.at(-1)[0], 'You gathered Moondrop Honey from the hive! The bees found 2 Moondrop Flowers nearby.');
+    const said = quiet(g);
+    await g.interact();
+    assert.match(said[0], /With 2 Moondrop Flowers in bloom nearby, it will be Moondrop Honey\./);
+  });
+
+  test('each flavour is a real item that its fans love as a gift', async () => {
+    for (const [flower, f] of Object.entries(HONEY_FLAVOURS)) {
+      assert.ok(CROPS[flower], flower);
+      assert.ok(ITEMS[f.item][0] > ITEMS.Honey[0], `${f.item} is worth more than plain honey`);
+      for (const n of f.fans) assert.ok(NPCS[n], n);
+    }
+    const g = fresh();
+    const fan = HONEY_FLAVOURS['Pink Cat Flower'].fans[0];
+    const before = g.friend[fan] || 0;
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    g.check_heart_and_rival_events = async () => {};
+    g.inv['Pink Cat Honey'] = 1;
+    g.held = 'Pink Cat Honey';
+    await g.talk(fan);
+    assert.match(said[0], /I love this!/);
+    assert.ok(g.friend[fan] > before + 2);
   });
 });
