@@ -3604,6 +3604,25 @@ export const FLUSH_COUNT = 5;
 export const DOG_CLUE_AFF = 30;
 
 /**
+ * Villagers remember milestones (mechanics task 03): the first time you talk to them after something
+ * happens, they bring it up instead of small talk, once. `{item}` / `{case}` are filled in.
+ */
+export const MILESTONE_LINES = {
+  /** Zack, after your first shipment ({item}: what you have shipped most of). */
+  first_shipment: "I still remember the first crate I picked up from your bin. {item}, wasn't it? You've come a long way since.",
+  /** The curator, once per museum case you complete. */
+  museum_case: 'The {case} case is complete, thanks to you. Visitors stop and read every label. I wrote your name on the card.',
+  /** Neighbours who notice the footbridge you helped rebuild at Willow Bend. */
+  footbridge: {
+    Popuri: 'I walked over the new footbridge at Willow Bend yesterday! Mom says you brought half the materials.',
+    Rick: "That footbridge you and Gotz put up is solid. I'd have built the rail a little higher, mind you.",
+    Ann: 'Dad says the Willow Bend crowd come in for lunch now that the footbridge is back. Thanks for that!',
+    Mary: 'I read on the new footbridge at Willow Bend most mornings. The river sounds different from up there.',
+    Elli: "Grandma can cross at Willow Bend again with the footbridge fixed. She asked me to say thank you.",
+  } as Record<string, string>,
+};
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.

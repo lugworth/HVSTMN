@@ -102,6 +102,7 @@ import {
   MUSHROOM_FLUSH,
   FLUSH_COUNT,
   DOG_CLUE_AFF,
+  MILESTONE_LINES,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -532,6 +533,8 @@ export class Game {
   flush_spots: string[] = [];
   /** This morning's scent from the dog (task 29): what it points at, and where. */
   dog_clue: { day: number; map: string; key: string; kind: 'dig' | 'mushroom' } | null = null;
+  /** Milestone remarks already made, as 'who:what' keys (task 03). */
+  milestones_said: string[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -609,7 +612,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -751,6 +754,7 @@ export class Game {
     this.flush_day = -1;
     this.flush_spots = [];
     this.dog_clue = null;
+    this.milestones_said = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1103,6 +1107,7 @@ export class Game {
       this.compost_scraps = Math.max(0, Math.floor(Number(this.compost_scraps) || 0));
       this.flush_day = Number.isInteger(this.flush_day) ? this.flush_day : -1;
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
+      this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
       const dc: any = this.dog_clue;
       this.dog_clue =
         dc && Number.isInteger(dc.day) && typeof dc.map === 'string' && this.maps[dc.map] && typeof dc.key === 'string' && (dc.kind === 'dig' || dc.kind === 'mushroom')
@@ -3384,8 +3389,15 @@ export class Game {
     } else {
       const f = this.friend[n] || 0;
       const tier = f < 30 ? 0 : f < 70 ? 1 : 2;
-      line = py_rng().choice(d.lines[tier]);
-      emitNpcEmote(f >= 60 ? 'heart' : 'note');
+      const memory = this.milestone_line(n);
+      if (memory) {
+        line = memory.line;
+        this.milestones_said.push(memory.key);
+        emitNpcEmote('heart');
+      } else {
+        line = py_rng().choice(d.lines[tier]);
+        emitNpcEmote(f >= 60 ? 'heart' : 'note');
+      }
     }
     if (!this.talked.has(n)) {
       this.talked.add(n);
@@ -3393,6 +3405,33 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- villagers remember milestones (mechanics task 03)
+  /** Museum cases (by label) where every piece has been donated. */
+  museum_cases_done(): string[] {
+    return this.museum_categories()
+      .filter(([, cat]) => {
+        const pool = this.museum_pool(cat);
+        return pool.length > 0 && pool.every((i) => this.museum.includes(i));
+      })
+      .map(([label]) => label);
+  }
+
+  /** Something this villager has not yet said about what you've done, with its key; or null. */
+  milestone_line(n: string): { key: string; line: string } | null {
+    const said = (k: string) => this.milestones_said.includes(k);
+    if (n === 'Zack' && this.shipped_total > 0 && !said('Zack:first_shipment')) {
+      const top = Object.entries(this.shipped_counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'Turnips';
+      return { key: 'Zack:first_shipment', line: MILESTONE_LINES.first_shipment.replace('{item}', top) };
+    }
+    if (n === 'Curator') {
+      const done = this.museum_cases_done().find((c) => !said(`Curator:case:${c}`));
+      if (done) return { key: `Curator:case:${done}`, line: MILESTONE_LINES.museum_case.replace('{case}', done) };
+    }
+    const bridge = MILESTONE_LINES.footbridge[n];
+    if (bridge && this.public_works.built && !said(`${n}:footbridge`)) return { key: `${n}:footbridge`, line: bridge };
+    return null;
   }
 
   /** Gray's watering-can advice from the current can level, or null once it is past Saibara's ore upgrades. */
