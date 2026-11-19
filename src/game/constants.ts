@@ -2023,6 +2023,24 @@ export const TILES: Record<string, any> = {
     "00",
     false
   ],
+  "pocket_seam": [
+    "≋",
+    "0E",
+    "01",
+    false
+  ],
+  "pocket_geode": [
+    "◊",
+    "0B",
+    "01",
+    false
+  ],
+  "pocket_moss": [
+    "♣",
+    "0A",
+    "01",
+    false
+  ],
   "bath": [
     "U",
     "0C",
@@ -3789,6 +3807,23 @@ export const FAVOR_SHOPS = ['supermarket', 'blacksmith', 'poultry', 'carpenter',
  * When all three are donated the curator sets them out together, reads the exhibit's note and gives
  * a lead to another discovery.
  */
+// ---------------------------------------------------------------- mine side chambers (mechanics task 40)
+/**
+ * Now and then a mine floor has a sealed side chamber in its wall. The rock pattern hints at what is
+ * inside. Breaking in takes time and shakes the floor: the way down is buried, so the player chooses
+ * between the pocket and the next ladder.
+ */
+export type PocketKind = 'seam' | 'geode' | 'moss';
+export const POCKETS: Record<PocketKind, { tile: string; look: string; holds: string; weight: number }> = {
+  seam: { tile: 'pocket_seam', look: 'Bright seams streak the rock around a thin wall.', holds: 'a handful of this floor\'s ore', weight: 5 },
+  geode: { tile: 'pocket_geode', look: 'Pale speckles ring the rock, and it sounds hollow when tapped.', holds: 'one rare stone', weight: 3 },
+  moss: { tile: 'pocket_moss', look: 'Damp moss and old timber frame a bricked-up gap.', holds: 'an old miner\'s cache', weight: 3 },
+};
+export const POCKET_CHANCE = 0.3;
+export const POCKET_MIN_FLOOR = 2;
+export const POCKET_MINUTES = 30;
+export const POCKET_STAMINA = 4;
+
 export const EXHIBITS: { id: string; title: string; pieces: string[]; note: string; lead: string }[] = [
   {
     id: 'river',

@@ -688,7 +688,7 @@ function isTorch(F: Frame, x: number, y: number, tag: CellTag): boolean {
 }
 
 /** Fixtures worth noticing: they keep their colour in the monochrome look. */
-const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign']);
+const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign', 'pocket_seam', 'pocket_geode', 'pocket_moss']);
 
 const isRainy = (F: Frame) => !F.indoor && (F.weather === 'Rain' || F.weather === 'Typhoon');
 const isWet = (F: Frame) => isRainy(F) || (!F.indoor && F.wetness > 0.06);
@@ -997,6 +997,13 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       }
       return { ch: '▒', fg: '#6a5844', bg: '#4a3c2e', bold: false };
     }
+    // sealed side chambers (mechanics task 40): the rock pattern is the clue
+    case 'pocket_seam':
+      return { ch: '≋', fg: '#ffcc33', bg: '#2e2924', bold: true, glow: '#ffcc33', glowR: 3, accent: true };
+    case 'pocket_geode':
+      return { ch: '◊', fg: '#9ff0ff', bg: '#2e2924', bold: true, glow: '#70e8ff', glowR: 3, accent: true };
+    case 'pocket_moss':
+      return { ch: '♣', fg: '#7ccf5a', bg: '#2e2924', bold: true, accent: true };
     case 'mwall':
       if (isTorch(F, x, y, tag)) return { ch: '†', fg: '#ff9900', bg: '#2e2924', bold: true, glow: '#ff9900', glowR: 9, accent: true };
       return { ch: hs < 0.5 ? '▓' : '▒', fg: '#4a423a', bg: '#2e2924', bold: false };

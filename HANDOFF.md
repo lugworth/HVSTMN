@@ -1,5 +1,21 @@
 # Handoff: HRVSTMN
 
+## Mine side chambers (mechanics task 40), 2026-11-19
+
+- `POCKETS` in `constants.ts`: three sealed-wall patterns, each its own tile in the cave wall:
+  `pocket_seam` (≋ gold: three pieces of the floor's ore, or gems in the Lake Mine, no Junk Ore),
+  `pocket_geode` (◊ cyan: one of the rarest stone the floor can give) and `pocket_moss`
+  (♣ green: an old miner's cache, 2 Black Grass and 40-90G).
+- `enter_mine()` calls `place_pocket()`: from B2F up to (not on) B255F, a `POCKET_CHANCE` (30%) roll
+  seals one interior wall beside open floor, at least 6 steps from the way in. `pocket` (x, y, kind,
+  opened) is saved; `restore_pocket()` puts it back after a load on a mine floor.
+- Facing it shows LOOK; `pocket_menu()` reads the pattern and, once you have opened one of that kind
+  (`pockets_read`, saved), what it held last time. "Break in" costs 30 min and 4 stamina, gives
+  `pocket_loot()` and buries the shaft (`bury_shaft()`: every `down` tile cleared, `ladder` null, and
+  the Hoe can't dig a new staircase while `pocket.opened`), so it's the pocket or the next floor.
+- Enhanced renderer: the three tiles get their own colours (gold and cyan glow a little) on the
+  mine-wall background, and are in `INTEREST`.
+
 ## Museum exhibits that tell a story (mechanics task 16), 2026-11-19
 
 - `EXHIBITS` in `constants.ts`: Willow Bend (Agate, Willow Chub, Clay Whistle) and Lighthouse Point

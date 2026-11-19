@@ -74,7 +74,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **37. A field notebook.** Record the place, weather, and time for interesting observations. Give the next hint in words such as “near shallow water after rain.”
 - [ ] **38. Read the water before casting.** Give a few fish distinct ripple shapes or preferred pockets. Let the player learn which sign corresponds to each habitat.
 - [x] **39. Set one crab pot or fish trap.** Mark it clearly and let the player check it on the next trip. Start with one spot and one bait decision.
-- [ ] **40. Mine side chambers.** Occasionally offer a visible choice between an ore pocket and the next ladder. Different rock patterns give clues about what the pocket holds.
+- [x] **40. Mine side chambers.** Occasionally offer a visible choice between an ore pocket and the next ladder. Different rock patterns give clues about what the pocket holds.
 
 ## Home and downtime
 

@@ -69,6 +69,9 @@ import {
   SECS_PER_10MIN,
   POSTCARD_MAX,
   EXHIBITS,
+  POCKETS,
+  POCKET_MINUTES,
+  POCKET_STAMINA,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -4291,5 +4294,137 @@ describe('museum exhibits that tell a story (task 16)', () => {
     const h = fresh();
     h.applySaveData(snap);
     assert.deepEqual(h.exhibits_done, ['river']);
+  });
+});
+
+describe('mine side chambers (task 40)', () => {
+  /** A Spring Mine floor with a sealed chamber on it, and the player facing it. */
+  const chamber = async (floor = 6, type: 'spring' | 'lake' = 'spring') => {
+    const g = fresh();
+    quiet(g);
+    for (let i = 0; i < 200 && !g.pocket; i++) g.enter_mine(floor, type);
+    assert.ok(g.pocket, 'a chamber turns up within a few tries');
+    const p = g.pocket;
+    const m = g.map;
+    const side = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).find(([dx, dy]) => m.tile(p.x + dx, p.y + dy) === 'mfloor')!;
+    g.px = p.x + side[0];
+    g.py = p.y + side[1];
+    g.face = [-side[0], -side[1]];
+    delete g.objs.mine[`${g.px},${g.py}`];
+    return g;
+  };
+  const downs = (g: any) => g.map.t.flat().filter((t: string) => t === 'down').length;
+
+  test('a chamber sits in the wall beside open floor, showing its rock pattern', async () => {
+    const g = await chamber();
+    const p = g.pocket;
+    assert.equal(g.map.tile(p.x, p.y), POCKETS[p.kind as keyof typeof POCKETS].tile);
+    assert.equal(p.opened, false);
+    assert.ok(Math.abs(p.x - 3) + Math.abs(p.y - 3) >= 6, 'away from the way in');
+    assert.ok(p.x > 0 && p.y > 0 && p.x < g.map.w - 1 && p.y < g.map.h - 1, 'not in the outer wall');
+    assert.deepEqual(g.facing_action(), { label: 'LOOK', summary: 'Look at the sealed side chamber' });
+    assert.deepEqual(g.context_action(), { key: 'x', label: 'LOOK' });
+  });
+
+  test('no chambers on the first floor or the last, and not on every floor', async () => {
+    const g = fresh();
+    quiet(g);
+    for (let i = 0; i < 30; i++) {
+      g.enter_mine(1);
+      assert.equal(g.pocket, null);
+    }
+    g.enter_mine(255);
+    assert.equal(g.pocket, null);
+    await pinned(0.95, () => g.enter_mine(7));
+    assert.equal(g.pocket, null, 'the chance roll failed');
+  });
+
+  test('leaving it for the ladder changes nothing', async () => {
+    const g = await chamber();
+    const [mins, inv] = [g.minutes, JSON.stringify(g.inv)];
+    g.menu = async () => 1;
+    await g.interact();
+    assert.equal(g.pocket.opened, false);
+    assert.equal(downs(g), 1, 'the way down is still there');
+    assert.deepEqual([g.minutes, JSON.stringify(g.inv)], [mins, inv]);
+  });
+
+  test('breaking in takes time and stamina, gives the pocket, and buries the way down', async () => {
+    const g = await chamber();
+    const p = g.pocket;
+    const [mins, stam, gold] = [g.minutes, g.stamina, g.gold];
+    let info: string[] = [];
+    g.menu = async (_t: string, _o: string[], _s: number, i: string[]) => { info = i; return 0; };
+    await g.interact();
+    assert.match(info.join(' '), /haven't broken into a wall like this before/);
+    assert.match(info.join(' '), /way down would be buried/);
+    assert.equal(g.minutes, mins + POCKET_MINUTES);
+    assert.equal(g.stamina, stam - POCKET_STAMINA);
+    assert.equal(p.opened, true);
+    assert.equal(g.map.tile(p.x, p.y), 'mfloor');
+    assert.equal(downs(g), 0);
+    assert.equal(g.ladder, null);
+    assert.deepEqual(g.pockets_read, [p.kind]);
+    const got = Object.values(g.inv).reduce((a: number, n: any) => a + n, 0) as number;
+    assert.ok(got > 0 || g.gold > gold, 'something came out of the wall');
+    assert.match(g.msgs.at(-1)[0], /way down is buried/);
+    // the Hoe can't dig a new staircase either
+    g.face = [g.face[0] * -1, g.face[1] * -1];
+    await pinned(0.1, () => g.mine_dig(g.px, g.py));
+    assert.equal(downs(g), 0);
+  });
+
+  test('once read, the same pattern tells you what it held last time', async () => {
+    const g = await chamber();
+    g.pockets_read = [g.pocket.kind];
+    let info: string[] = [];
+    g.menu = async (_t: string, _o: string[], _s: number, i: string[]) => { info = i; return 1; };
+    await g.interact();
+    assert.ok(info.includes(`  Last time, a wall like this hid ${POCKETS[g.pocket.kind as keyof typeof POCKETS].holds}.`), info.join(' | '));
+  });
+
+  test('each pattern holds its own kind of find', () => {
+    const g = fresh();
+    g.mine_type = 'spring';
+    g.mine_floor = 14;
+    assert.deepEqual(g.pocket_loot('geode'), { items: { Adamantite: 1 }, gold: 0 });
+    const seam = g.pocket_loot('seam');
+    assert.equal(Object.values(seam.items).reduce((a: number, n: any) => a + n, 0), 3);
+    assert.ok(!('Junk Ore' in seam.items));
+    const moss = g.pocket_loot('moss');
+    assert.equal(moss.items['Black Grass'], 2);
+    assert.ok(moss.gold >= 40 && moss.gold <= 90);
+    g.mine_type = 'lake';
+    g.mine_floor = 3;
+    assert.deepEqual(g.pocket_loot('geode').items, { Fluorite: 1 });
+  });
+
+  test('too tired to break in', async () => {
+    const g = await chamber();
+    g.stamina = POCKET_STAMINA - 1;
+    g.menu = async () => 0;
+    await g.interact();
+    assert.equal(g.pocket.opened, false);
+    assert.equal(downs(g), 1);
+  });
+
+  test('a sealed chamber, or a buried shaft, survives a reload', async () => {
+    const g = await chamber();
+    const p = { ...g.pocket };
+    const h = fresh();
+    h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.deepEqual(h.pocket, p);
+    assert.equal(h.maps.mine.tile(p.x, p.y), POCKETS[p.kind as keyof typeof POCKETS].tile);
+    g.menu = async () => 0;
+    await g.interact();
+    const k = fresh();
+    k.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.equal(k.pocket.opened, true);
+    assert.equal(k.maps.mine.t.flat().filter((t: string) => t === 'down').length, 0);
+    assert.deepEqual(k.pockets_read, [p.kind]);
+    const bad = fresh();
+    bad.applySaveData({ ...JSON.parse(JSON.stringify(g.snapshot())), pocket: { x: 'a', kind: 'gold' }, pockets_read: ['moss', 'nope', 'moss'] });
+    assert.equal(bad.pocket, null);
+    assert.deepEqual(bad.pockets_read, ['moss']);
   });
 });
