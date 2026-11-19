@@ -3177,6 +3177,7 @@ Object.assign(ITEMS, {
   "Burbot": [180, 11, "fish"],
   "Elder Sturgeon": [800, 50, "fish"],
   // Lighthouse Point sea fish
+  "Crab": [180, 12, "fish"],
   "Mackerel": [90, 7, "fish"],
   "Rockfish": [130, 9, "fish"],
   "Sea Bass": [220, 13, "fish"],
@@ -3575,6 +3576,13 @@ export const ORDER_GAP = 2;
  */
 export const COMPOST_SCRAPS = 5;
 export const COMPOST_BONUS = 1;
+
+/**
+ * One crab pot (mechanics task 39): Kai's old pot hangs off the end of the Mineral Beach pier, at
+ * [map, x, y] (a water tile; you stand on the pier end just north of it). Set it one day, haul it on
+ * a later trip. The bait decision: a fish draws crabs; unbaited it is a gamble.
+ */
+export const TRAP_SPOT: [string, number, number] = ['beach', 32, 20];
 
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows

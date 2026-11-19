@@ -98,6 +98,7 @@ import {
   SEED_SAVING,
   COMPOST_SCRAPS,
   COMPOST_BONUS,
+  TRAP_SPOT,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -521,6 +522,8 @@ export class Game {
   /** Scraps on the compost heap, and the farm tiles dressed with compost (task 18). */
   compost_scraps: number = 0;
   composted: string[] = [];
+  /** The crab pot off the pier (task 39): the day it was set and its bait, or null while it is up. */
+  trap: { day: number; bait: string | null } | null = null;
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -598,7 +601,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -736,6 +739,7 @@ export class Game {
     this.reminders = [];
     this.compost_scraps = 0;
     this.composted = [];
+    this.trap = null;
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1086,6 +1090,8 @@ export class Game {
       this.order = sanitizeOrder(this.order);
       this.reminders = sanitizeReminders(this.reminders, this.absday());
       this.compost_scraps = Math.max(0, Math.floor(Number(this.compost_scraps) || 0));
+      const tr: any = this.trap;
+      this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
       this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
@@ -2176,7 +2182,9 @@ export class Game {
       }
       await this.spend(2);
     } else if (t === 'Fishing Rod') {
-      if (tile === 'water' || tile === 'pond') {
+      if (this.at_trap(tx, ty)) {
+        this.msg("That's the crab pot's rope. Press X to check the pot, or cast to one side.", '08');
+      } else if (tile === 'water' || tile === 'pond') {
         await this.fish();
       } else {
         this.msg('You need to face water to cast your Fishing Rod.');
@@ -2344,6 +2352,91 @@ export class Game {
     if (!f || f.season !== this.season_name) return null;
     if (f.first === null) return 'too late to ripen';
     return f.repeats.length ? `ready ${f.season.slice(0, 3)} ${f.first}, ${f.repeats.length + 1} pickings` : `ready ${f.season.slice(0, 3)} ${f.first}`;
+  }
+
+  // ---------------------------------------------------------------- crab pot (mechanics task 39)
+  at_trap(x: number, y: number): boolean {
+    return this.mapname === TRAP_SPOT[0] && x === TRAP_SPOT[1] && y === TRAP_SPOT[2];
+  }
+
+  /** 'up' (on the pier, empty), 'set' (down, not yet a day), or 'ready' (set on an earlier day). */
+  trap_state(): 'up' | 'set' | 'ready' {
+    if (!this.trap) return 'up';
+    return this.absday() > this.trap.day ? 'ready' : 'set';
+  }
+
+  /** The cheapest fish in the rucksack, for bait. */
+  trap_bait(): string | null {
+    const fish = Object.keys(this.inv).filter((i) => (this.inv[i] || 0) > 0 && ITEMS[i]?.[2] === 'fish');
+    fish.sort((a, b) => (ITEMS[a][0] || 0) - (ITEMS[b][0] || 0) || a.localeCompare(b));
+    return fish[0] ?? null;
+  }
+
+  /** Lower the pot, baited with a fish from the rucksack or not. */
+  trap_set(bait: string | null): boolean {
+    if (this.trap) return false;
+    if (bait) {
+      if ((this.inv[bait] || 0) <= 0 || ITEMS[bait]?.[2] !== 'fish') return false;
+      this.take(bait, 1);
+    }
+    this.trap = { day: this.absday(), bait };
+    this.msg(
+      bait
+        ? `You baited the crab pot with a ${bait} and lowered it. Haul it on your next trip.`
+        : 'You lowered the crab pot without bait. Haul it on your next trip and see what wandered in.',
+      '0B',
+    );
+    return true;
+  }
+
+  /** Pull the pot up: a baited pot holds two crabs (sometimes a mackerel too); an unbaited one is a gamble. */
+  trap_haul(): string | null {
+    if (this.trap_state() !== 'ready') return null;
+    const baited = !!this.trap!.bait;
+    this.trap = null;
+    const r = py_rng().random();
+    const got: [string, number][] = baited
+      ? r < 0.3 ? [['Crab', 2], ['Mackerel', 1]] : [['Crab', 2]]
+      : r < 0.4 ? [['Crab', 1]] : r < 0.8 ? [['Small Fish', 1]] : [];
+    for (const [item, n] of got) {
+      this.give(item, n);
+      this.fish_caught[item] = (this.fish_caught[item] || 0) + n;
+    }
+    const line = got.length
+      ? `You hauled up the crab pot: ${andList(got.map(([i, n]) => `${n} ${i}`))}!`
+      : 'You hauled up the crab pot: just seaweed. A fish for bait would do better.';
+    this.msg(line, got.length ? '0B' : '08');
+    if (this.mapname === TRAP_SPOT[0]) this.fx_add('splash', TRAP_SPOT[1], TRAP_SPOT[2]);
+    return line;
+  }
+
+  /** The pot at the end of the pier: set it with a bait decision, or haul it on a later day. */
+  async trap_menu(): Promise<void> {
+    while (true) {
+      const st = this.trap_state();
+      if (st === 'set') {
+        const b = this.trap!.bait;
+        await this.say(`The crab pot is down${b ? `, baited with a ${b}` : ', unbaited'}. Haul it tomorrow or on any later trip.`, null);
+        return;
+      }
+      if (st === 'ready') {
+        const line = this.trap_haul();
+        if (line) await this.say(line, null);
+        continue;
+      }
+      const bait = this.trap_bait();
+      const info = [
+        "  Kai's old crab pot hangs off the end of the pier.",
+        '  Set it now and haul it on your next trip (tomorrow or later).',
+        '  A fish for bait draws crabs: 2 Crab, sometimes a Mackerel too.',
+        '  Unbaited it is a gamble: a Crab, a Small Fish, or seaweed.',
+      ];
+      const opts = [...(bait ? [`Bait with a ${bait} and lower it`] : []), 'Lower it without bait', 'Leave'];
+      const sel = await this.menu('Crab Pot', opts, 0, bait ? info : [...info, '  (No fish in your rucksack to use as bait.)']);
+      if (sel === null || opts[sel] === 'Leave') return;
+      this.trap_set(opts[sel].startsWith('Bait') ? bait : null);
+      return;
+    }
   }
 
   // ---------------------------------------------------------------- compost (mechanics task 18)
@@ -2722,6 +2815,11 @@ export class Game {
       } else {
         await this.say(`...Kappa emerges from the lake, munches your Cucumber, and vanishes. (${this.kappa_gifts}/10 for Mystic Berry)`, 'Kappa');
       }
+      return;
+    }
+
+    if (this.at_trap(tx, ty)) {
+      await this.trap_menu();
       return;
     }
 
@@ -4877,6 +4975,11 @@ export class Game {
       lines.push(`  ★ ${when === 'today' ? 'Today' : when === 'tomorrow' ? 'Tomorrow' : `${absdayLabel(r.day, false)} (${when})`}: ${r.text}`);
     }
     if (soon.length) lines.push('');
+    const pot = this.trap_state();
+    if (pot !== 'up') {
+      lines.push(pot === 'ready' ? '  Pot    The crab pot off the beach pier is ready to haul.' : '  Pot    Crab pot set off the beach pier: haul it tomorrow.');
+      lines.push('');
+    }
     lines.push(`  Ship   ${binValue ? `${binValue}G waiting` : 'empty'}`);
     lines.push(`         ${ship}`);
     lines.push(`  Water  ${this.crop_water_count()} crop${this.crop_water_count() === 1 ? '' : 's'} still dry`);
@@ -5300,6 +5403,14 @@ export class Game {
       const st = this.stall_state();
       return { label: 'STALL', summary: st === 'ready' ? 'Stock your stall' : st === 'open' ? 'Check your stall' : 'Read the market sign' };
     }
+    if (this.at_trap(tx, ty)) {
+      const st = this.trap_state();
+      return st === 'ready'
+        ? { label: 'HAUL', summary: 'Haul the crab pot' }
+        : st === 'set'
+          ? { label: 'CHECK', summary: 'Crab pot: haul it tomorrow' }
+          : { label: 'SET', summary: 'Set the crab pot' };
+    }
     if (tile === 'maker') {
       const maker = this.maker_at(tx, ty);
       if (maker) {
@@ -5360,6 +5471,10 @@ export class Game {
     if (tile === 'tv') return { key: 'x', label: 'WATCH' };
     if (tile === 'cal') return { key: 'x', label: 'CALENDAR' };
     if (tile === 'stall') return { key: 'x', label: 'STALL' };
+    if (this.at_trap(tx, ty)) {
+      const st = this.trap_state();
+      return { key: 'x', label: st === 'ready' ? 'HAUL' : st === 'set' ? 'CHECK' : 'SET' };
+    }
     if (tile === 'maker') {
       const maker = this.maker_at(tx, ty);
       if (maker) {
@@ -7210,6 +7325,10 @@ export class Game {
       if (this.composted.includes(pKey)) tag.compost = true;
       return tag;
     }
+    if (name === TRAP_SPOT[0] && x === TRAP_SPOT[1] && y === TRAP_SPOT[2]) {
+      tag.trap = this.trap_state();
+      return tag;
+    }
     if (name === 'mountain' && this.season === 3 && t === 'water' && x >= 13 && x <= 17 && y >= 7 && y <= 14) {
       tag.t = 'ice';
       return tag;
@@ -7230,6 +7349,11 @@ export class Game {
       // grey when shut, orange while it can be stocked, green while it is trading
       const st = this.stall_state();
       return [TILES.stall[0], st === 'open' ? '0B' : st === 'ready' ? '09' : '03', TILES.stall[2], st === 'open' || st === 'ready'];
+    }
+    if (name === TRAP_SPOT[0] && x === TRAP_SPOT[1] && y === TRAP_SPOT[2]) {
+      // the pot's float: grey while the pot is up on the pier, orange while it soaks, green when it is ready
+      const st = this.trap_state();
+      return ['¤', st === 'ready' ? '0B' : st === 'set' ? '09' : '03', '00', st !== 'up'];
     }
     if (t === 'maker') {
       // grey when empty, orange while a batch works, green once it is ready to collect
