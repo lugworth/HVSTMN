@@ -101,6 +101,7 @@ import {
   TRAP_SPOT,
   MUSHROOM_FLUSH,
   FLUSH_COUNT,
+  DOG_CLUE_AFF,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -529,6 +530,8 @@ export class Game {
   /** The absolute day of the last mushroom flush in Cedar Hollow, and where it came up (task 35). */
   flush_day: number = -1;
   flush_spots: string[] = [];
+  /** This morning's scent from the dog (task 29): what it points at, and where. */
+  dog_clue: { day: number; map: string; key: string; kind: 'dig' | 'mushroom' } | null = null;
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -606,7 +609,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -747,6 +750,7 @@ export class Game {
     this.trap = null;
     this.flush_day = -1;
     this.flush_spots = [];
+    this.dog_clue = null;
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1099,6 +1103,11 @@ export class Game {
       this.compost_scraps = Math.max(0, Math.floor(Number(this.compost_scraps) || 0));
       this.flush_day = Number.isInteger(this.flush_day) ? this.flush_day : -1;
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
+      const dc: any = this.dog_clue;
+      this.dog_clue =
+        dc && Number.isInteger(dc.day) && typeof dc.map === 'string' && this.maps[dc.map] && typeof dc.key === 'string' && (dc.kind === 'dig' || dc.kind === 'mushroom')
+          ? { day: dc.day, map: dc.map, key: dc.key, kind: dc.kind }
+          : null;
       const tr: any = this.trap;
       this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
@@ -3080,7 +3089,12 @@ export class Game {
     const h = Math.floor(this.dog_aff / 10);
     const bar = `[${'#'.repeat(h)}${'.'.repeat(10 - h)}]`;
     const opts = ['Pet & Hug Dog', 'Play Fetch with Dog Ball', 'Practice Beach Frisbee', 'Leave'];
-    const sel = await this.menu(`Doghouse — Dog ${bar} (Max Frisbee: ${this.dog_frisbee_dist}m)`, opts);
+    const scent = this.dog_clue_live()
+      ? [`  It keeps pointing its nose one way: ${this.dog_clue_text()}.`]
+      : this.dog_aff < DOG_CLUE_AFF
+        ? ['  A dog you spend time with will start sniffing out things in the valley.']
+        : [];
+    const sel = await this.menu(`Doghouse — Dog ${bar} (Max Frisbee: ${this.dog_frisbee_dist}m)`, opts, 0, scent);
     if (sel === 0) {
       this.dog_aff = Math.min(100, this.dog_aff + 3);
       this.fx_add('emote', 21, 6, 1.0, { emote: 'heart' });
@@ -4987,6 +5001,10 @@ export class Game {
       lines.push(`  ★ ${when === 'today' ? 'Today' : when === 'tomorrow' ? 'Tomorrow' : `${absdayLabel(r.day, false)} (${when})`}: ${r.text}`);
     }
     if (soon.length) lines.push('');
+    if (this.dog_clue_live()) {
+      lines.push(`  Dog    Picked up a scent: ${this.dog_clue_text()}.`);
+      lines.push('');
+    }
     const flush = this.flush_left();
     if (flush) {
       lines.push(`  Hollow ${flush} mushroom${flush === 1 ? '' : 's'} came up in Cedar Hollow after the rain.`);
@@ -7118,6 +7136,7 @@ export class Game {
     this.spawn_forage();
     if (rainedYesterday) this.mushroom_flush(report);
     this.spawn_digs();
+    this.dog_morning(report);
     this.talked = new Set();
     this.gifted = new Set();
     this.prayed = false;
@@ -7248,6 +7267,58 @@ export class Game {
   flush_coming(): boolean {
     const [s] = this.fest_date(1);
     return (this.weather === 'Rain' || this.weather === 'Typhoon') && this.flush_pool(SEASONS[s]).length > 0;
+  }
+
+  // ---------------------------------------------------------------- a pet's morning clue (mechanics task 29)
+  /** Is the thing the dog smelled still out there today? */
+  dog_clue_live(): boolean {
+    const c = this.dog_clue;
+    if (!c || c.day !== this.absday()) return false;
+    if (c.kind === 'dig') return this.objs[c.map]?.[c.key] === 'dig';
+    return !!this.forage[c.map]?.[c.key];
+  }
+
+  /** "the north-east of Cedar Hollow" for a tile, by thirds of the map. */
+  area_name(map: string, key: string): string {
+    const m = this.maps[map];
+    const [x, y] = parseCoordKey(key);
+    const ns = y < m.h / 3 ? 'north' : y >= (2 * m.h) / 3 ? 'south' : '';
+    const ew = x < m.w / 3 ? 'west' : x >= (2 * m.w) / 3 ? 'east' : '';
+    const part = ns && ew ? `${ns}-${ew}` : ns || ew;
+    return part ? `the ${part} of ${m.title}` : `the middle of ${m.title}`;
+  }
+
+  /** "mushrooms after the rain, in the north-east of Cedar Hollow" */
+  dog_clue_text(): string | null {
+    const c = this.dog_clue;
+    if (!c) return null;
+    const what = c.kind === 'mushroom' ? 'mushrooms after the rain' : 'a fresh dig spot';
+    return `${what}, in ${this.area_name(c.map, c.key)}`;
+  }
+
+  /**
+   * Each morning a well-loved dog picks up a scent: a flush mushroom if there are any, else a fresh
+   * dig spot away from the farm. Nothing is made up: the clue points at something already there.
+   */
+  dog_morning(report: string[]): void {
+    this.dog_clue = null;
+    if (this.dog_aff < DOG_CLUE_AFF) return;
+    const today = this.absday();
+    const flush = this.flush_day === today ? this.flush_spots.filter((k) => this.forage['woods']?.[k]) : [];
+    const rng = py_rng();
+    if (flush.length) {
+      this.dog_clue = { day: today, map: 'woods', key: rng.choice(flush), kind: 'mushroom' };
+    } else {
+      const digs: [string, string][] = [];
+      for (const map of DIG_MAPS) {
+        if (map === 'farm' || !this.maps[map]) continue;
+        for (const [k, o] of Object.entries(this.objs[map] || {})) if (o === 'dig') digs.push([map, k]);
+      }
+      if (!digs.length) return;
+      const [map, key] = rng.choice(digs.sort());
+      this.dog_clue = { day: today, map, key, kind: 'dig' };
+    }
+    report.push(`Your dog kept its nose to the ground this morning: ${this.dog_clue_text()}.`);
   }
 
   /** A free patch of open field on the farm (no soil, crop or object), or null. */

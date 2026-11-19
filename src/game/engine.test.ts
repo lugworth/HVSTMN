@@ -48,6 +48,7 @@ import {
   TRAP_SPOT,
   MUSHROOM_FLUSH,
   FLUSH_COUNT,
+  DOG_CLUE_AFF,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3092,5 +3093,92 @@ describe('weather worth exploring: a mushroom flush after rain (task 35)', () =>
     assert.equal(h.flush_day, g.flush_day);
     assert.deepEqual(h.flush_spots, g.flush_spots);
     assert.equal(h.flush_left(), g.flush_left());
+  });
+});
+
+describe("a pet's morning clue (task 29)", () => {
+  /** A farm whose only dig spot away from home is at Willow Bend (10, 4). */
+  const withDig = () => {
+    const g = fresh();
+    g.first_steps = null;
+    for (const m of Object.keys(g.objs)) for (const [k, o] of Object.entries(g.objs[m])) if (o === 'dig') delete g.objs[m][k];
+    (g.objs.river ||= {})['10,4'] = 'dig';
+    g.dog_aff = DOG_CLUE_AFF;
+    return g;
+  };
+
+  test('a well-loved dog points at a real dig spot, named by area', () => {
+    const g = withDig();
+    const report: string[] = [];
+    g.dog_morning(report);
+    assert.deepEqual(g.dog_clue, { day: g.absday(), map: 'river', key: '10,4', kind: 'dig' });
+    assert.equal(g.area_name('river', '10,4'), `the north-west of ${g.maps.river.title}`);
+    assert.deepEqual(report, [`Your dog kept its nose to the ground this morning: a fresh dig spot, in the north-west of ${g.maps.river.title}.`]);
+    assert.ok(g.today_lines().includes(`  Dog    Picked up a scent: a fresh dig spot, in the north-west of ${g.maps.river.title}.`));
+    // dug up: the clue is spent
+    delete g.objs.river['10,4'];
+    assert.equal(g.dog_clue_live(), false);
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Dog ')));
+  });
+
+  test('a flush mushroom comes first, and the clue is only good for the day', () => {
+    const g = withDig();
+    g.mushroom_flush([]);
+    g.dog_morning([]);
+    assert.equal(g.dog_clue.kind, 'mushroom');
+    assert.equal(g.dog_clue.map, 'woods');
+    assert.ok(g.flush_spots.includes(g.dog_clue.key));
+    assert.match(g.dog_clue_text(), /^mushrooms after the rain, in the .+ of Cedar Hollow$/);
+    g.day += 1;
+    assert.equal(g.dog_clue_live(), false);
+  });
+
+  test('a neglected dog notices nothing, and there is nothing to make up when nothing is out there', () => {
+    const g = withDig();
+    g.dog_aff = DOG_CLUE_AFF - 1;
+    const report: string[] = [];
+    g.dog_morning(report);
+    assert.equal(g.dog_clue, null);
+    assert.deepEqual(report, []);
+    const h = withDig();
+    delete h.objs.river['10,4'];
+    h.dog_morning(report);
+    assert.equal(h.dog_clue, null);
+    assert.deepEqual(report, []);
+  });
+
+  test('the doghouse says where it is pointing, or how to get it started', async () => {
+    const g = withDig();
+    g.dog_morning([]);
+    let info: string[] = [];
+    g.menu = async (_t: string, _o: string[], _s = 0, i: any = null) => {
+      info = i || [];
+      return null;
+    };
+    await g.dog_menu();
+    assert.deepEqual(info, [`  It keeps pointing its nose one way: a fresh dig spot, in the north-west of ${g.maps.river.title}.`]);
+    g.dog_aff = 10;
+    g.dog_clue = null;
+    await g.dog_menu();
+    assert.deepEqual(info, ['  A dog you spend time with will start sniffing out things in the valley.']);
+  });
+
+  test('the clue is part of a real morning and survives a reload', async () => {
+    const g = withDig();
+    quiet(g);
+    g.dog_aff = 80;
+    for (let i = 0; i < 20; i++) g.scr.pushKey('enter');
+    await g.new_day('sleep');
+    assert.ok(g.dog_clue && g.dog_clue.day === g.absday(), 'the Willow Bend dig is still out there, so the dog finds something');
+    assert.equal(g.dog_clue_live(), true);
+    g.dog_clue = { day: g.absday(), map: 'river', key: '10,4', kind: 'dig' };
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.dog_clue, g.dog_clue);
+    snap.dog_clue = { day: 1, map: 'nowhere', key: '1,1', kind: 'dig' };
+    const k = fresh();
+    k.applySaveData(snap);
+    assert.equal(k.dog_clue, null);
   });
 });
