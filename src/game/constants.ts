@@ -3785,6 +3785,28 @@ export const FAVOR_WATER_MAX = 12;
 export const FAVOR_SHOPS = ['supermarket', 'blacksmith', 'poultry', 'carpenter', 'clinic', 'library'];
 
 /**
+ * Museum exhibits that tell a story (mechanics task 16): an ore, a fish and a relic from one region.
+ * When all three are donated the curator sets them out together, reads the exhibit's note and gives
+ * a lead to another discovery.
+ */
+export const EXHIBITS: { id: string; title: string; pieces: string[]; note: string; lead: string }[] = [
+  {
+    id: 'river',
+    title: 'Willow Bend: the old ferry crossing',
+    pieces: ['Agate', 'Willow Chub', 'Clay Whistle'],
+    note: 'River-rolled agate, a chub from the shallows and the whistle the ferryman blew to call the boat across. Before the footbridge, the river was the road.',
+    lead: 'The ferry carried goods down to the sea. Glass floats from the old fishing nets still wash up at Lighthouse Point.',
+  },
+  {
+    id: 'coast',
+    title: 'Lighthouse Point: the fishing fleet',
+    pieces: ['Sand Rose', 'Mackerel', 'Glass Float'],
+    note: 'A sand rose from the dunes, the mackerel the fleet lived on, and a float from their nets. The lighthouse kept them all coming home.',
+    lead: "The keeper's log speaks of a silver fish that only bites off the Point in a storm. No one has ever donated one.",
+  },
+];
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.

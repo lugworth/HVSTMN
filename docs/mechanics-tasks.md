@@ -41,7 +41,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [ ] **13. Pick a festival role.** At an existing festival, choose to cook, help set up, or join the competition. Reuse the scene and add one distinct interaction for each role.
 - [x] **14. Tiny regional contests.** Try a two-hour evening catch at Willow Bend or a winter forage hunt. Reward one small decoration or an entry in the journal.
 - [ ] **15. Community pantry.** Turn surplus ingredients into a recurring shared meal. A neighbor can teach one new recipe after the first successful dinner.
-- [ ] **16. Museum exhibits that tell a story.** Display an ore, a river fish, and a relic together to tell the story of one region. Add a curator note or a lead to another discovery. [Fields of Mistria’s museum set notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-second-major-update-patch-notes-are-here)
+- [x] **16. Museum exhibits that tell a story.** Display an ore, a river fish, and a relic together to tell the story of one region. Add a curator note or a lead to another discovery. [Fields of Mistria’s museum set notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-second-major-update-patch-notes-are-here)
 
 ## Crops and the farm
 
