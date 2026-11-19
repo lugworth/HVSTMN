@@ -425,6 +425,8 @@ export class Game {
   tool: string = 'Hoe';
   /** A quick seed bag chosen for planting convenience; press S to pin or toggle back to the previous tool. */
   favorite_seed: string | null = null;
+  /** The first-morning checklist (task 50): which steps are done, or null once it is finished or hidden. */
+  first_steps: { till: boolean; sow: boolean; water: boolean } | null = null;
   /** The tool active before the current seed-bag shortcut toggled in. */
   previous_tool: string | null = null;
   levels: Record<string, number> = {};
@@ -564,7 +566,7 @@ export class Game {
   SAVE_FIELDS = [
     'name', 'farm', 'year', 'season', 'day', 'minutes', 'weather', 'tomorrow', 'gold',
     'stamina', 'max_stamina', 'fatigue', 'power_berries', 'berry_sources', 'has_mystic_berry',
-    'inv', 'held', 'tool', 'favorite_seed', 'previous_tool', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
+    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
     'water', 'upgrading', 'bin', 'basket', 'shipped_counts', 'chickens', 'chicken_aff', 'chicken_fest_won',
     'outdoor_hours', 'animals_grazing', 'incubator_days', 'fed', 'eggs', 'dog_aff', 'dog_frisbee_dist',
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
@@ -640,6 +642,7 @@ export class Game {
     this.held = null;
     this.tool = 'Hoe';
     this.favorite_seed = null;
+    this.first_steps = { till: false, sow: false, water: false };
     this.previous_tool = null;
     this.levels = Object.fromEntries(UPGRADABLE.map((t) => [t, 0]));
     this.tool_exp = Object.fromEntries(UPGRADABLE.map((t) => [t, 0]));
@@ -1004,6 +1007,9 @@ export class Game {
         }
       }
       this.inv = sanitizeStringRecordNumber(this.inv);
+      // an older save (no checklist saved) is an experienced farm: no first-morning checklist
+      const fs = 'first_steps' in d ? d.first_steps : null;
+      this.first_steps = fs && typeof fs === 'object' ? { till: !!fs.till, sow: !!fs.sow, water: !!fs.water } : null;
       this.bin = sanitizeStringRecordNumber(this.bin);
       this.basket = sanitizeStringRecordNumber(this.basket);
       this.shipped_counts = sanitizeStringRecordNumber(this.shipped_counts);
@@ -1252,6 +1258,7 @@ export class Game {
       }
     } else if (k === 'space' || k === 'z') {
       await this.use_tool();
+      this.first_steps_update();
     } else if (k === 'x' || k === 'e' || k === 'enter') {
       await this.interact();
     } else if (k === 'tab') {
@@ -1409,6 +1416,9 @@ export class Game {
         right: this.scr.accessibleCues ? 'ON' : 'OFF',
         rightCol: this.scr.accessibleCues ? '0B' : '03',
       },
+      ...(this.first_steps
+        ? [{ key: 'firststeps', raw: 'Hide First-Morning Checklist', label: 'Hide First-Morning Checklist', icon: '✓', iconCol: '0B', right: 'Hide', rightCol: '04' }]
+        : []),
       { key: 'export', raw: 'Export Save File', label: 'Export Save File', icon: '↗', iconCol: '04', right: 'JSON', rightCol: '03' },
       { key: 'import', raw: 'Import Save File', label: 'Import Save File', icon: '↙', iconCol: '04', right: 'JSON', rightCol: '03' },
     ];
@@ -1488,6 +1498,9 @@ export class Game {
       this.export_save();
     } else if (key === 'import') {
       await this.import_save();
+    } else if (key === 'firststeps') {
+      this.first_steps = null;
+      this.msg('First-morning checklist hidden.', '0C');
     } else if (key === 'cues') {
       this.scr.accessibleCues = !this.scr.accessibleCues;
       this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');
@@ -1817,6 +1830,48 @@ export class Game {
     const i = tl.includes(this.tool) ? tl.indexOf(this.tool) : 0;
     const nextIdx = ((i + d) % tl.length + tl.length) % tl.length;
     this.tool = tl[nextIdx];
+  }
+
+  // ---------------------------------------------------------------- first-morning checklist (mechanics task 50)
+  /** The checklist's three steps, in order, with whether each is done. */
+  first_steps_rows(): { key: 'till' | 'sow' | 'water'; label: string; done: boolean }[] {
+    const f = this.first_steps;
+    if (!f) return [];
+    return [
+      { key: 'till', label: 'Till soil with the Hoe', done: f.till },
+      { key: 'sow', label: 'Sow your Turnip Seeds', done: f.sow },
+      { key: 'water', label: 'Water the seeds', done: f.water },
+    ];
+  }
+
+  /** How to do the next step, in a line for messages and Today's Plan. */
+  first_steps_hint(key: 'till' | 'sow' | 'water'): string {
+    if (key === 'till') return 'Equip the Hoe (2) and press SPACE on the field south of your house.';
+    if (key === 'sow') return 'Equip the Turnip Seeds (F) and press SPACE on the tilled soil.';
+    return 'Equip the Watering Can (5) and press SPACE on the seeds; refill it at a pond.';
+  }
+
+  /** Tick off steps from what is on the farm; say what is next, and close the list when all are done. */
+  first_steps_update(): void {
+    const f = this.first_steps;
+    if (!f) return;
+    const crops = Object.entries(this.crops).filter(([, c]) => c[0] !== 'Grass');
+    const now = {
+      till: f.till || this.tilled.size > 0,
+      sow: f.sow || crops.length > 0,
+      water: f.water || crops.some(([k]) => this.wet.has(k)),
+    };
+    const newly = (['till', 'sow', 'water'] as const).filter((k) => now[k] && !f[k]);
+    if (!newly.length) return;
+    Object.assign(f, now);
+    const next = this.first_steps_rows().find((r) => !r.done);
+    if (!next) {
+      this.first_steps = null;
+      this.msg('✓ First morning done! Water them daily; turnips are ready in 4 days. Zack ships the bin at 5 PM.', '0B');
+      return;
+    }
+    const did = { till: 'Tilled the soil', sow: 'Sowed your first seeds', water: 'Watered them' }[newly[newly.length - 1]];
+    this.msg(`✓ ${did}. Next: ${next.label.toLowerCase()}.`, '0B');
   }
 
   /** Pin a seed bag for fast planting and return to the previous tool with one action. */
@@ -4701,6 +4756,14 @@ export class Game {
     lines.push(`  ${this.date_str()} — ${this.weather}`);
     lines.push(`  Tomorrow: ${this.tomorrow}`);
     lines.push('');
+    if (this.first_steps) {
+      const rows = this.first_steps_rows();
+      lines.push(`  First morning  ${rows.map((r) => `[${r.done ? '✓' : ' '}] ${r.label.split(' ')[0]}`).join('  ')}`);
+      const next = rows.find((r) => !r.done);
+      if (next) lines.push(`         ${this.first_steps_hint(next.key)}`);
+      lines.push('         (Hide this list in the Diary.)');
+      lines.push('');
+    }
     lines.push(`  Ship   ${binValue ? `${binValue}G waiting` : 'empty'}`);
     lines.push(`         ${ship}`);
     lines.push(`  Water  ${this.crop_water_count()} crop${this.crop_water_count() === 1 ? '' : 's'} still dry`);
@@ -7265,6 +7328,19 @@ export class Game {
       } else {
         pair(y++, 'FACING', facing.replace(' / ', ' ').replace(' stamina', 'st'), '0E');
       }
+    }
+    if (this.first_steps && y + 2 < end - 1) {
+      // two rows: the heading, then "✓ Till ○ Sow ○ Water" with each step lit once done
+      y += 1;
+      line(y++, 'FIRST MORNING', '0C');
+      let cx = x;
+      for (const r of this.first_steps_rows()) {
+        const seg = `${r.done ? '✓' : '○'} ${r.label.split(' ')[0]} `;
+        if (cx + seg.trimEnd().length > x + w) break;
+        s.put(cx, y, seg, r.done ? '0B' : '04', '00', r.done);
+        cx += seg.length;
+      }
+      y++;
     }
     const locFull = this.map.title + (this.map.indoor ? ' / Indoors' : '');
     if (y + 1 < end) {
