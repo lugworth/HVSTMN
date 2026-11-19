@@ -146,6 +146,11 @@ import {
   FAVOR_GAP,
   FAVOR_WATER_MAX,
   FAVOR_SHOPS,
+  OUTINGS,
+  OUTING_FRIENDSHIP,
+  OUTING_MINUTES,
+  OUTING_FRIEND,
+  OUTING_GAP,
 } from './constants';
 import type { ValleyLandmark, DayPace } from './constants';
 import type { CatchOdds, MakerStep } from './rules';
@@ -625,6 +630,8 @@ export class Game {
   favor: { npc: string; day: number } | null = null;
   /** When each neighbor last offered a favor (absolute day), so offers stay occasional. */
   favor_offered: Record<string, number> = {};
+  /** When each friend last invited you on an outing (task 02, absolute day), accepted or not. */
+  outing_asked: Record<string, number> = {};
   /** Named farm plots (task 42): where each sign stands, its name, and the tile it replaced. */
   plots: { key: string; name: string; tile: string }[] = [];
   /** Absolute day the board may post its next order. */
@@ -704,7 +711,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'postcards', 'contest', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'postcards', 'contest', 'favor', 'favor_offered', 'outing_asked',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -894,6 +901,7 @@ export class Game {
     this.contest = null;
     this.favor = null;
     this.favor_offered = {};
+    this.outing_asked = {};
     this.clear_plots();
     this.plots = [];
     this.order_last = null;
@@ -1289,6 +1297,9 @@ export class Game {
       this.favor = fv && typeof fv === 'object' && FAVORS[fv.npc] && Number.isInteger(fv.day) && fv.day >= this.absday() ? { npc: fv.npc, day: fv.day } : null;
       this.favor_offered = Object.fromEntries(
         Object.entries(this.favor_offered && typeof this.favor_offered === 'object' ? this.favor_offered : {}).filter(([k, v]) => FAVORS[k] && Number.isInteger(v)),
+      ) as Record<string, number>;
+      this.outing_asked = Object.fromEntries(
+        Object.entries(this.outing_asked && typeof this.outing_asked === 'object' ? this.outing_asked : {}).filter(([k, v]) => OUTINGS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
       const ct: any = this.contest;
       this.contest = ct && typeof ct === 'object' && Number.isInteger(ct.day) && Number.isInteger(ct.fish) && ct.fish >= 0
@@ -1892,15 +1903,22 @@ export class Game {
     if (!d || !d.out || n === this.married) {
       return false;
     }
-    // Kai is mainly around in Summer unless married or high hearts
-    if (n === 'Kai' && this.season !== 1 && (this.friend['Kai'] || 0) < 60) {
-      return false;
-    }
-    if (this.weather !== 'Sunny' && !d.rain) {
+    if (!this.npc_about_today(n)) {
       return false;
     }
     const [a, b] = d.out;
     return a * 60 <= this.minutes && this.minutes < b * 60;
+  }
+
+  /** Whether `n` goes out at all today (season and weather), whatever the hour. */
+  npc_about_today(n: string): boolean {
+    const d = NPCS[n];
+    if (!d) return false;
+    // Kai is mainly around in Summer unless married or high hearts
+    if (n === 'Kai' && this.season !== 1 && (this.friend['Kai'] || 0) < 60) {
+      return false;
+    }
+    return this.weather === 'Sunny' || !!d.rain;
   }
 
   update_npcs(): void {
@@ -3646,6 +3664,17 @@ export class Game {
       return;
     }
 
+    if (n !== this.married && !this.milestone_line(n) && this.outing_available(n)) {
+      emitNpcEmote('heart');
+      if (!this.talked.has(n)) {
+        this.talked.add(n);
+        this.friend[n] = clamp((this.friend[n] || 0) + 2, 0, 100);
+      }
+      await this.offer_outing(n);
+      await this.check_heart_and_rival_events(n);
+      return;
+    }
+
     let line = '';
     if (n === this.married && this.mapname === 'house') {
       line = py_rng().choice(SPOUSE_LINES);
@@ -3761,6 +3790,59 @@ export class Game {
     if (d !== 0) return null;
     if (f.kind === 'hours') return { text: `${fv.npc}'s note on today's shop hours:`, hours: this.favor_hours() };
     return { text: `Today: ${f.plan} (done this morning).`, hours: [] };
+  }
+
+  // ---------------------------------------------------------------- short outings with villagers (mechanics task 02)
+  /**
+   * Whether `n` could still invite you on an outing today: a good enough friend, out today (season,
+   * weather), no festival, not asked in the last week, and the window not yet over (ten minutes to spare).
+   */
+  outing_open_today(n: string): boolean {
+    const o = OUTINGS[n];
+    if (!o || n === this.married) return false;
+    if ((this.friend[n] || 0) < OUTING_FRIENDSHIP) return false;
+    if (!this.npc_about_today(n) || this.fest_on()) return false;
+    const last = this.outing_asked[n];
+    if (last !== undefined && this.absday() - last < OUTING_GAP) return false;
+    return this.minutes + OUTING_MINUTES <= o.hours[1] * 60;
+  }
+
+  /** Whether `n` would invite you if you talked now: open today, in the window, and out at their spot here. */
+  outing_available(n: string): boolean {
+    const o = OUTINGS[n];
+    if (!o || !this.outing_open_today(n)) return false;
+    return this.mapname === o.map && this.minutes >= o.hours[0] * 60 && this.is_out(n);
+  }
+
+  /** The invitation; going along takes ten minutes, two exchanges, a little friendship and a memory. */
+  async offer_outing(n: string): Promise<void> {
+    const o = OUTINGS[n];
+    this.outing_asked[n] = this.absday();
+    this.markDirty(false);
+    await this.say(o.invite, n);
+    const sel = await this.menu(o.title, ['Go along', 'Not today'], 0, [`About ${OUTING_MINUTES} minutes with ${n}.`]);
+    if (sel !== 0) {
+      await this.say('No worries. Another week, then.', n);
+      return;
+    }
+    for (const ex of o.exchanges) {
+      await this.say(ex.line, n);
+      await this.say(ex.reply, o.title);
+    }
+    await this.advance(OUTING_MINUTES);
+    this.friend[n] = clamp((this.friend[n] || 0) + OUTING_FRIEND, 0, 100);
+    if (o.gift) this.give(o.gift, 1);
+    await this.say(o.close, n);
+    this.remember(n, o.memory, `outing:${n}:${this.year}:${this.season}`);
+    this.msg(`${o.title}: ${n} enjoyed your company${o.gift ? ` and gave you ${aOrAn(o.gift)} ${o.gift}` : ''}.`, '0A');
+  }
+
+  /** The Today's Plan line for an outing that could still happen today, or null. */
+  outing_line(): string | null {
+    const n = Object.keys(OUTINGS).find((k) => this.outing_open_today(k));
+    if (!n) return null;
+    const [a, b] = OUTINGS[n].hours;
+    return `${OUTINGS[n].plan}, ${fmt_hour(a)}–${fmt_hour(b)}. ${n} may ask you along.`;
   }
 
   // ---------------------------------------------------------------- the Evening Catch (mechanics task 14)
@@ -5957,6 +6039,8 @@ export class Game {
       lines.push(`  Favor  ${favor.text}`);
       for (const h of favor.hours) lines.push(`         ${h}`);
     }
+    const outing = this.outing_line();
+    if (outing) lines.push(`  Outing ${outing}`);
     const contest = this.contest_line();
     if (contest) lines.push(`  Catch  ${contest}`);
     const works = this.works_line();
@@ -6153,6 +6237,8 @@ export class Game {
         all.push(...wrapLabeled('♥ Favor ', '0A', favor.text, '05'));
         for (const h of favor.hours) all.push(...wrapLabeled('        ', '04', h, '05'));
       }
+      const outing = this.outing_line();
+      if (outing) all.push(...wrapLabeled('♥ Outing', '0A', outing, '05'));
       const contest = this.contest_line();
       if (contest) all.push(...wrapLabeled('≈ Catch ', '0D', contest, '05'));
       if (works) all.push(...wrapLabeled('═ Bridge', '09', works, '05'));

@@ -1,5 +1,23 @@
 # Handoff: HRVSTMN
 
+## Short outings with villagers (mechanics task 02), 2026-11-19
+
+- `OUTINGS` (constants): Gray walks Ironwood Grove (`grove`, 5-7 PM, his evening out) and Kai fishes
+  off the Mineral Beach pier (`beach`, 9 AM-noon; Kai hands you a Small Fish, a plain `give()`, not
+  `fish()`, so the notebook, catch counts and contest are untouched). Each has an invite, two exchanges
+  (his line, then a narrated reply), a goodbye and a Villager Notes memory.
+- `Game.outing_open_today(n)`: friendship >= `OUTING_FRIENDSHIP` (40), out today (`npc_about_today()`,
+  split out of `is_out()`: Sunny only for both, Kai outside Summer only at 60+), not the spouse, no
+  festival, not asked in the last `OUTING_GAP` (7) days (`outing_asked`, saved, sanitized like
+  `favor_offered`), and `OUTING_MINUTES` (10) left before the window ends. `outing_available(n)` adds
+  being on that map, in the window and `is_out()`.
+- `talk()` invites in place of small talk, after gifts, Gray's request, milestones and favors
+  (`offer_outing()`: "Go along" / "Not today"; either way it counts as asked). Going along: both
+  exchanges, `advance(10)`, +`OUTING_FRIEND` (3) on top of the day's +2 chat, and
+  `remember(..., 'outing:<npc>:<year>:<season>')`, so the journal keeps one per villager a season.
+- Today's Plan (`outing_line()`, both `today_lines()` "Outing" and the `Y` panel "♥ Outing"): "Gray walks
+  Ironwood Grove after the forge, 5PM–7PM. Gray may ask you along." while it can still happen today.
+
 ## Valley postcards (mechanics task 46), 2026-11-19
 
 - Diary → "Take a Postcard": `take_postcard()` calls `capture_scene()`, which renders with `capturing`
