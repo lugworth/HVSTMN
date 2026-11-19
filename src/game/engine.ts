@@ -134,6 +134,7 @@ import {
   VALLEY_SHORT,
   VALLEY_LANDMARKS,
   PUBLIC_WORKS,
+  POSTCARD_MAX,
   CONTEST_MAP,
   CONTEST_WEEKDAY,
   CONTEST_HOURS,
@@ -285,6 +286,39 @@ const ITEM_BADGE: Record<string, [string, string]> = {
 };
 
 /** Task 12: the Willow Bend footbridge project. done_day is the absday it opens (set once everything is in). */
+/** A valley postcard (task 46): the map view as text plus colour codes, and where and when. */
+export interface Postcard {
+  map: string;
+  place: string;
+  day: number;
+  minutes: number;
+  weather: string;
+  rows: string[];
+  /** Per row, two hex digits (an Isotope base16 code) for each cell. */
+  fg: string[];
+}
+
+/** Keep only well-formed postcards (at most POSTCARD_MAX, the newest), clipped to a sane size. */
+export function sanitizePostcards(raw: unknown): Postcard[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Postcard[] = [];
+  for (const p of raw as any[]) {
+    if (!p || typeof p !== 'object' || typeof p.place !== 'string' || !Number.isInteger(p.day) || !Number.isFinite(p.minutes)) continue;
+    if (!Array.isArray(p.rows) || !p.rows.length || p.rows.length > 80 || !p.rows.every((r: unknown) => typeof r === 'string' && r.length <= 200)) continue;
+    const fg = Array.isArray(p.fg) ? p.fg.map((f: unknown) => (typeof f === 'string' && /^([0-9A-F]{2})*$/.test(f) ? f : '')) : [];
+    out.push({
+      map: typeof p.map === 'string' ? p.map : '',
+      place: p.place.slice(0, 40),
+      day: p.day,
+      minutes: p.minutes,
+      weather: typeof p.weather === 'string' ? p.weather.slice(0, 20) : '',
+      rows: p.rows,
+      fg: p.rows.map((_: string, i: number) => fg[i] ?? ''),
+    });
+  }
+  return out.slice(-POSTCARD_MAX);
+}
+
 export interface PublicWorks {
   delivered: Record<string, number>;
   crop: string | null;
@@ -581,6 +615,10 @@ export class Game {
   notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
   /** Seats rested at today (task 44): seat id → absolute day. */
   seats_rested: Record<string, number> = {};
+  /** The postcard album (task 46): a text capture of the map view with where and when it was taken. */
+  postcards: Postcard[] = [];
+  /** True while a postcard is being captured: the map is drawn without overlays. */
+  capturing: boolean = false;
   /** Tonight's Evening Catch (task 14): the day, fish landed and the best one; null when none is under way. */
   contest: { day: number; fish: number; best: string | null } | null = null;
   /** A favor a neighbor promised (task 05): who, and the absolute day it happens. */
@@ -666,7 +704,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'contest', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'postcards', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -852,6 +890,7 @@ export class Game {
     this.souvenirs = [];
     this.notebook = [];
     this.seats_rested = {};
+    this.postcards = [];
     this.contest = null;
     this.favor = null;
     this.favor_offered = {};
@@ -1255,6 +1294,7 @@ export class Game {
       this.contest = ct && typeof ct === 'object' && Number.isInteger(ct.day) && Number.isInteger(ct.fish) && ct.fish >= 0
         ? { day: ct.day, fish: ct.fish, best: typeof ct.best === 'string' && ITEMS[ct.best] ? ct.best : null }
         : null;
+      this.postcards = sanitizePostcards(this.postcards);
       this.seats_rested = Object.fromEntries(
         Object.entries(this.seats_rested && typeof this.seats_rested === 'object' ? this.seats_rested : {}).filter(([k, v]) => SEATS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
@@ -1606,6 +1646,10 @@ export class Game {
       { key: 'resume', raw: 'Resume', label: 'Resume', icon: '↩', iconCol: '0C', right: '[ESC]', rightCol: '0C' },
       { key: 'today', raw: 'Today’s Plan (y)', label: "Today's Plan", icon: '☀', iconCol: '09', right: '[Y]', rightCol: '0C', hotkey: 'y' },
       { key: 'notes', raw: 'Villager Notes (r)', label: 'Villager Notes', icon: '♥', iconCol: '0A', right: '[R]', rightCol: '0C', hotkey: 'r' },
+      { key: 'postcard', raw: 'Take a Postcard', label: 'Take a Postcard', icon: '▭', iconCol: '0C', right: 'Snap', rightCol: '04' },
+      ...(this.postcards.length
+        ? [{ key: 'album', raw: 'Postcard Album', label: 'Postcard Album', icon: '▤', iconCol: '0C', right: `${this.postcards.length}/${POSTCARD_MAX}`, rightCol: '04' }]
+        : []),
       { key: 'notebook', raw: 'Field Notebook', label: 'Field Notebook', icon: '✎', iconCol: '0C', right: `${this.notebook.length} noted`, rightCol: '04' },
       {
         key: 'bag',
@@ -1690,6 +1734,10 @@ export class Game {
       await this.today_panel();
     } else if (key === 'notes') {
       await this.relationships();
+    } else if (key === 'postcard') {
+      await this.take_postcard();
+    } else if (key === 'album') {
+      await this.postcard_album();
     } else if (key === 'notebook') {
       await this.field_notebook();
     } else if (key === 'ranch') {
@@ -4050,6 +4098,144 @@ export class Game {
   }
 
   /** The farmhouse mantel: pick a keepsake to see its date and the day it remembers. */
+  // ---------------------------------------------------------------- valley postcards (mechanics task 46)
+  /** Draw the map view with no overlays and copy it out, trimmed to what is drawn. */
+  capture_scene(): { rows: string[]; fg: string[] } {
+    this.capturing = true;
+    try {
+      this.render();
+    } finally {
+      this.capturing = false;
+    }
+    const v = this.scr.ctx?.view;
+    const buf = this.scr.buf;
+    if (!v) return { rows: [], fg: [] };
+    let [x0, y0, x1, y1] = [Infinity, Infinity, -1, -1];
+    for (let y = v.y; y < v.y + v.h; y++) {
+      for (let x = v.x; x < v.x + v.w; x++) {
+        if ((buf[y]?.[x]?.[0] ?? ' ') === ' ') continue;
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x);
+        y1 = Math.max(y1, y);
+      }
+    }
+    const rows: string[] = [];
+    const fg: string[] = [];
+    for (let y = y0; y <= y1; y++) {
+      let r = '';
+      let f = '';
+      for (let x = x0; x <= x1; x++) {
+        const c = buf[y][x];
+        r += c[0] || ' ';
+        f += /^[0-9A-F]{2}$/.test(c[1]) ? c[1] : '05';
+      }
+      rows.push(r);
+      fg.push(f);
+    }
+    return { rows, fg };
+  }
+
+  /** "Rose Square · Spring 3, Year 1 · 6:20 PM" */
+  postcard_caption(p: Postcard): string {
+    return `${p.place} · ${absdayLabel(p.day)} · ${fmt_time(p.minutes).trim()}`;
+  }
+
+  async take_postcard(): Promise<boolean> {
+    if (this.postcards.length >= POSTCARD_MAX) {
+      if (!(await this.confirm(`The album holds ${POSTCARD_MAX}. Make room by letting the oldest card go?`))) return false;
+      this.postcards.shift();
+    }
+    const { rows, fg } = this.capture_scene();
+    if (!rows.length) return false;
+    const card: Postcard = { map: this.mapname, place: this.map.title, day: this.absday(), minutes: this.minutes, weather: this.map.indoor ? 'Indoors' : this.weather, rows, fg };
+    this.postcards.push(card);
+    this.markDirty(false);
+    this.fx_add('sparkle', this.px, this.py, 0.6);
+    this.msg(`Postcard: ${card.place}, ${absdayLabel(card.day, false)} (${this.postcards.length}/${POSTCARD_MAX}).`, '0C');
+    return true;
+  }
+
+  /** The card as plain text with its caption, for a download. */
+  postcard_text(p: Postcard): string {
+    return [...p.rows.map((r) => r.trimEnd()), '', `${this.postcard_caption(p)} · ${p.weather}`, `${this.name} of ${this.farm} Farm`].join('\n') + '\n';
+  }
+
+  export_postcard(p: Postcard): boolean {
+    const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return this.download_text(`hrvstmn-postcard-${slug(p.place)}-${slug(absdayLabel(p.day))}.txt`, this.postcard_text(p), 'text/plain');
+  }
+
+  /** Save a text file in the browser; false (with a message) elsewhere. */
+  download_text(filename: string, text: string, type: string): boolean {
+    if (typeof document === 'undefined') {
+      this.msg('Saving files is only available in the browser.', '08');
+      return false;
+    }
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  }
+
+  /** Browse the album: newest first; open one to look at it, save it as a text file or let it go. */
+  async postcard_album(): Promise<void> {
+    while (this.postcards.length) {
+      const order = this.postcards.map((_, i) => i).reverse();
+      const opts = [...order.map((i) => `${this.postcards[i].place} · ${absdayLabel(this.postcards[i].day, false)}`), 'Back'];
+      const sel = await this.menu(`▤ Postcards  (${this.postcards.length}/${POSTCARD_MAX})`, opts, 0, (k: number) =>
+        k < order.length ? [this.postcard_caption(this.postcards[order[k]]), `${this.postcards[order[k]].weather}`] : []);
+      if (sel === null || sel >= order.length) return;
+      await this.view_postcard(order[sel]);
+    }
+  }
+
+  async view_postcard(i: number): Promise<void> {
+    while (i >= 0 && i < this.postcards.length) {
+      const p = this.postcards[i];
+      const k = await this.modal(() => this.draw_postcard(p, i));
+      if (k === 'left' || k === 'a' || k === 'h') i = (i + this.postcards.length - 1) % this.postcards.length;
+      else if (k === 'right' || k === 'd' || k === 'l') i = (i + 1) % this.postcards.length;
+      else if (k === 's') {
+        if (this.export_postcard(p)) this.msg(`Saved the ${p.place} postcard as a text file.`, '0B');
+      } else if (k === 'x' || k === 'delete' || k === 'backspace') {
+        if (await this.confirm(`Let the ${p.place} postcard go?`)) {
+          this.postcards.splice(i, 1);
+          this.markDirty(false);
+          return;
+        }
+      } else return;
+    }
+  }
+
+  /** The card centred in a box, cropped around its middle if the screen is smaller, with its caption. */
+  draw_postcard(p: Postcard, i: number): void {
+    const [W, H] = [this.scr.w, this.scr.h];
+    const cw = Math.min(p.rows[0]?.length || 0, W - 4);
+    const ch = Math.min(p.rows.length, H - 7);
+    const sx = Math.floor(((p.rows[0]?.length || 0) - cw) / 2);
+    const sy = Math.floor((p.rows.length - ch) / 2);
+    const caption = fitText(W - 6, this.postcard_caption(p), `${p.place} · ${absdayLabel(p.day, false)}`);
+    const hint = fitText(W - 6, '←/→ Browse · S Save .txt · X Remove · Esc Back', '←→ · S Save · X Remove');
+    const bw = Math.max(cw, caption.length, hint.length) + 4;
+    const bh = ch + 5;
+    const [bx, by] = [Math.max(0, Math.floor((W - bw) / 2)), Math.max(0, Math.floor((H - bh) / 2))];
+    this.scr.box(bx, by, bw, bh, '03', '00', `Postcard ${i + 1}/${this.postcards.length}`, '0C', { kind: 'hud', accent: '0C' });
+    const ox = bx + Math.floor((bw - cw) / 2);
+    for (let y = 0; y < ch; y++) {
+      const row = p.rows[sy + y];
+      const fg = p.fg[sy + y] || '';
+      for (let x = 0; x < cw; x++) this.scr.put(ox + x, by + 1 + y, row[sx + x] ?? ' ', fg.slice((sx + x) * 2, (sx + x) * 2 + 2) || '05');
+    }
+    this.scr.put(bx + 2, by + ch + 2, caption, '0C');
+    this.scr.put(bx + 2, by + ch + 3, hint, '03');
+  }
+
   async mantel_menu(): Promise<void> {
     if (!this.souvenirs.length) {
       await this.say('An empty mantel. Festival ribbons and keepsakes from days you remember will stand here.', 'Mantel');
@@ -8399,6 +8585,7 @@ export class Game {
     };
     if (!contour) this.draw_topbar(W);
     this.draw_map(0, mapY, vw, vh);
+    if (this.capturing) return;
     if (contour && this.map.indoor && this.mapname !== 'mine') this.draw_indoor_legend(vw, vh, mapY);
     if (this.show_minimap) this.draw_minimap(vw, vh);
     this.draw_pin_hint(vw, mapY);

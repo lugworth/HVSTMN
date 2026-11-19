@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## Valley postcards (mechanics task 46), 2026-11-19
+
+- Diary → "Take a Postcard": `take_postcard()` calls `capture_scene()`, which renders with `capturing`
+  set (render() stops after `draw_map()`: no indoor legend, minimap or pin hint) and copies the map
+  view out of the `Screen` buffer, trimmed to what is drawn: `rows` (text) and `fg` (two hex digits of
+  Isotope base16 code per cell). With place (`map.title`), day, minutes and weather it goes in
+  `postcards` (saved; `sanitizePostcards()` drops malformed cards and keeps the newest `POSTCARD_MAX`, 12).
+  A full album asks before letting the oldest card go.
+- Diary → "Postcard Album" (newest first) → `view_postcard()`: the card in a HUD box (`draw_postcard()`,
+  cropped around its middle on small screens) with its caption; ←/→ browse, S saves a `.txt` (the card,
+  caption, weather and farm; `download_text()`), X removes it after asking. Cards are drawn as plain
+  glyphs (their text), not through the Enhanced terrain styling.
+
 ## The Evening Catch at Willow Bend (mechanics task 14), 2026-11-19
 
 - `CONTEST_*` (constants): Wednesdays (`CONTEST_WEEKDAY`) from Spring to Fall (`CONTEST_SEASONS`),
