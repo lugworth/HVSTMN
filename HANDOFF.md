@@ -1,5 +1,14 @@
 # Handoff: HRVSTMN
 
+## Shared memories in Villager Notes (mechanics task 07), 2026-11-19
+
+- `Game.remember(npc, text, key?)` keeps a moment in `memories` (saved, sanitized, at most
+  `MEMORY_MAX` = 40, oldest dropped; a key keeps one-off moments from repeating). Kept: the first
+  time a villager gets a gift they love; a remembered birthday gift (once a year); each request
+  filled from the board; each finished order (task 32); and each milestone remark (task 03).
+- Villager Notes (R) ends with "Shared Memories" pages (`memory_pages()`), newest first: the date
+  in the villager's colour, then the moment. Empty journals say what will be kept there.
+
 ## Villagers remember milestones (mechanics task 03), 2026-11-19
 
 - `Game.milestone_line(n)` gives a villager's unsaid memory, used by `talk()` in place of small talk

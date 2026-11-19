@@ -29,7 +29,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **04. Requests with a second chapter.** Gray asks for copper from Spring Mine. After delivery, he shows you which watering-can upgrade is worth saving for and leaves a note about the next step.
 - [ ] **05. Ask for a favor.** A close neighbor offers one specific favor on a free afternoon, such as carrying a shipment or checking shop hours. Put the promise in Today’s Plan so it feels like an arrangement.
 - [ ] **06. Invite people to dinner.** Pick two guests and serve an existing recipe. Give each pairing one short exchange, with different reactions to what you serve.
-- [ ] **07. Shared memories in Villager Notes.** Record moments like a first fishing trip, a favorite meal, or a request you finished together. Let the player reread the entries.
+- [x] **07. Shared memories in Villager Notes.** Record moments like a first fishing trip, a favorite meal, or a request you finished together. Let the player reread the entries.
 - [ ] **08. A child’s interests develop over seasons.** Show them a fish, seed, or relic to start a conversation. Later scenes reflect a few interests they’ve picked up.
 
 ## Town life and events

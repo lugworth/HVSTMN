@@ -279,6 +279,18 @@ function sanitizeOrder(raw: any): VillagerOrder | null {
   return { id: t.id, delivered, deadline: raw.deadline };
 }
 
+/** How many shared memories Villager Notes keeps (the oldest go first). */
+export const MEMORY_MAX = 40;
+
+/** Memories from a save: well-formed entries for known villagers, at most MEMORY_MAX. */
+function sanitizeMemories(raw: unknown): { day: number; npc: string; text: string; key?: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((m) => m && Number.isInteger(m.day) && typeof m.npc === 'string' && NPCS[m.npc] && typeof m.text === 'string' && m.text.trim())
+    .map((m) => ({ day: m.day, npc: m.npc, text: String(m.text).slice(0, 120), ...(typeof m.key === 'string' ? { key: m.key } : {}) }))
+    .slice(-MEMORY_MAX);
+}
+
 /** Keep only well-formed batches for installed Makers (a save may be old, edited or cut short). */
 function sanitizeMakerJobs(raw: unknown, makers: string[]): Record<string, { steps: MakerStep[]; ready: number }> {
   const out: Record<string, { steps: MakerStep[]; ready: number }> = {};
@@ -535,6 +547,8 @@ export class Game {
   dog_clue: { day: number; map: string; key: string; kind: 'dig' | 'mushroom' } | null = null;
   /** Milestone remarks already made, as 'who:what' keys (task 03). */
   milestones_said: string[] = [];
+  /** Shared memories for Villager Notes (task 07): newest last; `key` keeps one-off moments from repeating. */
+  memories: { day: number; npc: string; text: string; key?: string }[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -612,7 +626,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -755,6 +769,7 @@ export class Game {
     this.flush_spots = [];
     this.dog_clue = null;
     this.milestones_said = [];
+    this.memories = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1108,6 +1123,7 @@ export class Game {
       this.flush_day = Number.isInteger(this.flush_day) ? this.flush_day : -1;
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
+      this.memories = sanitizeMemories(this.memories);
       const dc: any = this.dog_clue;
       this.dog_clue =
         dc && Number.isInteger(dc.day) && typeof dc.map === 'string' && this.maps[dc.map] && typeof dc.key === 'string' && (dc.kind === 'dig' || dc.kind === 'mushroom')
@@ -3363,6 +3379,8 @@ export class Game {
       }
       this.friend[n] = clamp((this.friend[n] || 0) + pts, 0, 100);
       this.gifted.add(n);
+      if (isBday && pts > 0) this.remember(n, `${n}'s birthday: you remembered, with ${aOrAn(item)} ${item}.`, `${n}:bday:${this.year}`);
+      else if (pref === 'love') this.remember(n, `${n} loved the ${item} you brought.`, `${n}:love:${item}`);
       emitNpcEmote(pref === 'love' ? 'heart' : pref === 'hate' ? 'cross' : 'note');
       await this.say(line, n);
       await this.check_heart_and_rival_events(n);
@@ -3393,6 +3411,7 @@ export class Game {
       if (memory) {
         line = memory.line;
         this.milestones_said.push(memory.key);
+        this.remember(n, this.milestone_memory(memory.key), `said:${memory.key}`);
         emitNpcEmote('heart');
       } else {
         line = py_rng().choice(d.lines[tier]);
@@ -3407,6 +3426,16 @@ export class Game {
     await this.check_heart_and_rival_events(n);
   }
 
+  // ---------------------------------------------------------------- shared memories (mechanics task 07)
+  /** Keep a moment with a villager for Villager Notes. With a key, the same moment is kept only once. */
+  remember(npc: string, text: string, key?: string): boolean {
+    if (!NPCS[npc]) return false;
+    if (key && this.memories.some((m) => m.key === key)) return false;
+    this.memories.push({ day: this.absday(), npc, text, ...(key ? { key } : {}) });
+    if (this.memories.length > MEMORY_MAX) this.memories.splice(0, this.memories.length - MEMORY_MAX);
+    return true;
+  }
+
   // ---------------------------------------------------------------- villagers remember milestones (mechanics task 03)
   /** Museum cases (by label) where every piece has been donated. */
   museum_cases_done(): string[] {
@@ -3416,6 +3445,15 @@ export class Game {
         return pool.length > 0 && pool.every((i) => this.museum.includes(i));
       })
       .map(([label]) => label);
+  }
+
+  /** How a milestone remark reads in Villager Notes. */
+  milestone_memory(key: string): string {
+    const [who, what, extra] = key.split(':');
+    if (what === 'first_shipment') return `${who} remembered picking up your very first shipment.`;
+    if (what === 'case') return `${who} put your name on the finished ${extra} case at the museum.`;
+    if (what === 'footbridge') return `${who} thanked you for the Willow Bend footbridge.`;
+    return `${who} remembered something you did.`;
   }
 
   /** Something this villager has not yet said about what you've done, with its key; or null. */
@@ -5324,6 +5362,43 @@ export class Game {
     });
   }
 
+  /** The "Shared Memories" pages at the back of Villager Notes, newest first. */
+  memory_pages(cw: number, pageMax: number): HudPageLine[][] {
+    const head = (): HudPageLine[] => [
+      {
+        kind: 'ledger',
+        prefix: '❧',
+        prefixCol: '0A',
+        label: 'Shared Memories',
+        labelCol: '07',
+        labelBold: true,
+        value: `${this.memories.length} kept`,
+        valueCol: '04',
+      },
+      { kind: 'fence' },
+    ];
+    const pages: HudPageLine[][] = [];
+    let page = head();
+    if (!this.memories.length) {
+      for (const l of wrapLines(['Nothing yet. Gifts they love, requests you fill and the moments people bring up are kept here.'], Math.max(10, cw - 2))) {
+        page.push({ kind: 'spans', spans: [{ text: `  ${l}`, fg: '04' }] });
+      }
+      return [page];
+    }
+    for (const m of [...this.memories].reverse()) {
+      const when = absdayLabel(m.day);
+      const body = wrapLines([m.text], Math.max(10, cw - 4));
+      if (page.length + 1 + body.length > pageMax && page.length > 2) {
+        pages.push(page);
+        page = head();
+      }
+      page.push({ kind: 'spans', spans: [{ text: '● ', fg: NPCS[m.npc]?.col || '05', bold: true }, { text: when, fg: '04' }] });
+      for (const l of body) page.push({ kind: 'spans', spans: [{ text: `    ${l}`, fg: '05' }] });
+    }
+    pages.push(page);
+    return pages;
+  }
+
   async relationships(): Promise<void> {
     const names = Object.keys(NPCS).sort((a, b) => (this.friend[b] || 0) - (this.friend[a] || 0));
     const buildPages = (cw: number, pageMax: number): HudPageLine[][] => {
@@ -5398,6 +5473,7 @@ export class Game {
         }
         pages.push(page);
       }
+      pages.push(...this.memory_pages(cw, pageMax));
       return pages.length ? pages : [[]];
     };
 
@@ -5805,6 +5881,7 @@ export class Game {
     this.requests_done += 1;
     this.order = null;
     this.order_next = this.absday() + ORDER_GAP;
+    this.remember(t.npc, `You put together ${t.title} for ${t.npc}.`);
     this.fx_add('coin', this.px, this.py, 0.8);
     this.fx_add('text', this.px, this.py, 1.1, { text: `+${t.reward}G` });
     const line = `${t.npc} has ${t.title}! You earned ${t.reward}G and +8 friendship.`;
@@ -5872,6 +5949,7 @@ export class Game {
     this.fx_add('coin', this.px, this.py, 0.8);
     this.fx_add('text', this.px, this.py, 1.1, { text: `+${request.reward}G` });
     this.requests.splice(index, 1);
+    this.remember(request.npc, `You brought ${request.npc} ${request.qty} × ${request.item} for the request board.`);
     return `${request.npc} got ${request.qty} × ${request.item}! You earned ${request.reward}G and +5 friendship.`;
   }
 
