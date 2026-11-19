@@ -114,6 +114,7 @@ import {
   PLOT_MAX,
   PLOT_SIGN_PRICE,
   PLOT_NAME_MAX,
+  EXHIBITS,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -627,6 +628,8 @@ export class Game {
   favor_offered: Record<string, number> = {};
   /** Named farm plots (task 42): where each sign stands, its name, and the tile it replaced. */
   plots: { key: string; name: string; tile: string }[] = [];
+  /** Museum exhibits the curator has set out (task 16). */
+  exhibits_done: string[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -704,7 +707,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'postcards', 'contest', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'postcards', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -896,6 +899,7 @@ export class Game {
     this.favor_offered = {};
     this.clear_plots();
     this.plots = [];
+    this.exhibits_done = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1285,6 +1289,7 @@ export class Game {
             .slice(0, PLOT_MAX)
         : [];
       this.place_plots();
+      this.exhibits_done = Array.isArray(this.exhibits_done) ? this.exhibits_done.filter((id) => EXHIBITS.some((e) => e.id === id)) : [];
       const fv: any = this.favor;
       this.favor = fv && typeof fv === 'object' && FAVORS[fv.npc] && Number.isInteger(fv.day) && fv.day >= this.absday() ? { npc: fv.npc, day: fv.day } : null;
       this.favor_offered = Object.fromEntries(
@@ -6560,10 +6565,39 @@ export class Game {
     this.museum.push(item);
     this.msg(`${item} added to the museum collection! (${this.museum.length}/${this.museum_total()})`, '0B');
     await this.museum_reward_check();
+    await this.exhibit_check();
+  }
+
+  /** Exhibits whose three pieces are all on display but not yet set out. */
+  exhibits_ready(): (typeof EXHIBITS)[number][] {
+    return EXHIBITS.filter((e) => !this.exhibits_done.includes(e.id) && e.pieces.every((p) => this.museum.includes(p)));
+  }
+
+  /** After a donation: the curator sets out any exhibit that is now complete, with its note and a lead. */
+  async exhibit_check(): Promise<void> {
+    for (const e of this.exhibits_ready()) {
+      this.exhibits_done.push(e.id);
+      await this.say(`A new exhibit: "${e.title}". ${e.note}`, 'Curator');
+      await this.say(`Here's a lead for you: ${e.lead}`, 'Curator');
+      this.keepsake(`exhibit:${e.id}`, 'Exhibit card', `The curator's card for "${e.title}", the exhibit your donations made.`);
+      this.remember('Curator', `The curator set out "${e.title}" from your donations.`, `exhibit:${e.id}`);
+    }
+  }
+
+  /** The museum book's Exhibits page: each story, its pieces, and the note once it is set out. */
+  exhibit_page(): string[] {
+    const page = ['  Exhibits — one region, told in an ore, a fish and a relic'];
+    for (const e of EXHIBITS) {
+      const done = this.exhibits_done.includes(e.id);
+      page.push('', `  ${done ? '★' : '·'} ${e.title}`);
+      page.push(`    ${e.pieces.map((p) => `${this.museum.includes(p) ? '[x]' : '[ ]'} ${p}`).join('  ')}`);
+      if (done) page.push(...wrapLines([`Lead: ${e.lead}`], 60).map((l) => `    ${l}`));
+    }
+    return page;
   }
 
   async museum_book(): Promise<void> {
-    const pages: string[][] = [];
+    const pages: string[][] = [this.exhibit_page()];
     for (const [label, category] of this.museum_categories()) {
       const all = this.museum_pool(category);
       const got = new Set(this.museum.filter((i) => all.includes(i)));

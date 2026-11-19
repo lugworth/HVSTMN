@@ -1,5 +1,15 @@
 # Handoff: HRVSTMN
 
+## Museum exhibits that tell a story (mechanics task 16), 2026-11-19
+
+- `EXHIBITS` in `constants.ts`: Willow Bend (Agate, Willow Chub, Clay Whistle) and Lighthouse Point
+  (Sand Rose, Mackerel, Glass Float), each an ore, a fish and a relic with a curator note and a lead
+  (Willow Bend points to the Point's glass floats; the Point to the Storm Marlin).
+- After each donation `Game.exhibit_check()` sets out any exhibit whose three pieces are on display:
+  the curator reads the note and gives the lead, an "Exhibit card" goes on the mantel (task 45) and a
+  Villager Notes memory is kept (task 07). `exhibits_done` is saved. The museum book now opens on an
+  Exhibits page (`exhibit_page()`) with each story's pieces ticked and, once set out, its lead.
+
 ## Valley postcards (mechanics task 46), 2026-11-19
 
 - Diary → "Take a Postcard": `take_postcard()` calls `capture_scene()`, which renders with `capturing`

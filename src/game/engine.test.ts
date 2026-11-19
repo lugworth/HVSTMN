@@ -68,6 +68,7 @@ import {
   PACE_KEY,
   SECS_PER_10MIN,
   POSTCARD_MAX,
+  EXHIBITS,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -4232,5 +4233,63 @@ describe('valley postcards (task 46)', () => {
     const o = fresh();
     o.applySaveData(old);
     assert.deepEqual(o.postcards, []);
+  });
+});
+
+describe('museum exhibits that tell a story (task 16)', () => {
+  const donate = async (g: any, item: string) => {
+    g.inv[item] = 1;
+    g.menu = async (_t: string, opts: string[]) => opts.findIndex((o: string) => o.startsWith(item));
+    await g.museum_donate();
+  };
+
+  test('each exhibit is an ore, a fish and a relic the museum takes', () => {
+    const g = fresh();
+    for (const e of EXHIBITS) {
+      assert.deepEqual(e.pieces.map((p) => ITEMS[p][2]), ['ore', 'fish', 'relic'], e.id);
+      for (const p of e.pieces) assert.ok(g.museum_pool().includes(p), `${p} can be donated`);
+    }
+  });
+
+  test('the last piece sets the exhibit out: the note, a lead, a keepsake and a memory, once', async () => {
+    const g = fresh();
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    const [ore, fish, relic] = EXHIBITS[0].pieces;
+    await donate(g, ore);
+    await donate(g, fish);
+    assert.deepEqual(g.exhibits_done, []);
+    assert.ok(!said.some((t) => t.startsWith('A new exhibit')));
+    await donate(g, relic);
+    assert.deepEqual(g.exhibits_done, ['river']);
+    assert.ok(said.includes(`A new exhibit: "${EXHIBITS[0].title}". ${EXHIBITS[0].note}`), said.join(' | '));
+    assert.ok(said.includes(`Here's a lead for you: ${EXHIBITS[0].lead}`));
+    assert.equal(g.souvenirs.at(-1).name, 'Exhibit card');
+    assert.match(g.memories.at(-1).text, /set out "Willow Bend: the old ferry crossing"/);
+    said.length = 0;
+    await g.exhibit_check();
+    assert.deepEqual(said, [], 'only once');
+  });
+
+  test('the museum book opens on the exhibits, with pieces ticked and the lead once set out', () => {
+    const g = fresh();
+    g.museum = [EXHIBITS[1].pieces[0]];
+    let page = g.exhibit_page().join('\n');
+    assert.match(page, /\[x\] Sand Rose  \[ \] Mackerel  \[ \] Glass Float/);
+    assert.doesNotMatch(page, /Lead:/);
+    g.museum = [...EXHIBITS[1].pieces];
+    g.exhibits_done = ['coast'];
+    page = g.exhibit_page().join('\n');
+    assert.match(page, /★ Lighthouse Point: the fishing fleet/);
+    assert.match(page, /Lead: The keeper's log/);
+  });
+
+  test('set-out exhibits survive a reload', () => {
+    const g = fresh();
+    g.exhibits_done = ['river', 'nonsense'];
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.exhibits_done, ['river']);
   });
 });
