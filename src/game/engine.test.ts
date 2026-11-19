@@ -3422,3 +3422,96 @@ describe('a mantel for festival souvenirs (task 45)', () => {
     assert.deepEqual(h.souvenirs, g.souvenirs);
   });
 });
+
+describe('a field notebook (task 37)', () => {
+  test('the first catch of each kind is noted with place, weather, time and date; repeats are not', () => {
+    const g = fresh();
+    g.warp('river', 10, 10, [0, 1]);
+    g.weather = 'Rain';
+    g.minutes = 7 * 60 + 40;
+    g.day = 3;
+    assert.equal(g.note_first('Willow Chub'), true);
+    g.fish_caught['Willow Chub'] = 1;
+    assert.equal(g.note_first('Willow Chub'), false);
+    assert.deepEqual(g.notebook, [{ item: 'Willow Chub', map: 'river', weather: 'Rain', minutes: 460, day: g.absday() }]);
+    assert.equal(g.notebook_line(g.notebook[0]), `Willow Chub — ${g.maps.river.title}, Rain, 7:40AM, Spring 3`);
+    assert.equal(g.msgs.at(-1)[0], 'Field notebook: first Willow Chub, noted.');
+  });
+
+  test('a real cast notes the first catch, and only the first', async () => {
+    const g = fresh();
+    g.warp('river', 10, 10, [0, 1]);
+    g.weather = 'Rain';
+    const [realNow, realRandom] = [Date.now, Math.random];
+    let now = 5_000_000;
+    Date.now = () => now;
+    Math.random = () => 0; // the bite comes 1.0 s after the cast
+    const castOnce = async () => {
+      const start = now;
+      g.scr.getKey = async () => {
+        now += 50;
+        return Math.abs((now - start) / 1000 - 1.3) < 0.026 ? 'space' : null;
+      };
+      await g.fish();
+    };
+    try {
+      await castOnce();
+      await castOnce();
+    } finally {
+      Date.now = realNow;
+      Math.random = realRandom;
+    }
+    const caught = Object.keys(g.fish_caught);
+    assert.ok(caught.length >= 1, JSON.stringify(g.fish_caught));
+    assert.deepEqual(g.notebook.map((o: any) => o.item), caught, 'one note per kind caught');
+    assert.equal(g.notebook[0].map, 'river');
+    assert.equal(g.notebook[0].weather, 'Rain');
+  });
+
+  test('a hauled crab pot is noted on the beach', async () => {
+    const h = fresh();
+    h.warp('beach', 32, 19, [0, 1]);
+    h.inv = { 'Small Fish': 1 };
+    h.trap_set('Small Fish');
+    h.day += 1;
+    const real = Math.random;
+    Math.random = () => 0.9;
+    try {
+      h.trap_haul();
+    } finally {
+      Math.random = real;
+    }
+    assert.deepEqual(h.notebook.map((o: any) => o.item), ['Crab']);
+    assert.equal(h.notebook[0].map, 'beach');
+  });
+
+  test('hints say where, when and what helps, in-season first, and drop what you have caught', () => {
+    const g = fresh();
+    g.season = 0;
+    const hints = g.notebook_hints();
+    const river = g.maps.river.title;
+    const point = g.maps.point.title;
+    assert.ok(hints.includes(`Speckled Trout: ${river}, in Spring or Fall, bites more often on a better rod.`), hints.join(' | '));
+    assert.ok(hints.includes(`Mackerel: ${point}, in Spring or Summer.`));
+    assert.ok(hints.some((h: string) => h.startsWith(`Storm Marlin: a rare bite off ${point}, most often after rain or in a storm; needs a `)));
+    assert.ok(!hints.some((h: string) => /^(Boot|Empty Can|Fish Bones):/.test(h)), 'no junk');
+    assert.ok(hints.indexOf(`Burbot: ${river}, in Winter, bites more often on a better rod.`) > hints.indexOf(`Mackerel: ${point}, in Spring or Summer.`), 'out of season goes later');
+    g.fish_caught.Mackerel = 1;
+    assert.ok(!g.notebook_hints().some((h: string) => h.startsWith('Mackerel:')));
+  });
+
+  test('the Diary opens the notebook, and it survives a reload', async () => {
+    const g = fresh();
+    g.note_first('Small Fish');
+    let opened = false;
+    g.field_notebook = async () => { opened = true; };
+    g.menu = async (title: string, opts: string[]) => (title === '▤ Diary' ? opts.indexOf('Field Notebook') : null);
+    await g.pause_menu();
+    assert.ok(opened);
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    snap.notebook.push({ item: 'Not A Fish', map: 'river', weather: 'Sunny', minutes: 1, day: 1 });
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.notebook, g.notebook);
+  });
+});

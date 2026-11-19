@@ -551,6 +551,8 @@ export class Game {
   memories: { day: number; npc: string; text: string; key?: string }[] = [];
   /** Keepsakes on the farmhouse mantel (task 45): what it is, the day, and a one-line memory. */
   souvenirs: { key: string; name: string; day: number; text: string }[] = [];
+  /** The field notebook (task 37): where, in what weather and when each kind of fish was first caught. */
+  notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -628,7 +630,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -773,6 +775,7 @@ export class Game {
     this.milestones_said = [];
     this.memories = [];
     this.souvenirs = [];
+    this.notebook = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1127,6 +1130,11 @@ export class Game {
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
       this.memories = sanitizeMemories(this.memories);
+      this.notebook = Array.isArray(this.notebook)
+        ? this.notebook.filter(
+            (o: any) => o && typeof o.item === 'string' && ITEMS[o.item] && typeof o.map === 'string' && typeof o.weather === 'string' && Number.isInteger(o.minutes) && Number.isInteger(o.day),
+          )
+        : [];
       this.souvenirs = Array.isArray(this.souvenirs)
         ? this.souvenirs
             .filter((v: any) => v && typeof v.key === 'string' && typeof v.name === 'string' && typeof v.text === 'string' && Number.isInteger(v.day))
@@ -1462,6 +1470,7 @@ export class Game {
       { key: 'resume', raw: 'Resume', label: 'Resume', icon: '↩', iconCol: '0C', right: '[ESC]', rightCol: '0C' },
       { key: 'today', raw: 'Today’s Plan (y)', label: "Today's Plan", icon: '☀', iconCol: '09', right: '[Y]', rightCol: '0C', hotkey: 'y' },
       { key: 'notes', raw: 'Villager Notes (r)', label: 'Villager Notes', icon: '♥', iconCol: '0A', right: '[R]', rightCol: '0C', hotkey: 'r' },
+      { key: 'notebook', raw: 'Field Notebook', label: 'Field Notebook', icon: '✎', iconCol: '0C', right: `${this.notebook.length} noted`, rightCol: '04' },
       {
         key: 'bag',
         raw: 'Rucksack (i)',
@@ -1541,6 +1550,8 @@ export class Game {
       await this.today_panel();
     } else if (key === 'notes') {
       await this.relationships();
+    } else if (key === 'notebook') {
+      await this.field_notebook();
     } else if (key === 'ranch') {
       await this.ranch_summary();
     } else if (key === 'ach') {
@@ -2447,6 +2458,7 @@ export class Game {
       : r < 0.4 ? [['Crab', 1]] : r < 0.8 ? [['Small Fish', 1]] : [];
     for (const [item, n] of got) {
       this.give(item, n);
+      this.note_first(item);
       this.fish_caught[item] = (this.fish_caught[item] || 0) + n;
     }
     const line = got.length
@@ -2688,6 +2700,7 @@ export class Game {
       this.give(caught);
       this.fx_add('splash', tx, ty, 0.7);
       if (ITEMS[caught]?.[2] === 'fish') {
+        this.note_first(caught);
         this.fish_caught[caught] = (this.fish_caught[caught] || 0) + 1;
         this.mastery_add('fishing');
       }
@@ -3438,6 +3451,72 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- a field notebook (mechanics task 37)
+  /** Note the first catch of a kind: here, in this weather, at this time. */
+  note_first(item: string): boolean {
+    if ((this.fish_caught[item] || 0) > 0 || this.notebook.some((o) => o.item === item)) return false;
+    this.notebook.push({ item, map: this.mapname, weather: this.weather, minutes: this.minutes, day: this.absday() });
+    this.msg(`Field notebook: first ${item}, noted.`, '0C');
+    return true;
+  }
+
+  /** One observation as a line: "Willow Chub — Willow Bend, Rain, 7:40AM, Spring 3". */
+  notebook_line(o: { item: string; map: string; weather: string; minutes: number; day: number }): string {
+    return `${o.item} — ${this.maps[o.map]?.title || o.map}, ${o.weather}, ${fmt_time(o.minutes).trim()}, ${absdayLabel(o.day, false)}`;
+  }
+
+  /**
+   * What to look for next, in words, from the regional catch tables: fish not caught yet, where they
+   * bite, in which seasons, and what helps (a better rod, rain or storms). In-season ones first.
+   */
+  notebook_hints(): string[] {
+    const seasonWords = (ss: number[]) => andList(ss.map((i) => SEASONS[i])).replace(/ and /, ' or ');
+    const out: { now: boolean; text: string }[] = [];
+    const seen = new Set<string>();
+    for (const [map, table] of Object.entries(REGION_CATCH)) {
+      const where = this.maps[map]?.title || map;
+      for (const e of table.fish) {
+        if (ITEMS[e.item]?.[2] !== 'fish' || this.fish_caught[e.item] || seen.has(e.item)) continue;
+        seen.add(e.item);
+        const parts = [where];
+        if (e.seasons) parts.push(`in ${seasonWords(e.seasons)}`);
+        if (e.rod) parts.push('bites more often on a better rod');
+        out.push({ now: !e.seasons || e.seasons.includes(this.season), text: `${e.item}: ${parts.join(', ')}.` });
+      }
+      if (!this.fish_caught[table.rare] && !seen.has(table.rare)) {
+        seen.add(table.rare);
+        const rod = LEVELS[table.rareRod] ?? 'better';
+        out.push({
+          now: (this.levels['Fishing Rod'] || 0) >= table.rareRod,
+          text: `${table.rare}: a rare bite off ${where}${table.stormBoost ? ', most often after rain or in a storm' : ''}; needs a ${rod} rod.`,
+        });
+      }
+    }
+    return [...out.filter((h) => h.now), ...out.filter((h) => !h.now)].map((h) => h.text);
+  }
+
+  /** The Field Notebook: observations, newest first, then what to look for next. */
+  async field_notebook(): Promise<void> {
+    const buildPages = (cw: number, pageMax: number): HudPageLine[][] => {
+      const lines: HudPageLine[] = [];
+      const head = (label: string, value: string): HudPageLine => ({ kind: 'ledger', prefix: '✎', prefixCol: '0C', label, labelCol: '07', labelBold: true, value, valueCol: '04' });
+      const para = (text: string, fg: string) => {
+        for (const l of wrapLines([text], Math.max(10, cw - 2))) lines.push({ kind: 'spans', spans: [{ text: `  ${l}`, fg }] });
+      };
+      lines.push(head('Observations', `${this.notebook.length} noted`), { kind: 'fence' });
+      if (!this.notebook.length) para('Nothing noted yet. The first time you catch each kind of fish, it is written down here.', '04');
+      for (const o of [...this.notebook].reverse()) para(this.notebook_line(o), '05');
+      const hints = this.notebook_hints();
+      lines.push({ kind: 'fence' }, head('Still to find', `${hints.length}`), { kind: 'fence' });
+      if (!hints.length) para('Every fish in the valley is in the notebook.', '0B');
+      for (const h of hints) para(h, '0C');
+      const pages: HudPageLine[][] = [];
+      for (let i = 0; i < lines.length; i += pageMax) pages.push(lines.slice(i, i + pageMax));
+      return pages.length ? pages : [[]];
+    };
+    await this.show_hud_pages('✎ Field Notebook', buildPages, { style: { kind: 'hud', accent: '0C' }, alignToMap: true, minWidth: 48, maxWidth: 64 });
   }
 
   // ---------------------------------------------------------------- the mantel (mechanics task 45)
