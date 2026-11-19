@@ -3726,6 +3726,17 @@ export const PLOT_SIGN_PRICE = 50;
 export const PLOT_NAME_MAX = 16;
 
 /**
+ * A tiny regional contest (mechanics task 14): the Evening Catch at Willow Bend. On CONTEST_WEEKDAY
+ * evenings from Spring to Fall (not on festival days), fish caught at Willow Bend between the two
+ * hours count; land CONTEST_GOAL of them for that season's ribbon on the farmhouse mantel.
+ */
+export const CONTEST_MAP = 'river';
+export const CONTEST_WEEKDAY = 2; // WEEKDAYS index: Wed
+export const CONTEST_HOURS: [number, number] = [18, 20];
+export const CONTEST_GOAL = 3;
+export const CONTEST_SEASONS = [0, 1, 2];
+
+/**
  * Favors from close neighbors (mechanics task 05): on a free afternoon a good friend offers one
  * specific favor for tomorrow. Accepted, it sits in Today's Plan until the morning it happens.
  * `kind` is what they do; `offer` is their line, `plan` the Today's Plan wording before and on the day,

@@ -62,6 +62,8 @@ import {
   FAVOR_FRIENDSHIP,
   FAVOR_GAP,
   FAVOR_WATER_MAX,
+  CONTEST_GOAL,
+  CONTEST_HOURS,
   DAY_PACES,
   PACE_KEY,
   SECS_PER_10MIN,
@@ -3955,6 +3957,112 @@ describe('favors from close neighbors (task 05)', () => {
     o.applySaveData(old);
     assert.equal(o.favor, null);
     assert.deepEqual(o.favor_offered, {});
+  });
+});
+
+describe('the Evening Catch at Willow Bend (task 14)', () => {
+  /** Spring 3 (a Wednesday) at Willow Bend, at the given hour. */
+  const evening = (hour = 18) => {
+    const g = fresh();
+    g.first_steps = null;
+    g.started = true;
+    g.day = 3;
+    assert.equal(g.weekday, 2);
+    g.mapname = 'river';
+    g.minutes = hour * 60;
+    return g;
+  };
+  const land = (g: any, n: number, item = 'Willow Chub') => {
+    for (let i = 0; i < n; i++) g.contest_catch(item);
+  };
+
+  test('Wednesdays from Spring to Fall, never on a festival day or in winter', () => {
+    const g = evening();
+    assert.ok(g.contest_today());
+    g.day = 4;
+    assert.ok(!g.contest_today());
+    g.day = 3;
+    g.season = 3;
+    assert.ok(!g.contest_today(), 'no contest in winter');
+    g.season = 0;
+    const realFest = g.fest_on.bind(g);
+    g.fest_on = (o = 0) => (o === 0 ? ['Test Fair', 9, 17] : realFest(o));
+    assert.ok(!g.contest_today(), 'a festival day has no contest');
+  });
+
+  test('only fish landed at Willow Bend between 6 and 8 PM count', () => {
+    const g = evening(17);
+    land(g, 1);
+    assert.equal(g.contest, null, 'too early');
+    g.minutes = CONTEST_HOURS[0] * 60;
+    g.mapname = 'beach';
+    land(g, 1);
+    assert.equal(g.contest, null, 'wrong water');
+    g.mapname = 'river';
+    land(g, 2);
+    assert.equal(g.contest.fish, 2);
+    g.minutes = CONTEST_HOURS[1] * 60;
+    land(g, 1);
+    assert.equal(g.contest.fish, 2, 'after the whistle');
+  });
+
+  test('three fish by 8 PM put the season ribbon on the mantel, once a season', async () => {
+    const g = evening();
+    land(g, 1, 'Willow Chub');
+    land(g, CONTEST_GOAL - 1, 'Elder Sturgeon');
+    assert.equal(g.contest.best, 'Elder Sturgeon', 'the best is the most valuable');
+    assert.ok(g.today_lines().some((l: string) => l.startsWith(`  Catch  Evening Catch at Willow Bend until 8PM: ${CONTEST_GOAL}/${CONTEST_GOAL} fish`)));
+    g.minutes = CONTEST_HOURS[1] * 60 - 10;
+    await g.advance(10);
+    assert.equal(g.contest, null);
+    assert.ok(g.souvenirs.some((x: any) => x.key === 'ribbon:evening_catch:1:0' && x.name === 'Evening Catch ribbon (Spring)'));
+    assert.ok(g.msgs.some((m: any) => /ribbon goes on your mantel/.test(String(m[0] ?? m.text ?? m))));
+
+    g.day = 10;
+    g.minutes = 18 * 60;
+    land(g, CONTEST_GOAL);
+    const lines = g.contest_close();
+    assert.match(lines[0], /already hold this season's ribbon/);
+    assert.equal(g.souvenirs.filter((x: any) => x.key.startsWith('ribbon:evening_catch')).length, 1);
+  });
+
+  test('too few fish: told the score, no ribbon; sleeping before the whistle settles it in the morning', async () => {
+    const g = evening(19);
+    land(g, 1);
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    await g.new_day('passout');
+    assert.equal(g.contest, null);
+    assert.ok(said.some((t) => /Evening Catch over: 1 of 3 fish/.test(t)));
+    assert.ok(!g.souvenirs.some((x: any) => x.key.startsWith('ribbon:evening_catch')));
+  });
+
+  test("Today's Plan announces it the day before and on the day", () => {
+    const g = evening(9);
+    g.day = 2;
+    assert.ok(g.today_lines().includes('  Catch  Tomorrow evening: the Evening Catch at Willow Bend (6PM–8PM).'));
+    g.day = 3;
+    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Catch  Evening Catch at Willow Bend, 6PM–8PM: land 3 fish for the Spring ribbon')));
+    g.minutes = 21 * 60;
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Catch')));
+  });
+
+  test('a contest in progress survives a save; bad data is dropped', () => {
+    const g = evening();
+    land(g, 2, 'Willow Chub');
+    const h = fresh();
+    h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.deepEqual(h.contest, g.contest);
+    const bad = JSON.parse(JSON.stringify(g.snapshot()));
+    bad.contest = { day: 'x', fish: -1 };
+    const k = fresh();
+    k.applySaveData(bad);
+    assert.equal(k.contest, null);
+    const old = JSON.parse(JSON.stringify(g.snapshot()));
+    delete old.contest;
+    const o = fresh();
+    o.applySaveData(old);
+    assert.equal(o.contest, null);
   });
 });
 

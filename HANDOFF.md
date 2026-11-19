@@ -1,5 +1,17 @@
 # Handoff: HRVSTMN
 
+## The Evening Catch at Willow Bend (mechanics task 14), 2026-11-19
+
+- `CONTEST_*` (constants): Wednesdays (`CONTEST_WEEKDAY`) from Spring to Fall (`CONTEST_SEASONS`),
+  6-8 PM (`CONTEST_HOURS`), at Willow Bend (`CONTEST_MAP`), not on festival days
+  (`Game.contest_today(offset)`). Fish caught there in that window (`contest_live()`; counted by
+  `contest_catch()` from `fish()`) build `contest` = { day, fish, best } (saved, sanitized); best is the
+  most valuable. A message marks 6 PM and each catch up to `CONTEST_GOAL` (3).
+- `contest_close()` at 8 PM (in `advance()`), or in the morning report if you slept first: the score and
+  best catch; at the goal, a keepsake `ribbon:evening_catch:<year>:<season>` ("Evening Catch ribbon
+  (Spring)") on the farmhouse mantel, once per season. Today's Plan ("Catch", both builders) announces
+  it the day before, then shows the target or the running count until 8 PM.
+
 ## A relaxed day setting (mechanics task 52), 2026-11-19
 
 - `DAY_PACES` (constants): Normal (`SECS_PER_10MIN`, 6 s per 10 in-game minutes), Relaxed (1.5x) and
