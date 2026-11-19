@@ -183,6 +183,8 @@ export function build_farm(): GameMap {
   // Add Water Mill next to Chicken Coop to grind Corn into 30 Chicken Feed
   m.set(35, 6, 'mill');
   m.signs[pkey(35, 6)] = 'mill';
+  // a bench on the farmhouse porch (mechanics task 44)
+  m.set(9, 6, 'bench');
   return m;
 }
 
@@ -203,6 +205,7 @@ export function build_town(): GameMap {
   for (const [x, y] of [[16, 2], [18, 5], [32, 2], [34, 5], [17, 3], [33, 3]]) m.set(x, y, 'tree');
   m.set(25, 6, 'sign');
   m.signs[pkey(25, 6)] = 'Town Green — Sit a while by the pond. The carp bite on a quiet morning.';
+  m.set(22, 6, 'bench'); // a bench by the pond (mechanics task 44)
   // A flower garden east of the hill road, where the library used to stand.
   for (let y = 3; y <= 5; y++) {
     for (let x = 41; x <= 49; x++) if ((x + y) % 2 === 0) m.set(x, y, 'flower');

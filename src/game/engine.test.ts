@@ -54,6 +54,8 @@ import {
   HIVE_SPOT,
   HIVE_RANGE,
   HONEY_FLAVOURS,
+  SEATS,
+  SEAT_REST,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -881,19 +883,30 @@ describe('labeled valley map (task 33)', () => {
 
 describe('the Willow Bend footbridge (task 12)', () => {
   const [SX, SY] = FOOTBRIDGE_SIGN;
-  /** Walk the river's south bank (below the road) from the sign's west side; can we reach the dock path? */
+  /**
+   * Walk the river's south bank (below the road) from the sign's west side; can we reach the dock path?
+   * Forage and dig spots that spawn overnight are set aside for the walk: they can be picked or dug,
+   * and one landing in the narrow approach used to make this check fail about one run in eighty.
+   */
   const crosses = (g: any): boolean => {
-    const seen = new Set<string>();
-    const queue: [number, number][] = [[SX - 1, SY]];
-    while (queue.length) {
-      const [x, y] = queue.pop()!;
-      const k = `${x},${y}`;
-      if (seen.has(k) || y < 15 || !g.walkable('river', x, y)) continue;
-      seen.add(k);
-      if (g.maps.river.tile(x, y) === 'path' && x > SX + 4) return true; // the far-bank path behind the dock
-      queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    const keep = [g.forage.river, g.objs.river];
+    g.forage.river = {};
+    g.objs.river = {};
+    try {
+      const seen = new Set<string>();
+      const queue: [number, number][] = [[SX - 1, SY]];
+      while (queue.length) {
+        const [x, y] = queue.pop()!;
+        const k = `${x},${y}`;
+        if (seen.has(k) || y < 15 || !g.walkable('river', x, y)) continue;
+        seen.add(k);
+        if (g.maps.river.tile(x, y) === 'path' && x > SX + 4) return true; // the far-bank path behind the dock
+        queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+      return false;
+    } finally {
+      [g.forage.river, g.objs.river] = keep;
     }
-    return false;
   };
   /** Hand Gotz everything the project needs, with Turnips as the crop. */
   const deliverAll = (g: any) => {
@@ -3573,5 +3586,107 @@ describe('hives with seasonal honey (task 22)', () => {
     await g.talk(fan);
     assert.match(said[0], /I love this!/);
     assert.ok(g.friend[fan] > before + 2);
+  });
+});
+
+describe('places to stop and sit (task 44)', () => {
+  /** Facing a seat from the path below it. */
+  const atSeat = (id: string) => {
+    const g = fresh();
+    g.first_steps = null;
+    const st = SEATS[id];
+    g.warp(st.map, st.x, st.y + 1, [0, -1]);
+    g.warp_fx = null;
+    g.stamina = 50;
+    return g;
+  };
+  /** The day of the week a seat's friend comes, in Spring Year 1 (day 1 is a Monday). */
+  const onWeekday = (g: any, weekday: number) => {
+    g.day = 1 + weekday;
+    assert.equal(g.weekday, weekday);
+  };
+
+  test('benches on the Town Green and the porch, each reached from the path', () => {
+    const g = fresh();
+    for (const id of ['green', 'porch']) {
+      const st = SEATS[id];
+      assert.equal(g.maps[st.map].tile(st.x, st.y), 'bench', id);
+      assert.ok(g.walkable(st.map, st.x, st.y + 1), `${id} can be reached`);
+    }
+  });
+
+  test('an ordinary hour: a short sit, a little rest once a day, and a nudge to come back', async () => {
+    const g = atSeat('green');
+    g.minutes = 11 * 60;
+    g.weather = 'Sunny';
+    const said = quiet(g);
+    await g.interact();
+    assert.equal(g.stamina, 50 + SEAT_REST);
+    assert.equal(g.minutes, 11 * 60 + 30);
+    assert.match(said[0], /Come back at sunset, or when a light rain falls\. \(\+15 Stamina\)$/);
+    await g.interact();
+    assert.equal(g.stamina, 50 + SEAT_REST, 'the rest is once a day per seat');
+  });
+
+  test('sunset and a light rain each have a scene; storms do not', async () => {
+    const g = atSeat('porch');
+    g.weather = 'Rain';
+    const said = quiet(g);
+    await g.interact();
+    assert.ok(said[0].startsWith(SEATS.porch.rain));
+    g.weather = 'Sunny';
+    g.minutes = 18 * 60;
+    said.length = 0;
+    await g.interact();
+    assert.ok(said[0].startsWith(SEATS.porch.sunset));
+    g.weather = 'Typhoon';
+    assert.equal(g.seat_moment(), null);
+  });
+
+  test('a friend is there on the right evening: a line, friendship, and a shared memory', async () => {
+    const g = atSeat('green');
+    const f = SEATS.green.friend!;
+    onWeekday(g, f.weekday);
+    g.weather = 'Sunny';
+    g.minutes = 17 * 60 + 30;
+    const said: string[] = [];
+    g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
+    const before = g.friend[f.npc] || 0;
+    await g.interact();
+    assert.ok(said.includes(`${f.npc}: ${f.line}`), said.join(' | '));
+    assert.equal(g.friend[f.npc], before + 3);
+    assert.equal(g.memories.at(-1).text, `You watched the sunset from the Town Green bench with ${f.npc}.`);
+    // another evening of the week: just the scene
+    const h = atSeat('green');
+    onWeekday(h, (f.weekday + 1) % 7);
+    h.weather = 'Sunny';
+    h.minutes = 17 * 60 + 30;
+    const s2 = quiet(h);
+    await h.interact();
+    assert.equal(s2.length, 1);
+  });
+
+  test('the Ridge lookout keeps its forecast, with the sunset scene and Cliff on Sundays', async () => {
+    const g = fresh();
+    const f = SEATS.lookout.friend!;
+    onWeekday(g, f.weekday);
+    g.weather = 'Sunny';
+    g.minutes = 18 * 60;
+    const said: string[] = [];
+    g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
+    await g.ridge_lookout();
+    assert.ok(said[0].startsWith(`Skyline Ridge Lookout: ${SEATS.lookout.sunset}`), said[0]);
+    assert.ok(said.includes(`${f.npc}: ${f.line}`));
+  });
+
+  test('a spouse keeps you company on the porch at sunset', async () => {
+    const g = atSeat('porch');
+    g.married = 'Ann';
+    g.weather = 'Sunny';
+    g.minutes = 18 * 60;
+    const said: string[] = [];
+    g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
+    await g.interact();
+    assert.ok(said.some((l) => l.startsWith('Ann: Ann comes out with two cups of tea')), said.join(' | '));
   });
 });
