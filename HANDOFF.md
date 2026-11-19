@@ -1,5 +1,15 @@
 # Handoff: HRVSTMN
 
+## Weather worth exploring (mechanics task 35), 2026-11-19
+
+- The morning after a Rain or Typhoon day, outside winter, `Game.mushroom_flush()` (called from
+  `new_day` after `spawn_forage`) puts `FLUSH_COUNT` (5) extra mushrooms on open grass in Cedar
+  Hollow, from `MUSHROOM_FLUSH[season]` (Mushroom and Chanterelle; Fall adds Truffle). The morning
+  report says "After yesterday's rain, mushrooms have come up in Cedar Hollow (5 to pick)."
+- Hints: on the rainy day the TV forecast adds "look for mushrooms in Cedar Hollow tomorrow
+  morning" and Today's Plan has a "Rain" line (`flush_coming()`); on the flush day Today's Plan
+  counts what is left to pick (`flush_left()`). `flush_day` and `flush_spots` are saved.
+
 ## A crab pot off the pier (mechanics task 39), 2026-11-19
 
 - One spot, `TRAP_SPOT` = beach (32, 20): the water just past the end of the Mineral Beach pier,
