@@ -1,5 +1,14 @@
 # Handoff: HRVSTMN
 
+## High-res detail is a setting again, 2026-11-19
+
+- The player asked for the contour look back. `Screen.setHires()` / `onHiresChange` are restored;
+  "High-res detail" is a checkbox in the F10 menu (`GameScreen.tsx`) and "High-res Detail" in the
+  Diary (`key: 'hires'`). Off by default (the plain look draws faster); the choice is kept in
+  localStorage as `hrvstmn-hires` = on/off.
+- `computeFrame` still runs `worldMicroDetail` only when `scr.hires` is on, so the plain look keeps
+  its speed.
+
 ## Mine side chambers (mechanics task 40), 2026-11-19
 
 - `POCKETS` in `constants.ts`: three sealed-wall patterns, each its own tile in the cave wall:
