@@ -1,5 +1,15 @@
 # Handoff: HRVSTMN
 
+## Villagers remember milestones (mechanics task 03), 2026-11-19
+
+- `Game.milestone_line(n)` gives a villager's unsaid memory, used by `talk()` in place of small talk
+  (heart emote), and records it in `milestones_said` ('who:what' keys, saved) so each is said once:
+  - Zack, after your first shipment, naming what you have shipped most of;
+  - the Curator, for each museum case you complete (`museum_cases_done()`), one case per chat;
+  - Popuri, Rick, Ann, Mary and Elli, each in their own words, once the Willow Bend footbridge
+    (task 12's public works) is built.
+- The lines live in `MILESTONE_LINES` in `constants.ts`.
+
 ## A pet's morning clue (mechanics task 29), 2026-11-19
 
 - Each morning (`Game.dog_morning()` in `new_day`, after the forage, flush and dig spawns) a dog

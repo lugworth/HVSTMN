@@ -49,6 +49,7 @@ import {
   MUSHROOM_FLUSH,
   FLUSH_COUNT,
   DOG_CLUE_AFF,
+  MILESTONE_LINES,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3180,5 +3181,69 @@ describe("a pet's morning clue (task 29)", () => {
     const k = fresh();
     k.applySaveData(snap);
     assert.equal(k.dog_clue, null);
+  });
+});
+
+describe('villagers remember milestones (task 03)', () => {
+  /** Talk to a villager and return what they said. */
+  const chat = async (g: any, n: string) => {
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    g.check_heart_and_rival_events = async () => {};
+    g.held = null;
+    await g.talk(n);
+    return said[0];
+  };
+
+  test('Zack remembers your first shipment, once, naming what you ship most', async () => {
+    const g = fresh();
+    assert.doesNotMatch(await chat(g, 'Zack'), /first crate/, 'nothing shipped yet');
+    g.shipped_total = 400;
+    g.shipped_counts = { Turnip: 6, Potato: 2 };
+    assert.equal(await chat(g, 'Zack'), MILESTONE_LINES.first_shipment.replace('{item}', 'Turnip'));
+    assert.ok(g.milestones_said.includes('Zack:first_shipment'));
+    assert.doesNotMatch(await chat(g, 'Zack'), /first crate/, 'said once');
+  });
+
+  test('the curator mentions each museum case you complete', async () => {
+    const g = fresh();
+    const fish = g.museum_pool('fish');
+    g.museum = fish.slice(0, -1);
+    assert.deepEqual(g.museum_cases_done(), []);
+    assert.doesNotMatch(await chat(g, 'Curator'), /case is complete/);
+    g.museum = [...fish];
+    assert.deepEqual(g.museum_cases_done(), ['Fish']);
+    assert.equal(await chat(g, 'Curator'), MILESTONE_LINES.museum_case.replace('{case}', 'Fish'));
+    assert.doesNotMatch(await chat(g, 'Curator'), /case is complete/);
+    g.museum.push(...g.museum_pool('ore'));
+    assert.match(await chat(g, 'Curator'), /^The Ore case is complete/);
+  });
+
+  test('neighbours notice the footbridge you helped rebuild, each in their own words', async () => {
+    const g = fresh();
+    assert.equal(g.milestone_line('Popuri'), null, 'not built yet');
+    g.public_works.built = true;
+    const lines = new Set<string>();
+    for (const n of Object.keys(MILESTONE_LINES.footbridge)) {
+      const said = await chat(g, n);
+      assert.equal(said, MILESTONE_LINES.footbridge[n]);
+      lines.add(said);
+      assert.equal(g.milestone_line(n), null, `${n} says it once`);
+    }
+    assert.equal(lines.size, Object.keys(MILESTONE_LINES.footbridge).length);
+    assert.equal(g.milestone_line('Jeff'), null, 'only the neighbours who use it');
+  });
+
+  test('what has been said survives a reload', () => {
+    const g = fresh();
+    g.milestones_said = ['Zack:first_shipment', 'Ann:footbridge'];
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.milestones_said, g.milestones_said);
+    delete snap.milestones_said;
+    const k = fresh();
+    k.applySaveData(snap);
+    assert.deepEqual(k.milestones_said, []);
   });
 });
