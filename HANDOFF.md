@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## A field notebook (mechanics task 37), 2026-11-19
+
+- `Game.note_first(item)` records the first catch of each kind of fish (the rod in `fish()` and the
+  crab pot's haul) in `notebook` with map, weather, minutes and day (saved, sanitized), and says
+  "Field notebook: first X, noted."
+- Diary → Field Notebook (`field_notebook()`): "Observations", newest first ("Willow Chub — Willow
+  Bend, Rain, 7:40AM, Spring 3"), then "Still to find": `notebook_hints()` words the regional catch
+  tables for fish not caught yet: where, in which seasons, "bites more often on a better rod", and for
+  rare fish "a rare bite off …, most often after rain or in a storm; needs a <level> rod". Hints that
+  can come true now (in season, rod good enough) go first.
+
 ## A mantel for festival souvenirs (mechanics task 45), 2026-11-19
 
 - Every farmhouse has a `mantel` tile (`♕`, house (14, 1) on the north wall; grey when bare, lit once

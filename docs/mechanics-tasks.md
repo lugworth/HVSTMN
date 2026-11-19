@@ -71,7 +71,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **34. A shortcut earned on foot.** Open a gate from the far side of a trail or repair a crossing after seeing both banks. Make the route a permanent part of the valley once earned.
 - [x] **35. Weather worth exploring.** After a rainy night, show a mushroom flush in Cedar Hollow or an unusual tide-pool find at Lighthouse Point. Put the hint in the morning forecast or a villager’s dialogue.
 - [ ] **36. People you meet along the trail.** Place a neighbor sketching the view or looking for a dropped scarf. A one-screen detour earns a story or clue.
-- [ ] **37. A field notebook.** Record the place, weather, and time for interesting observations. Give the next hint in words such as “near shallow water after rain.”
+- [x] **37. A field notebook.** Record the place, weather, and time for interesting observations. Give the next hint in words such as “near shallow water after rain.”
 - [ ] **38. Read the water before casting.** Give a few fish distinct ripple shapes or preferred pockets. Let the player learn which sign corresponds to each habitat.
 - [x] **39. Set one crab pot or fish trap.** Mark it clearly and let the player check it on the next trip. Start with one spot and one bait decision.
 - [ ] **40. Mine side chambers.** Occasionally offer a visible choice between an ore pocket and the next ladder. Different rock patterns give clues about what the pocket holds.
