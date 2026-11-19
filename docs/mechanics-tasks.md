@@ -91,7 +91,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 - [ ] **49. A “Facing” row in the HUD.** Show the available action and what it affects, such as “Water turnip · 2 stamina” or “Talk to Gray.” Use the same action information on phones.
 - [x] **50. An optional first-morning checklist.** Check off tilling, planting, and watering as the player uses their starting turnip seeds. Let experienced players dismiss it.
-- [ ] **51. Reminders on the calendar.** Pin a birthday, market, or personal harvest day and surface it in Today’s Plan. Keep reminders in the game clock.
+- [x] **51. Reminders on the calendar.** Pin a birthday, market, or personal harvest day and surface it in Today’s Plan. Keep reminders in the game clock.
 - [ ] **52. A relaxed day setting.** Give players more real time per in-game hour. Keep the 5 PM shipping cutoff and shop schedules tied to the in-game clock.
 - [ ] **53. A seed pouch shortcut.** Favorite one seed bag for quick planting and return to the previously equipped tool with one action.
 - [ ] **54. Work along a row.** Preview a short line of reachable tiles and hold to till or water it. Stop at obstacles, an empty can, or the chosen stamina limit.

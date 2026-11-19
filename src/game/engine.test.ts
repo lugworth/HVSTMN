@@ -2,7 +2,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { Screen } from './screen';
-import { Game } from './engine';
+import { Game, REMINDER_MAX } from './engine';
 import { computeFrame } from './enhanced';
 import { HEDGE_GATE } from './map';
 import {
@@ -2638,5 +2638,108 @@ describe('first-morning checklist (task 50)', () => {
     const d = fresh();
     d.applySaveData(done);
     assert.equal(d.first_steps, null);
+  });
+});
+
+describe('reminders on the calendar (task 51)', () => {
+  /** Spring 3, a turnip patch sown yesterday and Mary's... whoever's birthday is near. */
+  const farmDay = () => {
+    const g = fresh();
+    g.day = 3;
+    g.minutes = 7 * 60;
+    g.crops = { '20,15': ['Turnip', 1], '21,15': ['Turnip', 1], '22,15': ['Potato', 0] };
+    return g;
+  };
+  const pickMenus = (g: any, picks: (string | null)[]) => {
+    const seen: { title: string; opts: string[]; info: string[] }[] = [];
+    g.menu = async (title: string, opts: string[], _s = 0, info: any = null) => {
+      seen.push({ title, opts, info: typeof info === 'function' ? info(0) : info || [] });
+      const want = picks.shift();
+      if (want == null) return null;
+      const i = opts.findIndex((o) => o.includes(want));
+      assert.ok(i >= 0, `"${want}" in ${title}: ${opts.join(' | ')}`);
+      return i;
+    };
+    return seen;
+  };
+
+  test('the options cover festivals, birthdays, the next market and when each crop is first ready', () => {
+    const g = farmDay();
+    const opts = g.reminder_options();
+    const texts = opts.map((o: any) => o.text);
+    assert.ok(opts.some((o: any) => o.text === 'Turnip ready (2 tiles)' && o.day === g.absday() + 3), JSON.stringify(opts));
+    assert.ok(opts.some((o: any) => o.text === 'Potato ready (1 tile)' && o.day === g.absday() + 7));
+    assert.ok(opts.some((o: any) => o.text === 'Saturday market' && o.day === g.market_next()));
+    const expected: string[] = [];
+    for (let off = 0; off < 30; off++) {
+      const f = g.fest_on(off);
+      if (f) expected.push(f[0]);
+      for (const n of g.birthdays(off)) expected.push(`${n}'s birthday`);
+    }
+    assert.ok(expected.length > 0, 'a spring month has festivals or birthdays');
+    for (const e of expected) assert.ok(texts.includes(e), `${e} can be pinned`);
+    for (let i = 1; i < opts.length; i++) assert.ok(opts[i].day >= opts[i - 1].day, 'in date order');
+  });
+
+  test('pin at the calendar; Today\'s Plan and the morning report remind you; past days fall away', async () => {
+    const g = farmDay();
+    const seen = pickMenus(g, ['Pin a reminder', 'Turnip ready', null]);
+    await g.calendar_menu();
+    assert.equal(seen[0].title, 'Calendar');
+    assert.match(seen[0].info[0], /^  Today is Spring 3 \(.+\), Year 1\. 27 days until Summer\.$/);
+    assert.deepEqual(g.reminders, [{ day: g.absday() + 3, text: 'Turnip ready (2 tiles)' }]);
+    assert.equal(g.msgs.at(-1)[0], 'Pinned: Turnip ready (2 tiles), Spring 6.');
+    assert.ok(seen[2].info.includes('  ★ Spring 6 (in 3d): Turnip ready (2 tiles)'), seen[2].info.join(' | '));
+    assert.ok(g.today_lines().includes('  ★ Spring 6 (in 3d): Turnip ready (2 tiles)'));
+    assert.ok(!g.reminder_options().some((o: any) => o.text === 'Turnip ready (2 tiles)'), 'not offered twice');
+
+    g.day = 5;
+    assert.ok(g.today_lines().includes('  ★ Tomorrow: Turnip ready (2 tiles)'));
+    g.day = 6;
+    const report: string[] = [];
+    g.reminder_day(report);
+    assert.deepEqual(report, ['Reminder: Turnip ready (2 tiles) today.']);
+    assert.ok(g.today_lines().includes('  ★ Today: Turnip ready (2 tiles)'));
+    g.day = 7;
+    g.reminder_day([]);
+    assert.deepEqual(g.reminders, []);
+  });
+
+  test('the calendar holds six; unpin from the same menu', async () => {
+    const g = farmDay();
+    for (let i = 0; i < REMINDER_MAX; i++) assert.ok(g.reminder_add({ day: g.absday() + i + 1, text: `Day ${i}` }));
+    assert.equal(g.reminder_add({ day: g.absday() + 20, text: 'one too many' }), false);
+    assert.equal(g.reminder_add({ day: g.absday() + 1, text: 'Day 0' }), false, 'no duplicates');
+    const said = quiet(g);
+    pickMenus(g, ['Pin a reminder', null]);
+    await g.calendar_menu();
+    assert.match(said[0], /holds 6 reminders\. Unpin one first\./);
+    pickMenus(g, ['Unpin', 'Day 2', null]);
+    await g.calendar_menu();
+    assert.deepEqual(g.reminders.map((r: any) => r.text), ['Day 0', 'Day 1', 'Day 3', 'Day 4', 'Day 5']);
+    assert.equal(g.msgs.at(-1)[0], 'Unpinned: Day 2.');
+  });
+
+  test('reminders survive a reload, in order, without past or broken ones', () => {
+    const g = farmDay();
+    g.reminder_add({ day: g.absday() + 2, text: 'Saturday market' });
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.reminders, g.reminders);
+    snap.reminders = [
+      { day: g.absday() + 5, text: 'later' },
+      { day: g.absday() - 1, text: 'yesterday' },
+      { day: 'x', text: 'broken' },
+      { day: g.absday() + 1, text: '' },
+      { day: g.absday() + 1, text: 'sooner' },
+    ];
+    const k = fresh();
+    k.applySaveData(snap);
+    assert.deepEqual(k.reminders.map((r: any) => r.text), ['sooner', 'later']);
+    delete snap.reminders;
+    const o = fresh();
+    o.applySaveData(snap);
+    assert.deepEqual(o.reminders, []);
   });
 });
