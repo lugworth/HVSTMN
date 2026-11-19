@@ -2597,6 +2597,10 @@ Object.assign(FORAGE_GLYPH, {
   "HMSGB Apple": ["a", "0A"],
   "AEPFE Apple": ["a", "09"],
   "Honey": ["h", "09"],
+  "Moondrop Honey": ["h", "0A"],
+  "Toy Flower Honey": ["h", "0E"],
+  "Pink Cat Honey": ["h", "0A"],
+  "Magic Red Honey": ["h", "08"],
 });
 
 Object.assign(TILES, {
@@ -2640,6 +2644,10 @@ Object.assign(ITEMS, {
   "HMSGB Apple": [500, 15, "forage"],
   "AEPFE Apple": [500, 15, "forage"],
   "Honey": [50, 10, "forage"],
+  "Moondrop Honey": [90, 14, "forage"],
+  "Toy Flower Honey": [110, 14, "forage"],
+  "Pink Cat Honey": [100, 14, "forage"],
+  "Magic Red Honey": [160, 16, "forage"],
   "Spa-Boiled Egg": [80, 15, "animal"],
   // Egg & Mayonnaise Quality Ladder
   "Good Egg": [60, 10, "animal"],
@@ -3626,6 +3634,20 @@ export const MILESTONE_LINES = {
     Mary: 'I read on the new footbridge at Willow Bend most mornings. The river sounds different from up there.',
     Elli: "Grandma can cross at Willow Bend again with the footbridge fixed. She asked me to say thank you.",
   } as Record<string, string>,
+};
+
+/**
+ * Hives with seasonal honey (mechanics task 22): the wild hive in the farm tree at HIVE_SPOT. Its bees
+ * visit flowers in bloom within HIVE_RANGE tiles; the flower with the most blooms flavours the day's
+ * honey, and each flavour has villagers who love it as a gift. No flowers nearby: plain Honey.
+ */
+export const HIVE_SPOT: [number, number] = [7, 6];
+export const HIVE_RANGE = 8;
+export const HONEY_FLAVOURS: Record<string, { item: string; fans: string[] }> = {
+  'Moondrop Flower': { item: 'Moondrop Honey', fans: ['Mary', 'Elli', 'Lillia'] },
+  'Toy Flower': { item: 'Toy Flower Honey', fans: ['May', 'Popuri'] },
+  'Pink Cat Flower': { item: 'Pink Cat Honey', fans: ['Manna', 'Popuri'] },
+  'Magic Red Flower': { item: 'Magic Red Honey', fans: ['Harvest Goddess', 'Doctor'] },
 };
 
 /**

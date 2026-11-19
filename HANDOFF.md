@@ -1,5 +1,14 @@
 # Handoff: HRVSTMN
 
+## Hives with seasonal honey (mechanics task 22), 2026-11-19
+
+- The farm tree at `HIVE_SPOT` (7, 6) is a wild hive. `Game.hive_blooms()` counts flowers in bloom
+  (Moondrop, Toy Flower, Pink Cat, Magic Red) within `HIVE_RANGE` (8) tiles; `hive_honey()` picks the
+  one with most blooms (ties by name) from `HONEY_FLAVOURS`: Moondrop / Toy Flower / Pink Cat / Magic
+  Red Honey (new items, worth more than plain Honey). No flowers in reach: plain Honey, with a line
+  saying flowers nearby would flavour it. After picking, the tree says what tomorrow's honey will be.
+- Each flavour has fans (`HONEY_FLAVOURS[..].fans`) who treat it as a loved gift in `talk()`.
+
 ## A field notebook (mechanics task 37), 2026-11-19
 
 - `Game.note_first(item)` records the first catch of each kind of fish (the rod in `fish()` and the
