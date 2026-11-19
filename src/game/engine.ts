@@ -132,6 +132,11 @@ import {
   VALLEY_SHORT,
   VALLEY_LANDMARKS,
   PUBLIC_WORKS,
+  CONTEST_MAP,
+  CONTEST_WEEKDAY,
+  CONTEST_HOURS,
+  CONTEST_GOAL,
+  CONTEST_SEASONS,
   FAVORS,
   FAVOR_FRIENDSHIP,
   FAVOR_HOURS,
@@ -574,6 +579,8 @@ export class Game {
   notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
   /** Seats rested at today (task 44): seat id → absolute day. */
   seats_rested: Record<string, number> = {};
+  /** Tonight's Evening Catch (task 14): the day, fish landed and the best one; null when none is under way. */
+  contest: { day: number; fish: number; best: string | null } | null = null;
   /** A favor a neighbor promised (task 05): who, and the absolute day it happens. */
   favor: { npc: string; day: number } | null = null;
   /** When each neighbor last offered a favor (absolute day), so offers stay occasional. */
@@ -657,7 +664,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -804,6 +811,7 @@ export class Game {
     this.souvenirs = [];
     this.notebook = [];
     this.seats_rested = {};
+    this.contest = null;
     this.favor = null;
     this.favor_offered = {};
     this.clear_plots();
@@ -1202,6 +1210,10 @@ export class Game {
       this.favor_offered = Object.fromEntries(
         Object.entries(this.favor_offered && typeof this.favor_offered === 'object' ? this.favor_offered : {}).filter(([k, v]) => FAVORS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
+      const ct: any = this.contest;
+      this.contest = ct && typeof ct === 'object' && Number.isInteger(ct.day) && Number.isInteger(ct.fish) && ct.fish >= 0
+        ? { day: ct.day, fish: ct.fish, best: typeof ct.best === 'string' && ITEMS[ct.best] ? ct.best : null }
+        : null;
       this.seats_rested = Object.fromEntries(
         Object.entries(this.seats_rested && typeof this.seats_rested === 'object' ? this.seats_rested : {}).filter(([k, v]) => SEATS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
@@ -1403,6 +1415,12 @@ export class Game {
 
     if (before < 18 * 60 && 18 * 60 <= this.minutes) {
       this.msg('The sun is setting. Shops are closing soon.', '09');
+    }
+    if (this.contest_today() && before < CONTEST_HOURS[0] * 60 && CONTEST_HOURS[0] * 60 <= this.minutes) {
+      this.msg(`The Evening Catch has begun at Willow Bend: land ${CONTEST_GOAL} fish by ${fmt_hour(CONTEST_HOURS[1])}.`, '0D');
+    }
+    if (before < CONTEST_HOURS[1] * 60 && CONTEST_HOURS[1] * 60 <= this.minutes) {
+      for (const line of this.contest_close()) this.msg(line, '0D');
     }
     if (before < 24 * 60 && 24 * 60 <= this.minutes) {
       this.fatigue = Math.min(100, this.fatigue + 10);
@@ -2786,6 +2804,7 @@ export class Game {
       this.fx_add('splash', tx, ty, 0.7);
       if (ITEMS[caught]?.[2] === 'fish') {
         this.note_first(caught);
+        this.contest_catch(caught);
         this.fish_caught[caught] = (this.fish_caught[caught] || 0) + 1;
         this.mastery_add('fishing');
       }
@@ -3642,6 +3661,72 @@ export class Game {
     if (d !== 0) return null;
     if (f.kind === 'hours') return { text: `${fv.npc}'s note on today's shop hours:`, hours: this.favor_hours() };
     return { text: `Today: ${f.plan} (done this morning).`, hours: [] };
+  }
+
+  // ---------------------------------------------------------------- the Evening Catch (mechanics task 14)
+  /** Whether today is an Evening Catch day (Wednesdays, Spring to Fall, not a festival). */
+  contest_today(offset: number = 0): boolean {
+    const d = this.absday() + offset;
+    const season = Math.floor((d % 120) / 30);
+    return d % 7 === CONTEST_WEEKDAY && CONTEST_SEASONS.includes(season) && !this.fest_on(offset);
+  }
+
+  /** Whether a catch right now, here, counts. */
+  contest_live(): boolean {
+    const [a, b] = CONTEST_HOURS;
+    return this.contest_today() && this.mapname === CONTEST_MAP && this.minutes >= a * 60 && this.minutes < b * 60;
+  }
+
+  /** The key for this season's ribbon on the mantel. */
+  contest_ribbon_key(): string {
+    return `ribbon:evening_catch:${this.year}:${this.season}`;
+  }
+
+  /** Count a fish landed during the contest; say how far along you are. */
+  contest_catch(item: string): void {
+    if (!this.contest_live()) return;
+    if (!this.contest || this.contest.day !== this.absday()) this.contest = { day: this.absday(), fish: 0, best: null };
+    const c = this.contest;
+    c.fish += 1;
+    const price = (i: string | null) => (i ? ITEMS[i]?.[0] || 0 : -1);
+    if (price(item) > price(c.best)) c.best = item;
+    if (c.fish === CONTEST_GOAL && !this.souvenirs.some((s) => s.key === this.contest_ribbon_key())) {
+      this.msg(`Evening Catch: ${CONTEST_GOAL} fish! The ribbon is yours at the ${fmt_hour(CONTEST_HOURS[1])} whistle.`, '0B');
+    } else if (c.fish < CONTEST_GOAL) {
+      this.msg(`Evening Catch: ${c.fish}/${CONTEST_GOAL} fish.`, '0D');
+    }
+  }
+
+  /** End the contest (at 8 PM, or the next morning if you slept first): the result, and the ribbon if you won. */
+  contest_close(): string[] {
+    const c = this.contest;
+    if (!c) return [];
+    this.contest = null;
+    const season = SEASONS[Math.floor((c.day % 120) / 30)];
+    const year = Math.floor(c.day / 120) + 1;
+    const best = c.best ? [`Your best catch: ${aOrAn(c.best)} ${c.best}.`] : [];
+    if (c.fish < CONTEST_GOAL) {
+      return [`Evening Catch over: ${c.fish} of ${CONTEST_GOAL} fish. Next Wednesday, then!`, ...best];
+    }
+    const key = `ribbon:evening_catch:${year}:${Math.floor((c.day % 120) / 30)}`;
+    const fresh = this.keepsake(key, `Evening Catch ribbon (${season})`, `A green river ribbon from the Evening Catch at Willow Bend, ${season} Year ${year}: ${c.fish} fish landed${c.best ? `, the best ${aOrAn(c.best)} ${c.best}` : ''}.`);
+    return [fresh
+      ? `Evening Catch over: ${c.fish} fish! The ${season} ribbon goes on your mantel.`
+      : `Evening Catch over: ${c.fish} fish. You already hold this season's ribbon.`, ...best];
+  }
+
+  /** Today's Plan line for the Evening Catch, or null. */
+  contest_line(): string | null {
+    const [a, b] = CONTEST_HOURS;
+    const won = this.souvenirs.some((s) => s.key === this.contest_ribbon_key());
+    if (this.contest_today()) {
+      if (this.minutes >= b * 60) return null;
+      const c = this.contest?.day === this.absday() ? this.contest : null;
+      if (c) return `Evening Catch at Willow Bend until ${fmt_hour(b)}: ${c.fish}/${CONTEST_GOAL} fish${c.best ? ` (best: ${c.best})` : ''}.`;
+      return `Evening Catch at Willow Bend, ${fmt_hour(a)}–${fmt_hour(b)}: land ${CONTEST_GOAL} fish for the ${this.season_name} ribbon${won ? ' (already won)' : ''}.`;
+    }
+    if (this.contest_today(1)) return `Tomorrow evening: the Evening Catch at Willow Bend (${fmt_hour(a)}–${fmt_hour(b)}).`;
+    return null;
   }
 
   // ---------------------------------------------------------------- named farm plots (mechanics task 42)
@@ -5634,6 +5719,8 @@ export class Game {
       lines.push(`  Favor  ${favor.text}`);
       for (const h of favor.hours) lines.push(`         ${h}`);
     }
+    const contest = this.contest_line();
+    if (contest) lines.push(`  Catch  ${contest}`);
     const works = this.works_line();
     if (works) lines.push(`  Bridge ${works}`);
     const pinRoute = this.pin_route();
@@ -5828,6 +5915,8 @@ export class Game {
         all.push(...wrapLabeled('♥ Favor ', '0A', favor.text, '05'));
         for (const h of favor.hours) all.push(...wrapLabeled('        ', '04', h, '05'));
       }
+      const contest = this.contest_line();
+      if (contest) all.push(...wrapLabeled('≈ Catch ', '0D', contest, '05'));
       if (works) all.push(...wrapLabeled('═ Bridge', '09', works, '05'));
       if (pinRoute) all.push(...wrapLabeled('◈ Pin   ', '0E', `${pinRoute.landmark.name}: ${pinRoute.text}`, '05'));
 
@@ -7719,6 +7808,7 @@ export class Game {
     this.fed = 0;
 
     this.barn_new_day(report);
+    report.push(...this.contest_close());
     this.favor_morning(report);
 
     // Blacksmith completion
