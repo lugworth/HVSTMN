@@ -66,6 +66,41 @@ const KEYMAP: Record<string, string> = {
   ' ': 'space',
 };
 
+/** Keep text entry intact while translating held row keys to the non-starting command. */
+export function rowKeyboardKey(key: string, repeat: boolean, typing: boolean): string {
+  return repeat && !typing && (key === 'c' || key === 'C') ? 'row-repeat' : key;
+}
+
+/** One outstanding repeat at most; stopping also discards an unconsumed repeat. */
+export function createRowRepeat(
+  getScreen: () => Pick<Screen, 'keyQueue' | 'pushKey'> | null,
+  canRepeat: () => boolean,
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const stop = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+    const queue = getScreen()?.keyQueue;
+    if (queue) {
+      for (let i = queue.length - 1; i >= 0; i--) if (queue[i] === 'row-repeat') queue.splice(i, 1);
+    }
+  };
+  const tick = () => {
+    timer = null;
+    if (!canRepeat()) return stop();
+    const screen = getScreen();
+    if (screen && screen.keyQueue.length === 0) screen.pushKey('row-repeat');
+    timer = setTimeout(tick, REPEAT_MS);
+  };
+  return {
+    start: () => {
+      stop();
+      timer = setTimeout(tick, REPEAT_DELAY_MS);
+    },
+    stop,
+  };
+}
+
 const TITLE_TOOLBAR = [
   ['down', '↑/↓', 'SELECT', 'Move selection (Up/Down)', 'swap'],
   ['enter', 'ENTER', 'START', 'Confirm selection (Enter)', 'act'],
@@ -146,6 +181,20 @@ export default function GameScreen() {
   const [compact, setCompact] = useState(false);
   /** The game menu: closed (null), or open with focus on its first or last item ('none' on touch). */
   const [menu, setMenu] = useState<'first' | 'last' | 'none' | null>(null);
+  const menuOpenRef = useRef(false);
+  const rowKeyInterruptedRef = useRef(false);
+  const rowPointerRef = useRef<number | null>(null);
+  const rowRepeatRef = useRef<ReturnType<typeof createRowRepeat> | null>(null);
+  if (!rowRepeatRef.current) {
+    rowRepeatRef.current = createRowRepeat(
+      () => screenRef.current,
+      () => Boolean(gameRef.current?.started && gameRef.current.row && !gameRef.current.modal_depth && !gameRef.current.typing && !menuOpenRef.current),
+    );
+  }
+  const stopRow = useCallback(() => {
+    rowPointerRef.current = null;
+    rowRepeatRef.current?.stop();
+  }, []);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const menuOpenerRef = useRef<HTMLElement | null>(null);
   const [toolbarFocus, setToolbarFocus] = useState(0);
@@ -388,11 +437,16 @@ export default function GameScreen() {
   // whatever opened the menu, a command to the game itself.
   const focusGame = useCallback(() => canvasRef.current?.focus({ preventScroll: true }), []);
   const openMenu = useCallback((focus: 'first' | 'last' | 'none', opener: Element | null) => {
+    stopRow();
+    rowKeyInterruptedRef.current = true;
+    if (gameRef.current) gameRef.current.row = null;
+    menuOpenRef.current = true;
     menuOpenerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
     setMenu(focus);
-  }, []);
+  }, [stopRow]);
   const closeMenu = useCallback(
     (why: MenuClose) => {
+      menuOpenRef.current = false;
       setMenu(null);
       if (why === 'escape') (menuOpenerRef.current ?? canvasRef.current)?.focus({ preventScroll: true });
       else if (why === 'command') focusGame();
@@ -710,6 +764,12 @@ export default function GameScreen() {
     };
 
     screen.onRender = () => {
+      // A dialog can open and close between repeat ticks; a new press must start any later row.
+      if (gameRef.current?.modal_depth) {
+        rowKeyInterruptedRef.current = true;
+        gameRef.current.row = null;
+        if (rowPointerRef.current !== null) stopRow();
+      }
       if (!canvas || !ctx) return;
       if (screen.style !== 'classic') {
         renderEnhanced();
@@ -787,16 +847,32 @@ export default function GameScreen() {
       } else if (KEYMAP[e.key]) {
         name = KEYMAP[e.key];
       } else if ([...e.key].length === 1) {
-        name = e.key;
+        name = rowKeyboardKey(e.key, e.repeat, Boolean(gameRef.current?.typing));
       } else {
         return;
       }
 
       e.preventDefault();
+      if ((name === 'c' || name === 'C') && !e.repeat) {
+        rowKeyInterruptedRef.current = Boolean(gameRef.current?.modal_depth || menuOpenRef.current);
+      }
+      if (name === 'row-repeat' && (rowKeyInterruptedRef.current || !gameRef.current?.started || !gameRef.current.row || gameRef.current.modal_depth > 0 || menuOpenRef.current || screen.keyQueue.length > 0)) return;
       sendKey(name);
     };
 
+    const onKeyUp = (e: KeyboardEvent) => {
+      if ((e.key === 'c' || e.key === 'C') && rowPointerRef.current === null) {
+        rowRepeatRef.current?.stop();
+      }
+    };
+    const onBlur = () => {
+      stopRow();
+      rowKeyInterruptedRef.current = true;
+      if (gameRef.current) gameRef.current.row = null;
+    };
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
 
     // Window resizes, phone rotation, browser toolbars sliding away and the touch pad appearing
     // all change the stage size; the observer catches every one of them.
@@ -864,7 +940,10 @@ export default function GameScreen() {
       game.flushAutosave();
     };
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushSave();
+      if (document.visibilityState === 'hidden') {
+        onBlur();
+        flushSave();
+      }
     };
     window.addEventListener('pagehide', flushSave);
     window.addEventListener('beforeunload', flushSave);
@@ -877,6 +956,7 @@ export default function GameScreen() {
         await game.run();
       } catch (err) {
         console.error('Game error:', err);
+        stopRow();
         if (isMounted) setCrashed(true);
       }
     })();
@@ -887,6 +967,8 @@ export default function GameScreen() {
       game.flushAutosave();
       game.running = false;
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pagehide', flushSave);
       window.removeEventListener('beforeunload', flushSave);
@@ -899,9 +981,10 @@ export default function GameScreen() {
       clearInterval(animTimer);
       clearInterval(hudTimer);
       if (dpadState.timer) clearTimeout(dpadState.timer);
+      stopRow();
       cancelWalk();
     };
-  }, [sendKey, cancelWalk]);
+  }, [sendKey, cancelWalk, stopRow]);
 
   // Leaving the name prompt (by any button) clears the field and drops the keyboard; iOS can
   // leave the page scrolled after its keyboard closes, so snap back.
@@ -1104,6 +1187,38 @@ export default function GameScreen() {
             </div>
             <div className="t-util-b">
               <PadButton label={HORSE.label} title={HORSE.title} style={{ color: HORSE.color }} onPress={() => press(HORSE.key)} />
+              <button
+                type="button"
+                className="pad-btn"
+                title="Work a row: tap to preview or step, hold to continue (C)"
+                aria-label="Work a row: tap to preview or step, hold to continue"
+                onPointerDown={(e) => {
+                  if (rowPointerRef.current !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+                  const game = gameRef.current;
+                  if (!game?.started || game.modal_depth || game.typing || menuOpenRef.current) return;
+                  e.preventDefault();
+                  rowPointerRef.current = e.pointerId;
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                    // Without capture, leaving the button stops the hold.
+                  }
+                  press('c');
+                  rowRepeatRef.current?.start();
+                }}
+                onPointerUp={(e) => { if (rowPointerRef.current === e.pointerId) stopRow(); }}
+                onPointerCancel={(e) => { if (rowPointerRef.current === e.pointerId) stopRow(); }}
+                onLostPointerCapture={(e) => { if (rowPointerRef.current === e.pointerId) stopRow(); }}
+                onPointerLeave={(e) => {
+                  if (rowPointerRef.current === e.pointerId && !e.currentTarget.hasPointerCapture?.(e.pointerId)) stopRow();
+                }}
+                onClick={(e) => {
+                  const game = gameRef.current;
+                  if (e.detail === 0 && game?.started && !game.modal_depth && !game.typing && !menuOpenRef.current) press('c');
+                }}
+              >
+                ROW
+              </button>
               {compact && (
                 <PadButton label={INFO.label} title={INFO.title} style={{ color: INFO.color }} onPress={() => press(INFO.key)} />
               )}
