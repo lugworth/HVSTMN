@@ -3714,6 +3714,51 @@ export const PLOT_SIGN_PRICE = 50;
 export const PLOT_NAME_MAX = 16;
 
 /**
+ * Favors from close neighbors (mechanics task 05): on a free afternoon a good friend offers one
+ * specific favor for tomorrow. Accepted, it sits in Today's Plan until the morning it happens.
+ * `kind` is what they do; `offer` is their line, `plan` the Today's Plan wording before and on the day,
+ * `done` the morning report, `memory` the Villager Notes entry.
+ */
+export interface FavorDef {
+  kind: 'feed' | 'water' | 'hours';
+  offer: string;
+  plan: string;
+  done: string;
+  memory: string;
+}
+export const FAVORS: Record<string, FavorDef> = {
+  Rick: {
+    kind: 'feed',
+    offer: "I'm up before the roosters anyway. Want me to feed your chickens tomorrow morning? Bring my own feed and everything.",
+    plan: 'Rick feeds your chickens',
+    done: 'Rick came by at dawn and fed your chickens, as he promised.',
+    memory: 'Rick fed your chickens one morning, with his own feed.',
+  },
+  Cliff: {
+    kind: 'water',
+    offer: "I have nowhere to be tomorrow morning. I could water your field for you... if that would help.",
+    plan: 'Cliff waters your field',
+    done: 'Cliff came by early and watered your field, as he said he would.',
+    memory: 'Cliff watered your field one morning, just to help.',
+  },
+  Mary: {
+    kind: 'hours',
+    offer: "I'm writing out the shop hours for the library board. Shall I copy tomorrow's out for you too?",
+    plan: "Mary leaves a note of the day's shop hours",
+    done: "Mary left a note on your door with today's shop hours (see Today's Plan).",
+    memory: "Mary wrote out a day's shop hours for you in her neat hand.",
+  },
+};
+/** Friendship a neighbor needs before offering a favor, and the hours of a "free afternoon". */
+export const FAVOR_FRIENDSHIP = 60;
+export const FAVOR_HOURS: [number, number] = [12, 18];
+/** Days before the same neighbor offers again, and how many dry crops Cliff waters. */
+export const FAVOR_GAP = 7;
+export const FAVOR_WATER_MAX = 12;
+/** The shops on Mary's note, in her order. */
+export const FAVOR_SHOPS = ['supermarket', 'blacksmith', 'poultry', 'carpenter', 'clinic', 'library'];
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.

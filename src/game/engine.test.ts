@@ -58,6 +58,10 @@ import {
   SEAT_REST,
   PLOT_RADIUS,
   PLOT_MAX,
+  FAVORS,
+  FAVOR_FRIENDSHIP,
+  FAVOR_GAP,
+  FAVOR_WATER_MAX,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3784,5 +3788,146 @@ describe('named farm plots (task 42)', () => {
     const g = fresh();
     const opts = await g.shop_options('supermarket');
     assert.ok(opts.some(([o]: [string]) => o === 'Buy Plot Sign (50G)'));
+  });
+});
+
+describe('favors from close neighbors (task 05)', () => {
+  /** A Tuesday afternoon in early Spring (Spring 1 is the New Year festival) with chickens and a field. */
+  const neighborly = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.day = 2;
+    g.minutes = 13 * 60;
+    g.weather = 'Sunny';
+    g.tomorrow = 'Sunny';
+    g.chickens = 2;
+    for (let x = 0; x < 15; x++) g.crops[`${10 + x},14`] = ['Turnip', 1];
+    for (const n of Object.keys(FAVORS)) g.friend[n] = FAVOR_FRIENDSHIP;
+    return g;
+  };
+  /** Talk to `n`, answering the offer with menu choice `pick` (0 yes, 1 no). */
+  const talkTo = async (g: any, n: string, pick = 0) => {
+    const said = quiet(g);
+    const menus: string[] = [];
+    g.menu = async (title: string) => { menus.push(title); return pick; };
+    await g.talk(n);
+    return { said, menus };
+  };
+
+  test('only a close friend offers, on a free afternoon, with something to help with', () => {
+    const g = neighborly();
+    assert.ok(g.favor_available('Rick'));
+    g.friend.Rick = FAVOR_FRIENDSHIP - 1;
+    assert.ok(!g.favor_available('Rick'), 'not yet a close friend');
+    g.friend.Rick = FAVOR_FRIENDSHIP;
+    g.minutes = 10 * 60;
+    assert.ok(!g.favor_available('Rick'), 'mornings are busy');
+    g.minutes = 18 * 60;
+    assert.ok(!g.favor_available('Rick'), 'evening is past the free afternoon');
+    g.minutes = 13 * 60;
+    g.chickens = 0;
+    assert.ok(!g.favor_available('Rick'), 'no chickens to feed');
+    assert.ok(!g.favor_available('Doug'), 'only neighbors with a favor in mind offer one');
+  });
+
+  test('accepting puts the promise in Today\'s Plan; it happens the next morning and is remembered', async () => {
+    const g = neighborly();
+    const { said, menus } = await talkTo(g, 'Rick', 0);
+    assert.equal(said[0], FAVORS.Rick.offer);
+    assert.equal(menus.length, 1);
+    assert.deepEqual(g.favor, { npc: 'Rick', day: g.absday() + 1 });
+    assert.ok(g.today_lines().includes(`  Favor  Tomorrow: ${FAVORS.Rick.plan}.`));
+    assert.ok(!g.favor_available('Cliff'), 'one favor at a time');
+
+    g.fed = 0;
+    await g.new_day('passout');
+    assert.equal(g.fed, 2, 'Rick fed both chickens');
+    assert.ok(g.memories.some((m: any) => m.npc === 'Rick' && m.text === FAVORS.Rick.memory));
+    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Favor  Today: Rick feeds your chickens')));
+
+    await g.new_day('passout');
+    assert.equal(g.favor, null, 'cleared once its day has passed');
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Favor')));
+    assert.ok(!g.memories.some((m: any, i: number, all: any[]) => all.findIndex((o: any) => o.key === m.key) !== i), 'remembered once');
+  });
+
+  test('declining is fine: they wait a week before offering again', async () => {
+    const g = neighborly();
+    const { said } = await talkTo(g, 'Mary', 1);
+    assert.equal(g.favor, null);
+    assert.match(said[said.length - 1], /next week/);
+    g.talked.clear();
+    g.day += FAVOR_GAP - 1;
+    assert.ok(!g.favor_available('Mary'));
+    g.day += 1;
+    assert.ok(g.favor_available('Mary'));
+  });
+
+  test('a talk that has a milestone to share keeps it; the favor waits for another visit', async () => {
+    const g = neighborly();
+    g.public_works.built = true;
+    const { said, menus } = await talkTo(g, 'Rick', 0);
+    assert.equal(said[0], MILESTONE_LINES.footbridge.Rick);
+    assert.equal(menus.length, 0);
+    assert.equal(g.favor, null);
+    g.talked.clear();
+    await talkTo(g, 'Rick', 0);
+    assert.equal(g.favor?.npc, 'Rick', 'next visit, the offer comes');
+  });
+
+  test('Cliff waters a dozen dry crops at most, and nothing when rain already did', () => {
+    const g = neighborly();
+    g.favor = { npc: 'Cliff', day: g.absday() };
+    const report: string[] = [];
+    g.favor_morning(report);
+    assert.equal(g.crop_water_count(), 15 - FAVOR_WATER_MAX);
+    assert.deepEqual(report, [FAVORS.Cliff.done]);
+
+    const r = neighborly();
+    r.favor = { npc: 'Cliff', day: r.absday() };
+    for (const k of Object.keys(r.crops)) r.wet.add(k);
+    const wet: string[] = [];
+    r.favor_morning(wet);
+    assert.match(wet[0], /already watered/);
+    assert.ok(!r.memories.some((m: any) => m.npc === 'Cliff'), 'nothing done, nothing to remember');
+  });
+
+  test("Mary's note lists the day's shop hours, closed days included", () => {
+    const g = neighborly();
+    g.day = 4; // a Thursday: the forge is shut
+    assert.equal(g.weekday, 3);
+    g.favor = { npc: 'Mary', day: g.absday() };
+    const lines = g.today_lines();
+    const at = lines.indexOf("  Favor  Mary's note on today's shop hours:");
+    assert.ok(at >= 0);
+    assert.ok(lines.includes("         Saibara's Blacksmith: closed today"));
+    assert.ok(lines.includes('         Supermarket: 9AM–5PM'));
+    assert.equal(lines.slice(at + 1).filter((l: string) => l.startsWith('         ') && l.includes(':')).length >= 6, true);
+  });
+
+  test('the promise survives a save; bad or stale data is dropped and old saves load', () => {
+    const g = neighborly();
+    g.favor = { npc: 'Cliff', day: g.absday() + 1 };
+    g.favor_offered = { Cliff: g.absday() };
+    const h = fresh();
+    h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.deepEqual(h.favor, g.favor);
+    assert.deepEqual(h.favor_offered, g.favor_offered);
+
+    const bad = JSON.parse(JSON.stringify(g.snapshot()));
+    bad.favor = { npc: 'Nobody', day: 'soon' };
+    bad.favor_offered = { Nobody: 1, Mary: 'x', Rick: 2 };
+    const k = fresh();
+    k.applySaveData(bad);
+    assert.equal(k.favor, null);
+    assert.deepEqual(k.favor_offered, { Rick: 2 });
+
+    const old = JSON.parse(JSON.stringify(g.snapshot()));
+    delete old.favor;
+    delete old.favor_offered;
+    const o = fresh();
+    o.applySaveData(old);
+    assert.equal(o.favor, null);
+    assert.deepEqual(o.favor_offered, {});
   });
 });

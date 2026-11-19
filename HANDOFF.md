@@ -1,5 +1,20 @@
 # Handoff: HRVSTMN
 
+## Favors from close neighbors (mechanics task 05), 2026-11-19
+
+- `FAVORS` (constants): Rick feeds your chickens (`feed`), Cliff waters up to `FAVOR_WATER_MAX` (12) dry
+  crops (`water`), Mary leaves a note of the day's shop hours (`hours`, shops in `FAVOR_SHOPS`).
+- `Game.favor_available(n)`: friendship >= `FAVOR_FRIENDSHIP` (60), 12-6 PM (`FAVOR_HOURS`), no festival
+  today or tomorrow, nothing already arranged, not offered in the last `FAVOR_GAP` (7) days
+  (`favor_offered`, saved), and something to help with (chickens / crops). `talk()` offers it in place of
+  small talk, after gifts, Gray's request and milestone remarks; `offer_favor()` asks Yes/No and books
+  `favor` = { npc, day: tomorrow } (saved, sanitized; stale ones dropped on load).
+- `favor_morning()` (in `new_day()`, after the barn) does it on the day, reports it and keeps a Villager
+  Notes memory; nothing to do (empty coop, field already wet) is reported and not remembered. Today's
+  Plan (`favor_line()`, both `today_lines()` and the `Y` panel): "Favor  Tomorrow: ..." the day before,
+  "Today: ... (done this morning)" or Mary's hours (`favor_hours()`, the whole day, festival/closed
+  days marked) on the day. The favor is cleared the morning after.
+
 ## Named farm plots (mechanics task 42), 2026-11-19
 
 - Jeff sells **Plot Sign**s (`PLOT_SIGN_PRICE` 50G). Equipped (it joins the tool list while held),
