@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## Morning save backups (mechanics task 55), 2026-11-19
+
+- Every wake-up (`new_day()`, right after the Slot 1 save) also pushes a snapshot to `hrvstmn-dawn`
+  (`DAWN_KEY` in `save.ts`): a JSON array, newest first, at most `DAWN_MAX` (3). `pushDawnBackup()`
+  replaces an older copy of the same farm and morning and, if storage is full, drops the oldest
+  backups before giving up; `readDawnBackups()` skips anything that is not a valid save payload.
+- Diary → "Restore a Morning Backup" (only when one exists; `dawn_menu()`): each backup as farm and
+  date, with the existing `formatSaveLine()` / `formatSaveStatsLine()` as info, then a confirm naming
+  the farmer, farm and date. Restoring is `applySaveData()` plus `flushAutosave()`, so a reload keeps it.
+  Saves are the same format as the slots and export/import. "Delete All Browser Saves" clears them too.
+
 ## Favors from close neighbors (mechanics task 05), 2026-11-19
 
 - `FAVORS` (constants): Rick feeds your chickens (`feed`), Cliff waters up to `FAVOR_WATER_MAX` (12) dry

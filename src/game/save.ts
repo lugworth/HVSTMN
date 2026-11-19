@@ -248,3 +248,55 @@ export function formatSlotBadge(s: SaveSummary | null): string {
   if (!s) return 'Empty';
   return `${s.seasonName.slice(0, 2)} ${s.day} · ${s.gold}G`;
 }
+
+// ---------------------------------------------------------------- morning backups (mechanics task 55)
+/** A few recent dawn snapshots, newest first, kept apart from the save slots. */
+export const DAWN_KEY = 'hrvstmn-dawn';
+export const DAWN_MAX = 3;
+
+/** The dawn backups in storage, newest first; anything unreadable is skipped. */
+export function readDawnBackups(storage: StorageLike | null): Record<string, any>[] {
+  if (!storage) return [];
+  try {
+    const raw = JSON.parse(storage.getItem(DAWN_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((d) => isValidSavePayload(d)) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Which farm and morning a snapshot is: a second save of the same morning replaces the first. */
+function dawnId(d: Record<string, any>): string {
+  const s = summarizeSave('auto', d);
+  return `${s.farmer}|${s.farm}|${s.year}|${s.season}|${s.day}`;
+}
+
+/**
+ * Keep this morning's snapshot at the front, dropping an older copy of the same morning and
+ * anything past DAWN_MAX. If storage is full, the oldest backups give way before giving up.
+ */
+export function pushDawnBackup(storage: StorageLike | null, data: Record<string, any>): WriteSaveResult {
+  if (!storage) return { ok: false, error: 'Browser localStorage is unavailable.' };
+  const id = dawnId(data);
+  let list = [data, ...readDawnBackups(storage).filter((d) => dawnId(d) !== id)].slice(0, DAWN_MAX);
+  while (list.length) {
+    try {
+      storage.setItem(DAWN_KEY, JSON.stringify(list));
+      return { ok: true };
+    } catch (err: any) {
+      if (list.length === 1) return { ok: false, error: err?.message || 'Failed to write backup.' };
+      list = list.slice(0, -1);
+    }
+  }
+  return { ok: false };
+}
+
+export function clearDawnBackups(storage: StorageLike | null): boolean {
+  if (!storage) return false;
+  try {
+    storage.removeItem(DAWN_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
