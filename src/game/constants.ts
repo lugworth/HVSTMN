@@ -1994,6 +1994,12 @@ export const TILES: Record<string, any> = {
     "01",
     false
   ],
+  "bench": [
+    "╥",
+    "09",
+    "00",
+    false
+  ],
   "bath": [
     "U",
     "0C",
@@ -3649,6 +3655,43 @@ export const HONEY_FLAVOURS: Record<string, { item: string; fans: string[] }> = 
   'Pink Cat Flower': { item: 'Pink Cat Honey', fans: ['Manna', 'Popuri'] },
   'Magic Red Flower': { item: 'Magic Red Honey', fans: ['Harvest Goddess', 'Doctor'] },
 };
+
+/**
+ * Places to stop and sit (mechanics task 44): the Town Green bench, the farmhouse porch and the
+ * Skyline Ridge lookout. Each has a scene at sunset (5-8 PM) and in a light rain; a friend may be
+ * there on the right evening (weekday index, 0 = Mon). The porch's company is your spouse, or a
+ * well-loved dog.
+ */
+export const SEATS: Record<string, { map: string; x: number; y: number; title: string; sunset: string; rain: string; friend?: { npc: string; weekday: number; line: string } }> = {
+  green: {
+    map: 'town',
+    x: 22,
+    y: 6,
+    title: 'Town Green bench',
+    sunset: 'The pond turns to copper and the carp rise for the last flies of the day. Rose Square goes quiet behind you.',
+    rain: 'A soft rain stipples the pond. The flowers lean in, and the town smells of wet stone and blossom.',
+    friend: { npc: 'Mary', weekday: 4, line: 'Mary sits down with a book she is not reading. "Fridays, I come here to watch the light go. You too?"' },
+  },
+  porch: {
+    map: 'farm',
+    x: 9,
+    y: 6,
+    title: 'Porch bench',
+    sunset: 'The field goes gold, then blue. Somewhere past the barn a cow lows, and the first stars come out over the hills.',
+    rain: 'Rain drums on the porch roof and runs off the eaves. The crops will drink well tonight.',
+  },
+  lookout: {
+    map: 'ridge',
+    x: -1,
+    y: -1,
+    title: 'Skyline Ridge lookout',
+    sunset: 'The sun drops into the sea and the whole valley goes gold, then violet.',
+    rain: 'A light rain blows across the ridge in long grey veils, and the valley below goes soft and quiet.',
+    friend: { npc: 'Cliff', weekday: 6, line: 'Cliff is already here, sitting on a rock. "Sundays I climb up and think about where I have been. It is good to have company."' },
+  },
+};
+/** Stamina from a good sit, once a day per seat. */
+export const SEAT_REST = 15;
 
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows

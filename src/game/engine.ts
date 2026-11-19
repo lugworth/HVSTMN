@@ -106,6 +106,8 @@ import {
   HIVE_SPOT,
   HIVE_RANGE,
   HONEY_FLAVOURS,
+  SEATS,
+  SEAT_REST,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -556,6 +558,8 @@ export class Game {
   souvenirs: { key: string; name: string; day: number; text: string }[] = [];
   /** The field notebook (task 37): where, in what weather and when each kind of fish was first caught. */
   notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
+  /** Seats rested at today (task 44): seat id → absolute day. */
+  seats_rested: Record<string, number> = {};
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -633,7 +637,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -779,6 +783,7 @@ export class Game {
     this.memories = [];
     this.souvenirs = [];
     this.notebook = [];
+    this.seats_rested = {};
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1133,6 +1138,9 @@ export class Game {
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
       this.memories = sanitizeMemories(this.memories);
+      this.seats_rested = Object.fromEntries(
+        Object.entries(this.seats_rested && typeof this.seats_rested === 'object' ? this.seats_rested : {}).filter(([k, v]) => SEATS[k] && Number.isInteger(v)),
+      ) as Record<string, number>;
       this.notebook = Array.isArray(this.notebook)
         ? this.notebook.filter(
             (o: any) => o && typeof o.item === 'string' && ITEMS[o.item] && typeof o.map === 'string' && typeof o.weather === 'string' && Number.isInteger(o.minutes) && Number.isInteger(o.day),
@@ -3020,6 +3028,9 @@ export class Game {
       await this.interior_interact(tile, [tx, ty]);
     } else if (tile === 'mantel') {
       await this.mantel_menu();
+    } else if (tile === 'bench') {
+      const seat = Object.entries(SEATS).find(([, st]) => st.map === this.mapname && st.x === tx && st.y === ty);
+      if (seat) await this.sit(seat[0]);
     } else if (tile === 'kitchen' || tile === 'bath' || tile === 'shelf' || tile === 'vase' || tile === 'fireplace') {
       await this.use_furniture(tile);
     } else if (tile === 'stall') {
@@ -3061,7 +3072,8 @@ export class Game {
 
   /** Skyline Ridge lookout: the view reads tomorrow's weather, and once a day the cold air revives you. */
   async ridge_lookout(): Promise<void> {
-    let text = `${this.lookout_scene()} ${LOOKOUT_VIEW[this.tomorrow] || LOOKOUT_VIEW.Sunny}`;
+    const sat = this.seat_scene('lookout');
+    let text = `${sat?.scene ?? this.lookout_scene()} ${LOOKOUT_VIEW[this.tomorrow] || LOOKOUT_VIEW.Sunny}`;
     if (this.lookout_day !== this.absday()) {
       this.lookout_day = this.absday();
       this.stamina = Math.min(this.max_stamina, this.stamina + LOOKOUT_STAMINA);
@@ -3069,6 +3081,7 @@ export class Game {
       text += ` The thin, cold air clears your head. (+${LOOKOUT_STAMINA} Stamina, -${LOOKOUT_FATIGUE} Fatigue)`;
     }
     await this.say(text, 'Skyline Ridge Lookout');
+    if (sat?.friend) await this.seat_friend('lookout', sat.friend);
   }
 
   lookout_scene(): string {
@@ -3458,6 +3471,59 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- places to stop and sit (mechanics task 44)
+  /** The light at a seat now: 'sunset' (5-8 PM), 'rain' (a light rain), or null. */
+  seat_moment(): 'sunset' | 'rain' | null {
+    if (this.weather === 'Rain') return 'rain';
+    if (this.weather === 'Sunny' && this.minutes >= 17 * 60 && this.minutes < 20 * 60) return 'sunset';
+    return null;
+  }
+
+  /** The scene at a seat right now, and who is there with you, if anyone. */
+  seat_scene(id: string): { scene: string; friend: { npc: string; line: string } | null } | null {
+    const st = SEATS[id];
+    const moment = this.seat_moment();
+    if (!st || !moment) return null;
+    let friend: { npc: string; line: string } | null = null;
+    if (moment === 'sunset' && st.friend && this.weekday === st.friend.weekday && this.season !== 3) friend = st.friend;
+    if (id === 'porch' && moment === 'sunset' && this.married) {
+      friend = { npc: this.married, line: `${this.married} comes out with two cups of tea and sits close. Neither of you says much. You don't need to.` };
+    }
+    return { scene: st[moment], friend };
+  }
+
+  /** A friend at a seat: a line, a little friendship once a day, and a memory for Villager Notes. */
+  async seat_friend(id: string, f: { npc: string; line: string }): Promise<void> {
+    await this.say(f.line, f.npc);
+    if (!this.talked.has(f.npc)) {
+      this.talked.add(f.npc);
+      this.friend[f.npc] = clamp((this.friend[f.npc] || 0) + 3, 0, 100);
+    }
+    this.remember(f.npc, `You watched the sunset from the ${SEATS[id].title} with ${f.npc}.`, `seat:${id}:${f.npc}`);
+  }
+
+  /** Sit a while: half an hour passes, a little stamina comes back once a day, and the scene plays. */
+  async sit(id: string): Promise<void> {
+    const st = SEATS[id];
+    const sc = this.seat_scene(id);
+    const rest = this.seats_rested[id] !== this.absday();
+    if (rest) {
+      this.seats_rested[id] = this.absday();
+      this.stamina = Math.min(this.max_stamina, this.stamina + SEAT_REST);
+    }
+    await this.advance(30);
+    const tail = rest ? ` (+${SEAT_REST} Stamina)` : '';
+    if (!sc) {
+      await this.say(`You sit a while on the ${st.title.toLowerCase()}. It's a nice spot. Come back at sunset, or when a light rain falls.${tail}`, st.title);
+      return;
+    }
+    await this.say(`${sc.scene}${tail}`, st.title);
+    if (sc.friend) await this.seat_friend(id, sc.friend);
+    else if (id === 'porch' && this.seat_moment() === 'sunset' && this.dog_aff >= 50) {
+      await this.say('Your dog pads over and leans against your legs, watching the field with you.', 'Porch bench');
+    }
   }
 
   // ---------------------------------------------------------------- hives with seasonal honey (mechanics task 22)
@@ -5728,7 +5794,7 @@ export class Game {
         return { label: 'LOAD', summary: `Load the ${maker}` };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench'].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return withTarget('Cast', 'your line', 'CAST');
@@ -5789,7 +5855,7 @@ export class Game {
         return { key: 'x', label: st === 'ready' ? 'COLLECT' : st === 'working' ? 'CHECK' : 'LOAD' };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench'].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };

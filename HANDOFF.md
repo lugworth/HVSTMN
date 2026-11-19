@@ -1,5 +1,18 @@
 # Handoff: HRVSTMN
 
+## Places to stop and sit (mechanics task 44), 2026-11-19
+
+- `bench` tiles (`╥`): the Town Green (town 22, 6) and the farmhouse porch (farm 9, 6). `SEATS` in
+  `constants.ts` also covers the Skyline Ridge lookout, whose existing forecast keeps working.
+- `Game.sit(id)`: half an hour passes and `SEAT_REST` (15) stamina once a day per seat
+  (`seats_rested`, saved). `seat_moment()` is 'sunset' (Sunny, 5-8 PM) or 'rain' (Rain, not
+  Typhoon); each seat has a scene for both. Otherwise the bench nudges you to come back then.
+- Friends at sunset (`seat_scene()`): Mary at the Green on Fridays, Cliff at the lookout on Sundays
+  (not in winter); on the porch, your spouse, or a dog with 50+ affection. A friend gives a line, +3
+  friendship once a day and a Villager Notes memory (`seat_friend()`).
+- Test fix in the same PR: the task 12 footbridge test's route check now sets aside overnight forage
+  and dig spots (they made it fail about one run in eighty, also on main).
+
 ## Hives with seasonal honey (mechanics task 22), 2026-11-19
 
 - The farm tree at `HIVE_SPOT` (7, 6) is a wild hive. `Game.hive_blooms()` counts flowers in bloom
