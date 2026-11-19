@@ -3785,6 +3785,70 @@ export const FAVOR_WATER_MAX = 12;
 export const FAVOR_SHOPS = ['supermarket', 'blacksmith', 'poultry', 'carpenter', 'clinic', 'library'];
 
 /**
+ * Short outings with villagers (mechanics task 02): a friend out at their usual spot invites you
+ * along for ten in-game minutes, with two short exchanges (their line, then yours). `map` and
+ * `hours` are where and when the invitation can come (inside the villager's time out); `plan` starts
+ * the Today's Plan line (the hours are added); `gift` is an item they hand you at the end, if any.
+ */
+export interface OutingDef {
+  map: string;
+  hours: [number, number];
+  title: string;
+  invite: string;
+  plan: string;
+  exchanges: { line: string; reply: string }[];
+  close: string;
+  memory: string;
+  gift?: string;
+}
+export const OUTINGS: Record<string, OutingDef> = {
+  Gray: {
+    map: 'grove',
+    hours: [17, 19],
+    title: 'A walk in Ironwood Grove',
+    invite: "Saibara let me off early. I usually walk the grove to get the forge smoke out of my head. Come along?",
+    plan: 'Gray walks Ironwood Grove after the forge',
+    exchanges: [
+      {
+        line: 'See the bark on these? Ironwood. My grandfather swore you could temper a blade in its sap. I tried once. Ruined a good knife.',
+        reply: 'You ask what he did with the knife. He grins: it is still on his shelf.',
+      },
+      {
+        line: "...It's quiet out here. I don't have to be good at anything for a while. Thanks for not filling it with talk.",
+        reply: 'You walk the last stretch in easy silence, the forge bell faint behind the trees.',
+      },
+    ],
+    close: "Same time next week, if you like. The grove's better with someone in it.",
+    memory: 'You walked Ironwood Grove with Gray after the forge closed.',
+  },
+  Kai: {
+    map: 'beach',
+    hours: [9, 12],
+    title: 'Fishing with Kai',
+    invite: "Tide's turning and the fish are hungry. Got a line? I've got a spare. Come sit on the pier with me.",
+    plan: 'Kai fishes off the Mineral Beach pier',
+    exchanges: [
+      {
+        line: "Don't yank it. Let them think it was their idea. ...See? Patience. The townsfolk say I don't have any.",
+        reply: 'Your float bobs twice and goes still. You laugh; Kai pretends not to.',
+      },
+      {
+        line: "I've fished a lot of coasts. This one's the only place I keep coming back to. Don't tell anyone.",
+        reply: 'You promise. He nods at the water like it heard you too.',
+      },
+    ],
+    close: "Here, take the best of the morning. You earned it, mostly.",
+    memory: 'You spent a morning fishing off the pier with Kai.',
+    gift: 'Small Fish',
+  },
+};
+/** Friendship a villager needs before inviting you, minutes an outing takes, the friendship it adds, and days between invitations. */
+export const OUTING_FRIENDSHIP = 40;
+export const OUTING_MINUTES = 10;
+export const OUTING_FRIEND = 3;
+export const OUTING_GAP = 7;
+
+/**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
  * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.

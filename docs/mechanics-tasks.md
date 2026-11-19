@@ -24,7 +24,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 ## Neighbors and family
 
 - [x] **01. Friday evenings at Doug’s Inn.** Rotate a card game, a recipe swap, and a story from an older villager. Let the player listen or join, and let unseen scenes recur.
-- [ ] **02. Short outings with villagers.** Meet Gray for a walk or Kai for a fishing session. A ten-minute in-game outing with two bits of dialogue is enough to try it.
+- [x] **02. Short outings with villagers.** Meet Gray for a walk or Kai for a fishing session. A ten-minute in-game outing with two bits of dialogue is enough to try it.
 - [x] **03. Villagers remember milestones.** Let Zack mention your first shipment, the curator mention a completed exhibit, and neighbors notice a path you helped repair.
 - [x] **04. Requests with a second chapter.** Gray asks for copper from Spring Mine. After delivery, he shows you which watering-can upgrade is worth saving for and leaves a note about the next step.
 - [x] **05. Ask for a favor.** A close neighbor offers one specific favor on a free afternoon, such as carrying a shipment or checking shop hours. Put the promise in Today’s Plan so it feels like an arrangement.

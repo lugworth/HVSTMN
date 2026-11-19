@@ -68,6 +68,11 @@ import {
   PACE_KEY,
   SECS_PER_10MIN,
   POSTCARD_MAX,
+  OUTINGS,
+  OUTING_FRIENDSHIP,
+  OUTING_MINUTES,
+  OUTING_FRIEND,
+  OUTING_GAP,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3958,6 +3963,189 @@ describe('favors from close neighbors (task 05)', () => {
     o.applySaveData(old);
     assert.equal(o.favor, null);
     assert.deepEqual(o.favor_offered, {});
+  });
+});
+
+describe('short outings with villagers (task 02)', () => {
+  /** Gray at his evening spot in Ironwood Grove (Spring 2, a sunny Tuesday), or Kai on Mineral Beach on a Summer morning. */
+  const friendly = (n: 'Gray' | 'Kai' = 'Gray') => {
+    const g = fresh();
+    g.first_steps = null;
+    g.day = 2;
+    g.weather = 'Sunny';
+    g.gray_quest = 3; // Gray's copper request is done, so it does not take the first talk
+    if (n === 'Kai') g.season = 1;
+    assert.equal(g.fest_on(), null);
+    g.friend[n] = OUTING_FRIENDSHIP;
+    g.mapname = OUTINGS[n].map;
+    g.minutes = OUTINGS[n].hours[0] * 60 + 15;
+    g.update_npcs();
+    return g;
+  };
+  /** Talk to `n`, answering any invitation with menu choice `pick` (0 go along, 1 not today). */
+  const talkTo = async (g: any, n: string, pick = 0) => {
+    const said: { text: string; who: string | null }[] = [];
+    g.say = async (text: string, who: string | null = null) => { said.push({ text, who }); };
+    const menus: string[] = [];
+    g.menu = async (title: string) => { menus.push(title); return pick; };
+    await g.talk(n);
+    return { said, menus };
+  };
+
+  test('Gray invites a friend on a walk: ten minutes, two exchanges, friendship and a memory', async () => {
+    const g = friendly('Gray');
+    assert.ok(g.outing_available('Gray'));
+    const t0 = g.minutes;
+    const { said, menus } = await talkTo(g, 'Gray', 0);
+    const o = OUTINGS.Gray;
+    assert.deepEqual(menus, [o.title]);
+    assert.equal(g.minutes, t0 + OUTING_MINUTES, 'ten in-game minutes pass');
+    // (a heart or rival event may follow, as after any chat)
+    assert.deepEqual(said.slice(0, 6).map((s) => s.text), [
+      o.invite,
+      o.exchanges[0].line, o.exchanges[0].reply,
+      o.exchanges[1].line, o.exchanges[1].reply,
+      o.close,
+    ]);
+    assert.equal(o.exchanges.length, 2);
+    assert.equal(said.slice(0, 6).filter((s) => s.who === 'Gray').length, 4, 'invite, two lines and the goodbye are his');
+    assert.equal(g.friend.Gray, OUTING_FRIENDSHIP + 2 + OUTING_FRIEND);
+    assert.ok(g.memories.some((m: any) => m.npc === 'Gray' && m.text === o.memory));
+    assert.equal(g.outing_asked.Gray, g.absday());
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Outing')), 'the plan row goes once it has happened');
+
+    const again = await talkTo(g, 'Gray', 0);
+    assert.equal(again.menus.length, 0, 'once a week: the next chat is small talk');
+    assert.equal(g.friend.Gray, OUTING_FRIENDSHIP + 2 + OUTING_FRIEND);
+    assert.equal(g.memories.filter((m: any) => m.npc === 'Gray').length, 1);
+  });
+
+  test('Kai takes you fishing off the pier on a Summer morning and hands over the best fish', async () => {
+    const g = friendly('Kai');
+    assert.ok(g.outing_available('Kai'));
+    const fish = g.inv[OUTINGS.Kai.gift!] || 0;
+    const { said } = await talkTo(g, 'Kai', 0);
+    assert.equal(said[0].text, OUTINGS.Kai.invite);
+    assert.equal(g.inv[OUTINGS.Kai.gift!], fish + 1);
+    assert.equal(g.friend.Kai, OUTING_FRIENDSHIP + 2 + OUTING_FRIEND);
+    assert.ok(g.memories.some((m: any) => m.npc === 'Kai' && m.text === OUTINGS.Kai.memory));
+  });
+
+  test('no invitation unless a good friend is out at the spot, in the window, with time to spare', () => {
+    const g = friendly('Gray');
+    g.friend.Gray = OUTING_FRIENDSHIP - 1;
+    assert.ok(!g.outing_available('Gray'), 'not close enough yet');
+    g.friend.Gray = OUTING_FRIENDSHIP;
+    g.minutes = 16 * 60 + 50;
+    assert.ok(!g.outing_available('Gray'), 'still at the forge');
+    g.minutes = 19 * 60 - OUTING_MINUTES + 1;
+    assert.ok(!g.outing_available('Gray'), 'not enough of the evening left');
+    g.minutes = 19 * 60 - OUTING_MINUTES;
+    assert.ok(g.outing_available('Gray'), 'just enough time');
+    g.mapname = 'town';
+    assert.ok(!g.outing_available('Gray'), 'only at his spot in the grove');
+    g.mapname = 'grove';
+    g.weather = 'Rain';
+    assert.ok(!g.outing_available('Gray'), 'no walk in the rain');
+    g.weather = 'Sunny';
+    g.married = 'Gray';
+    assert.ok(!g.outing_available('Gray'), 'a spouse is at home, not out walking');
+    g.married = null;
+    const realFest = g.fest_on.bind(g);
+    g.fest_on = (o = 0) => (o === 0 ? ['Test Fair', 9, 17] : realFest(o));
+    assert.ok(!g.outing_available('Gray'), 'not on a festival day');
+    assert.ok(!g.outing_available('Doug'), 'only villagers with an outing in mind');
+  });
+
+  test('Kai is only about outside Summer once he is a close friend', () => {
+    const g = friendly('Kai');
+    g.season = 0;
+    g.update_npcs();
+    assert.ok(!g.outing_available('Kai'));
+    assert.ok(!g.outing_line());
+    g.friend.Kai = 60;
+    g.update_npcs();
+    assert.ok(g.outing_available('Kai'));
+  });
+
+  test('declining costs nothing but time to the next invitation, a week later', async () => {
+    const g = friendly('Gray');
+    const t0 = g.minutes;
+    const { said } = await talkTo(g, 'Gray', 1);
+    assert.equal(g.minutes, t0, 'no time passes');
+    assert.equal(g.friend.Gray, OUTING_FRIENDSHIP + 2, 'just the day\'s chat');
+    assert.ok(!g.memories.some((m: any) => m.npc === 'Gray'));
+    assert.ok(said.some((s) => /Another week/.test(s.text)));
+    g.talked.clear();
+    g.day += OUTING_GAP - 1;
+    assert.ok(!g.outing_available('Gray'));
+    g.day += 1;
+    assert.ok(g.outing_available('Gray'));
+  });
+
+  test('gifts and Gray\'s request come first; the invitation waits', async () => {
+    const g = friendly('Gray');
+    g.held = 'Copper';
+    g.inv.Copper = 1;
+    const gift = await talkTo(g, 'Gray', 0);
+    assert.equal(gift.menus.length, 0, 'a gift is just a gift');
+    assert.equal(g.outing_asked.Gray, undefined);
+
+    const q = friendly('Gray');
+    q.gray_quest = 0;
+    const ask = await talkTo(q, 'Gray', 0);
+    assert.equal(ask.menus.length, 0);
+    assert.match(ask.said[0].text, /Copper/);
+    assert.equal(q.gray_quest, 1);
+  });
+
+  test("Today's Plan names the outing while it can still happen, in both builders and at compact width", async () => {
+    const g = friendly('Gray');
+    g.minutes = 8 * 60;
+    g.mapname = 'farm';
+    const row = 'Gray walks Ironwood Grove after the forge, 5PM–7PM. Gray may ask you along.';
+    assert.ok(g.today_lines().includes(`  Outing ${row}`));
+    let build: any = null;
+    g.show_hud_pages = async (_t: string, fn: any) => { build = fn; };
+    await g.today_panel();
+    for (const cw of [46, 60]) {
+      const lines = build(cw, 200).flat().filter((l: any) => l.kind === 'spans');
+      const texts = lines.map((l: any) => l.spans.map((s: any) => s.text).join(''));
+      const at = texts.findIndex((t: string) => t.startsWith('♥ Outing '));
+      assert.ok(at >= 0, `panel row at width ${cw}`);
+      assert.ok(texts.every((t: string) => t.length <= cw), `nothing wider than ${cw}`);
+    }
+    g.minutes = 19 * 60 - OUTING_MINUTES + 1;
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Outing')), 'gone once the evening is over');
+    g.minutes = 8 * 60;
+    g.friend.Gray = OUTING_FRIENDSHIP - 1;
+    assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Outing')), 'not before he would ask');
+  });
+
+  test('when they last asked survives a save; bad data is dropped and old saves load', () => {
+    const g = friendly('Gray');
+    g.outing_asked = { Gray: g.absday(), Kai: g.absday() - 3 };
+    const h = fresh();
+    h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.deepEqual(h.outing_asked, g.outing_asked);
+
+    const bad = JSON.parse(JSON.stringify(g.snapshot()));
+    bad.outing_asked = { Nobody: 1, Kai: 'soon', Gray: 4 };
+    const k = fresh();
+    k.applySaveData(bad);
+    assert.deepEqual(k.outing_asked, { Gray: 4 });
+    const worse = JSON.parse(JSON.stringify(g.snapshot()));
+    worse.outing_asked = 'yesterday';
+    const w = fresh();
+    w.applySaveData(worse);
+    assert.deepEqual(w.outing_asked, {});
+
+    const old = JSON.parse(JSON.stringify(g.snapshot()));
+    delete old.outing_asked;
+    const o = fresh();
+    o.outing_asked = { Gray: 99 };
+    o.applySaveData(old);
+    assert.deepEqual(o.outing_asked, {});
   });
 });
 
