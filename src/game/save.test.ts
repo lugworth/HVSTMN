@@ -17,6 +17,11 @@ import {
   slotStorageKey,
   summarizeSave,
   writeSaveSlot,
+  DAWN_KEY,
+  DAWN_MAX,
+  readDawnBackups,
+  pushDawnBackup,
+  clearDawnBackups,
   type StorageLike,
 } from './save';
 import { SAVE_KEY } from './constants';
@@ -261,5 +266,90 @@ describe('Game localStorage persistence across sessions', () => {
     assert.equal(slots.slot1?.gold, 700);
     assert.equal(slots.slot2?.gold, 1200);
     assert.equal(slots.auto?.gold, 1200);
+  });
+});
+
+describe('morning backups (task 55)', () => {
+  const morning = (day: number, extra: Record<string, any> = {}) => ({ name: 'Pete', farm: 'Moon', year: 1, season: 0, day, minutes: 360, gold: day * 100, ...extra });
+
+  test('newest first, at most DAWN_MAX, and a second save of the same morning replaces the first', () => {
+    for (let d = 1; d <= DAWN_MAX + 2; d++) assert.ok(pushDawnBackup(mockStorage, morning(d)).ok);
+    let list = readDawnBackups(mockStorage);
+    assert.deepEqual(list.map((d) => d.day), [5, 4, 3].slice(0, DAWN_MAX));
+    pushDawnBackup(mockStorage, morning(5, { gold: 1 }));
+    list = readDawnBackups(mockStorage);
+    assert.equal(list.length, DAWN_MAX);
+    assert.equal(list.filter((d) => d.day === 5).length, 1);
+    assert.equal(list[0].gold, 1);
+    pushDawnBackup(mockStorage, morning(5, { farm: 'Cedar' }));
+    assert.deepEqual(readDawnBackups(mockStorage).map((d) => d.farm), ['Cedar', 'Moon', 'Moon'], 'another farm is another backup');
+  });
+
+  test('unreadable entries are skipped, a full store sheds the oldest, and clearing removes them all', () => {
+    mockStorage.data[DAWN_KEY] = JSON.stringify([morning(2), { gold: 5 }, 'junk']);
+    assert.deepEqual(readDawnBackups(mockStorage).map((d) => d.day), [2]);
+    mockStorage.data[DAWN_KEY] = '{not json';
+    assert.deepEqual(readDawnBackups(mockStorage), []);
+
+    for (let d = 1; d <= 3; d++) pushDawnBackup(mockStorage, morning(d));
+    const tight: StorageLike = {
+      getItem: (k) => mockStorage.getItem(k),
+      setItem: (k, v) => {
+        if (JSON.parse(v).length > 1) throw new Error('QuotaExceededError');
+        mockStorage.setItem(k, v);
+      },
+      removeItem: (k) => mockStorage.removeItem(k),
+    };
+    assert.ok(pushDawnBackup(tight, morning(4)).ok);
+    assert.deepEqual(readDawnBackups(mockStorage).map((d) => d.day), [4], 'keeps the newest when space is short');
+    assert.equal(pushDawnBackup(null, morning(5)).ok, false);
+
+    assert.ok(clearDawnBackups(mockStorage));
+    assert.deepEqual(readDawnBackups(mockStorage), []);
+  });
+
+  test('waking up keeps a backup; the Diary restores one after showing the farm and date', async () => {
+    const g = new Game(new Screen(132, 30), true) as any;
+    g.new_game('Aria', 'Cedar');
+    g.started = true;
+    g.say = async () => {};
+    await g.new_day('passout');
+    const first = readDawnBackups(mockStorage);
+    assert.equal(first.length, 1);
+    assert.equal(first[0].day, 2);
+    assert.equal(first[0].minutes, 6 * 60);
+
+    g.gold = 12345;
+    g.minutes = 15 * 60;
+    const shown: string[][] = [];
+    const titles: string[] = [];
+    g.menu = async (title: string, opts: string[], _sel: number, info: any) => {
+      titles.push(title);
+      if (title === 'Morning Backups') {
+        shown.push(opts, info(0));
+        return 0;
+      }
+      return 1; // "No" at the confirm
+    };
+    await g.dawn_menu();
+    assert.equal(shown[0][0], 'Cedar Farm · Spring 2, Yr 1');
+    assert.match(shown[1][0], /Aria · Cedar Farm · Spring 2 \(Tue\), Yr 1 · +6:00 ?AM/i);
+    assert.match(titles[1], /^Restore Aria's Cedar Farm to the morning of Spring 2, Year 1\?/);
+    assert.equal(g.gold, 12345, 'declining changes nothing');
+
+    g.menu = async (title: string) => (title === 'Morning Backups' ? 0 : 0);
+    await g.dawn_menu();
+    assert.equal(g.minutes, 6 * 60);
+    assert.notEqual(g.gold, 12345);
+    assert.equal(readSaveSlot(mockStorage, 'auto')?.minutes, 6 * 60, 'the auto-save holds the restored morning');
+  });
+
+  test('no backups yet: the Diary has no restore entry and the menu says why', async () => {
+    const g = new Game(new Screen(132, 30), true) as any;
+    g.new_game('Aria', 'Cedar');
+    const said: string[] = [];
+    g.say = async (t: string) => { said.push(t); };
+    await g.dawn_menu();
+    assert.match(said[0], /No morning backups yet/);
   });
 });

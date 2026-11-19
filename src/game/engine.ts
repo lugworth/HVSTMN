@@ -217,6 +217,10 @@ import {
   isValidSavePayload,
   listSaveSlots,
   readSaveSlot,
+  readDawnBackups,
+  pushDawnBackup,
+  clearDawnBackups,
+  summarizeSave,
   sanitizeCrops,
   sanitizeMapStringRecords,
   sanitizeStringRecordNumber,
@@ -1043,6 +1047,33 @@ export class Game {
     return true;
   }
 
+  /**
+   * Morning backups (task 55): the last few dawn snapshots, newest first. Each shows the farm and
+   * date before anything happens; restoring asks first and also rewrites the auto-save, so a
+   * reload keeps the restored morning.
+   */
+  async dawn_menu(): Promise<void> {
+    const backups = readDawnBackups(getBrowserStorage());
+    if (!backups.length) {
+      await this.say('No morning backups yet. One is kept each time you wake up.', null);
+      return;
+    }
+    const sums = backups.map((d) => summarizeSave('auto', d));
+    const opts = [...sums.map((s) => `${s.farm} Farm · ${s.seasonName} ${s.day}, Yr ${s.year}`), 'Back'];
+    const info = (i: number) =>
+      i < sums.length
+        ? [formatSaveLine(sums[i]), formatSaveStatsLine(sums[i]), 'Restores the farm as it was that morning.']
+        : ['Keep playing from now.'];
+    const sel = await this.menu('Morning Backups', opts, 0, info);
+    if (sel === null || sel >= sums.length) return;
+    const s = sums[sel];
+    if (!(await this.confirm(`Restore ${s.farmer}'s ${s.farm} Farm to the morning of ${s.seasonName} ${s.day}, Year ${s.year}? Anything since then is lost.`))) return;
+    this.applySaveData(backups[sel]);
+    this.update_npcs();
+    this.flushAutosave();
+    this.msg(`Restored the morning of ${s.seasonName} ${s.day}, Year ${s.year}.`, '0C');
+  }
+
   export_save(): void {
     if (typeof document === 'undefined') {
       this.msg('Save export is only available in the browser.', '08');
@@ -1510,6 +1541,7 @@ export class Game {
     const achDone = achList.filter((a) => a.done).length;
     const bagKinds = Object.keys(this.inv).length;
     const slots = listSaveSlots(getBrowserStorage());
+    const dawns = readDawnBackups(getBrowserStorage());
     const entries: (HudMenuEntry & { key: string; raw: string })[] = [
       { key: 'resume', raw: 'Resume', label: 'Resume', icon: '↩', iconCol: '0C', right: '[ESC]', rightCol: '0C' },
       { key: 'today', raw: 'Today’s Plan (y)', label: "Today's Plan", icon: '☀', iconCol: '09', right: '[Y]', rightCol: '0C', hotkey: 'y' },
@@ -1542,6 +1574,9 @@ export class Game {
       { key: 'load2', raw: 'Load Diary — Slot 2', label: 'Load Diary — Slot 2', icon: '◈', iconCol: '0D', right: formatSlotBadge(slots.slot2), rightCol: slots.slot2 ? '0D' : '03' },
       ...(slots.auto
         ? [{ key: 'loadauto', raw: 'Load Auto-Save', label: 'Load Auto-Save', icon: '◈', iconCol: '0C', right: formatSlotBadge(slots.auto), rightCol: '0C' }]
+        : []),
+      ...(dawns.length
+        ? [{ key: 'dawn', raw: 'Restore a Morning Backup', label: 'Restore a Morning Backup', icon: '☼', iconCol: '0A', right: `${dawns.length} kept`, rightCol: '0A' }]
         : []),
       {
         key: 'cues',
@@ -1632,6 +1667,8 @@ export class Game {
       } catch (e: any) {
         await this.say(e.message || 'No Auto-Save found.');
       }
+    } else if (key === 'dawn') {
+      await this.dawn_menu();
     } else if (key === 'export') {
       this.export_save();
     } else if (key === 'import') {
@@ -7769,6 +7806,7 @@ export class Game {
     this.face = [0, -1];
     this.npc_pos = {};
     this.save(1);
+    pushDawnBackup(getBrowserStorage(), this.snapshot());
     this.msgs = [];
     await this.say(`Good morning! ${this.date_str()}.  Weather: ${this.weather}.`, null);
     for (const r of report) {
@@ -9837,6 +9875,7 @@ export class Game {
           deleteSaveSlot(storage, 'auto');
           deleteSaveSlot(storage, 1);
           deleteSaveSlot(storage, 2);
+          clearDawnBackups(storage);
           await this.say('All browser save data cleared.', null);
           return;
         }
