@@ -132,7 +132,8 @@
   showing. Older saves (no `first_steps` key) load with it hidden, so experienced farms never see it.
 - Shown in Today's Plan (three boxes plus how to do the next step) and, on desktop, as two rows under
   FACING in the side panel ("FIRST MORNING" / "✓ Till ○ Sow ○ Water"), when the panel has room.
-- Tasks 49 (Facing row) and 53 (seed pouch, F) were already in the game before this list was worked.
+- Tasks 49 (Facing row) and 53 (seed pouch, F) were already in the game before this list was worked;
+  both are checked off in `docs/mechanics-tasks.md` (2026-11-19).
 
 ## Planting forecast (mechanics task 24), 2026-11-18
 
