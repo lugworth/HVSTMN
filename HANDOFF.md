@@ -1,5 +1,16 @@
 # Handoff: HRVSTMN
 
+## First-morning checklist (mechanics task 50), 2026-11-19
+
+- A new farm starts with `first_steps = { till, sow, water }` all false. `Game.first_steps_update()`
+  runs after every SPACE (tool use) and ticks steps off from the farm itself (any tilled tile; any
+  non-Grass crop; any watered crop), with a message naming the next step; when all three are done it
+  says so and sets `first_steps = null`. The Diary has "Hide First-Morning Checklist" while it is
+  showing. Older saves (no `first_steps` key) load with it hidden, so experienced farms never see it.
+- Shown in Today's Plan (three boxes plus how to do the next step) and, on desktop, as two rows under
+  FACING in the side panel ("FIRST MORNING" / "✓ Till ○ Sow ○ Water"), when the panel has room.
+- Tasks 49 (Facing row) and 53 (seed pouch, F) were already in the game before this list was worked.
+
 ## Planting forecast (mechanics task 24), 2026-11-18
 
 - `plantingForecast(day, grow, regrow)` in `rules.ts`: first harvest `day + grow` (watered daily;

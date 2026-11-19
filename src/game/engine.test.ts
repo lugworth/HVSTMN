@@ -2557,3 +2557,86 @@ describe('planting forecast (task 24)', () => {
     assert.equal(g.facing_action().summary.split(' · ')[1], 'too late to ripen');
   });
 });
+
+describe('first-morning checklist (task 50)', () => {
+  /** On the farm with the field cleared at (20..22, 15), facing east from (20, 15). */
+  const onField = () => {
+    const g = fresh();
+    g.warp('farm', 20, 15, [1, 0]);
+    for (let x = 20; x <= 24; x++) for (let y = 13; y <= 17; y++) delete g.objs.farm[`${x},${y}`];
+    g.stamina = g.max_stamina;
+    return g;
+  };
+
+  test('a new farm starts with the three steps open; Today and the side panel show them', () => {
+    const g = fresh();
+    assert.deepEqual(g.first_steps, { till: false, sow: false, water: false });
+    const today = g.today_lines();
+    assert.ok(today.includes('  First morning  [ ] Till  [ ] Sow  [ ] Water'), today.join('\n'));
+    assert.ok(today.includes('         Equip the Hoe (2) and press SPACE on the field south of your house.'));
+    const big = new Game(new Screen(132, 44), true) as any; // a desktop-height side panel has room for it
+    big.new_game('Pete', 'Moon');
+    big.render();
+    const screen = big.scr.buf.map((r: any[]) => r.map((c) => c[0]).join('')).join('\n');
+    assert.match(screen, /FIRST MORNING/);
+    assert.match(screen, /○ Till ○ Sow ○ Water/);
+  });
+
+  test('till, sow and water tick off as they happen, then the list closes', async () => {
+    const g = onField();
+    g.tool = 'Hoe';
+    await g.handle('space');
+    assert.equal(g.first_steps.till, true);
+    assert.equal(g.msgs.at(-1)[0], '✓ Tilled the soil. Next: sow your turnip seeds.');
+    assert.ok(g.today_lines().includes('  First morning  [✓] Till  [ ] Sow  [ ] Water'));
+
+    g.tool = 'Turnip Seeds';
+    await g.handle('space');
+    assert.equal(g.first_steps.sow, true);
+    assert.equal(g.msgs.at(-1)[0], '✓ Sowed your first seeds. Next: water the seeds.');
+
+    g.tool = 'Watering Can';
+    await g.handle('space');
+    assert.equal(g.first_steps, null, 'all done');
+    assert.match(g.msgs.at(-1)[0], /^✓ First morning done!/);
+    assert.ok(!g.today_lines().some((l: string) => l.includes('First morning')));
+  });
+
+  test('it can be hidden from the Diary, and stays hidden', async () => {
+    const g = fresh();
+    let entries: string[] = [];
+    g.menu = async (title: string, opts: string[]) => {
+      entries = opts;
+      return title === '▤ Diary' ? opts.indexOf('Hide First-Morning Checklist') : null;
+    };
+    await g.pause_menu();
+    assert.ok(entries.includes('Hide First-Morning Checklist'));
+    assert.equal(g.first_steps, null);
+    assert.equal(g.msgs.at(-1)[0], 'First-morning checklist hidden.');
+    g.menu = async (_t: string, opts: string[]) => {
+      entries = opts;
+      return null;
+    };
+    await g.pause_menu();
+    assert.ok(!entries.includes('Hide First-Morning Checklist'), 'no entry once hidden');
+  });
+
+  test('progress survives a reload; an older save without the list never shows it', () => {
+    const g = fresh();
+    g.first_steps.till = true;
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.first_steps, { till: true, sow: false, water: false });
+    const old = JSON.parse(JSON.stringify(snap));
+    delete old.first_steps;
+    const k = fresh();
+    k.applySaveData(old);
+    assert.equal(k.first_steps, null);
+    const done = JSON.parse(JSON.stringify(snap));
+    done.first_steps = null;
+    const d = fresh();
+    d.applySaveData(done);
+    assert.equal(d.first_steps, null);
+  });
+});
