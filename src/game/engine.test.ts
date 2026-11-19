@@ -56,6 +56,8 @@ import {
   HONEY_FLAVOURS,
   SEATS,
   SEAT_REST,
+  PLOT_RADIUS,
+  PLOT_MAX,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3688,5 +3690,99 @@ describe('places to stop and sit (task 44)', () => {
     g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
     await g.interact();
     assert.ok(said.some((l) => l.startsWith('Ann: Ann comes out with two cups of tea')), said.join(' | '));
+  });
+});
+
+describe('named farm plots (task 42)', () => {
+  /** On the farm, a cleared patch of field around (20..26, 12..18), facing east at (21, 15). */
+  const field = () => {
+    const g = fresh();
+    g.first_steps = null;
+    for (let x = 16; x <= 30; x++) for (let y = 10; y <= 20; y++) delete g.objs.farm[`${x},${y}`];
+    g.warp('farm', 20, 15, [1, 0]);
+    g.inv['Plot Sign'] = 2;
+    g.tool = 'Plot Sign';
+    return g;
+  };
+  const named = (g: any, name: string) => {
+    g.text_input = async () => name;
+  };
+
+  test('put up a sign on open ground, name the plot, and Today\'s Plan uses the name', async () => {
+    const g = field();
+    named(g, 'North Turnips');
+    for (const k of ['22,15', '23,15', '24,15', '22,16']) g.tilled.add(k);
+    g.crops['22,15'] = ['Turnip', 1];
+    g.crops['23,15'] = ['Turnip', 1];
+    g.crops['24,15'] = ['Turnip', 4];
+    g.wet.add('23,15');
+    await g.handle('space');
+    assert.equal(g.maps.farm.tile(21, 15), 'plotsign');
+    assert.deepEqual(g.plots, [{ key: '21,15', name: 'North Turnips', tile: 'field' }]);
+    assert.equal(g.inv['Plot Sign'], 1);
+    assert.deepEqual(g.plot_status()[0], { name: 'North Turnips', key: '21,15', tiles: 4, dry: 1, ready: 1 });
+    assert.ok(g.today_lines().includes('  Plot   North Turnips: 1 dry tile, 1 ready to pick'), g.today_lines().join('\n'));
+  });
+
+  test('not on tilled soil, not more than the limit; tiles go to the nearest sign within reach', async () => {
+    const g = field();
+    g.tilled.add('21,15');
+    named(g, 'X');
+    await g.handle('space');
+    assert.equal(g.plots.length, 0);
+    assert.match(g.msgs.at(-1)[0], /not on tilled soil/);
+
+    const h = field();
+    h.plots = [{ key: '20,12', name: 'A', tile: 'field' }, { key: '26,12', name: 'B', tile: 'field' }];
+    for (const k of ['21,12', '25,12', `${20 + PLOT_RADIUS + 1},18`]) h.tilled.add(k);
+    assert.equal(h.plot_of('21,12'), 0);
+    assert.equal(h.plot_of('25,12'), 1);
+    assert.equal(h.plot_of(`${20 + PLOT_RADIUS + 1},18`), -1, 'too far from both');
+    h.plots = Array.from({ length: PLOT_MAX }, (_, i) => ({ key: `${16 + i},20`, name: `P${i}`, tile: 'field' }));
+    await h.handle('space');
+    assert.equal(h.plots.length, PLOT_MAX);
+    assert.match(h.msgs.at(-1)[0], /already have 6 named plots/);
+  });
+
+  test('at the sign: its status, rename, and take it down (the ground and the sign come back)', async () => {
+    const g = field();
+    named(g, 'Melons');
+    await g.handle('space');
+    g.face = [1, 0];
+    let info: string[] = [];
+    let pick = 0;
+    g.menu = async (_t: string, _o: string[], _s = 0, i: any = null) => {
+      info = i;
+      return pick;
+    };
+    named(g, 'Cucumbers');
+    await g.interact();
+    assert.equal(g.plots[0].name, 'Cucumbers');
+    assert.match(info[1], /Nothing needs you here today\./);
+    pick = 1;
+    await g.interact();
+    assert.deepEqual(g.plots, []);
+    assert.equal(g.maps.farm.tile(21, 15), 'field');
+    assert.equal(g.inv['Plot Sign'], 2);
+  });
+
+  test('plots survive a reload and stand back on the farm; a new game clears them', async () => {
+    const g = field();
+    named(g, 'Berries');
+    await g.handle('space');
+    const snap = JSON.parse(JSON.stringify(g.snapshot()));
+    const h = fresh();
+    h.applySaveData(snap);
+    assert.deepEqual(h.plots, g.plots);
+    assert.equal(h.maps.farm.tile(21, 15), 'plotsign');
+    h.new_game('Pete', 'Moon');
+    assert.deepEqual(h.plots, []);
+    assert.equal(h.maps.farm.tile(21, 15), 'field');
+  });
+
+  test("Jeff sells Plot Signs", async () => {
+    const g = fresh();
+    const opts = await g.shop_options('supermarket');
+    assert.ok(opts.some(([o]: [string]) => o === 'Buy Plot Sign (50G)'));
   });
 });

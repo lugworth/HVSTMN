@@ -108,6 +108,10 @@ import {
   HONEY_FLAVOURS,
   SEATS,
   SEAT_REST,
+  PLOT_RADIUS,
+  PLOT_MAX,
+  PLOT_SIGN_PRICE,
+  PLOT_NAME_MAX,
   ORDERS,
   ORDER_DAYS,
   ORDER_GAP,
@@ -560,6 +564,8 @@ export class Game {
   notebook: { item: string; map: string; weather: string; minutes: number; day: number }[] = [];
   /** Seats rested at today (task 44): seat id → absolute day. */
   seats_rested: Record<string, number> = {};
+  /** Named farm plots (task 42): where each sign stands, its name, and the tile it replaced. */
+  plots: { key: string; name: string; tile: string }[] = [];
   /** Absolute day the board may post its next order. */
   order_next: number = 0;
   order_last: string | null = null;
@@ -637,7 +643,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -784,6 +790,8 @@ export class Game {
     this.souvenirs = [];
     this.notebook = [];
     this.seats_rested = {};
+    this.clear_plots();
+    this.plots = [];
     this.order_last = null;
     this.next_request_id = 1;
     this.requests_done = 0;
@@ -1138,6 +1146,14 @@ export class Game {
       this.flush_spots = Array.isArray(this.flush_spots) ? this.flush_spots.filter((k) => typeof k === 'string') : [];
       this.milestones_said = Array.isArray(this.milestones_said) ? this.milestones_said.filter((k) => typeof k === 'string') : [];
       this.memories = sanitizeMemories(this.memories);
+      this.clear_plots();
+      this.plots = Array.isArray(this.plots)
+        ? this.plots
+            .filter((p: any) => p && typeof p.key === 'string' && typeof p.name === 'string' && p.name.trim() && typeof p.tile === 'string' && TILES[p.tile])
+            .map((p: any) => ({ key: p.key, name: p.name.slice(0, PLOT_NAME_MAX), tile: p.tile }))
+            .slice(0, PLOT_MAX)
+        : [];
+      this.place_plots();
       this.seats_rested = Object.fromEntries(
         Object.entries(this.seats_rested && typeof this.seats_rested === 'object' ? this.seats_rested : {}).filter(([k, v]) => SEATS[k] && Number.isInteger(v)),
       ) as Record<string, number>;
@@ -1922,7 +1938,7 @@ export class Game {
   tool_list(): string[] {
     const tools = TOOLS.filter((t) => !(this.upgrading && this.upgrading[0] === t));
     const seeds = py_sorted(Object.keys(this.inv).filter((i) => i.endsWith(' Seeds')));
-    return [...tools, ...seeds, ...((this.inv['Compost'] || 0) > 0 ? ['Compost'] : [])];
+    return [...tools, ...seeds, ...((this.inv['Compost'] || 0) > 0 ? ['Compost'] : []), ...((this.inv['Plot Sign'] || 0) > 0 ? ['Plot Sign'] : [])];
   }
 
   cycle_tool(d: number): void {
@@ -2074,6 +2090,10 @@ export class Game {
     }
     if (t === 'Compost') {
       this.spread_compost(tx, ty);
+      return;
+    }
+    if (t === 'Plot Sign') {
+      await this.place_plot_sign(tx, ty);
       return;
     }
 
@@ -3028,6 +3048,8 @@ export class Game {
       await this.interior_interact(tile, [tx, ty]);
     } else if (tile === 'mantel') {
       await this.mantel_menu();
+    } else if (tile === 'plotsign') {
+      await this.plot_menu(pKey);
     } else if (tile === 'bench') {
       const seat = Object.entries(SEATS).find(([, st]) => st.map === this.mapname && st.x === tx && st.y === ty);
       if (seat) await this.sit(seat[0]);
@@ -3471,6 +3493,119 @@ export class Game {
     }
     await this.say(line, n);
     await this.check_heart_and_rival_events(n);
+  }
+
+  // ---------------------------------------------------------------- named farm plots (mechanics task 42)
+  /** Put the plot signs back on the farm map (after a load or a new placement). */
+  place_plots(): void {
+    const m = this.maps['farm'];
+    if (!m) return;
+    for (const p of this.plots) {
+      const [x, y] = parseCoordKey(p.key);
+      m.set(x, y, 'plotsign');
+    }
+  }
+
+  /** Take every plot sign off the farm map, restoring the ground under it. */
+  clear_plots(): void {
+    const m = this.maps?.['farm'];
+    if (!m || !Array.isArray(this.plots)) return;
+    for (const p of this.plots) {
+      const [x, y] = parseCoordKey(p.key);
+      if (m.tile(x, y) === 'plotsign') m.set(x, y, p.tile);
+    }
+  }
+
+  /** A default name from where the sign stands: "North Field", "South-East Field". */
+  plot_default_name(x: number, y: number): string {
+    const m = this.maps['farm'];
+    const ns = y < m.h / 3 + 4 ? 'North' : y >= (2 * m.h) / 3 ? 'South' : '';
+    const ew = x < m.w / 3 ? 'West' : x >= (2 * m.w) / 3 ? 'East' : '';
+    const part = ns && ew ? `${ns}-${ew}` : ns || ew || 'Middle';
+    return `${part} Field`.slice(0, 12).trim();
+  }
+
+  /** Which plot a tilled tile belongs to: the nearest sign within PLOT_RADIUS (ties: the first placed). */
+  plot_of(k: string): number {
+    const [x, y] = parseCoordKey(k);
+    let best = -1;
+    let bestD = Infinity;
+    this.plots.forEach((p, i) => {
+      const [px, py] = parseCoordKey(p.key);
+      const d = Math.max(Math.abs(px - x), Math.abs(py - y));
+      if (d <= PLOT_RADIUS && d < bestD) [best, bestD] = [i, d];
+    });
+    return best;
+  }
+
+  /** Each plot's tilled tiles, dry growing crops and ripe crops. */
+  plot_status(): { name: string; key: string; tiles: number; dry: number; ready: number }[] {
+    const out = this.plots.map((p) => ({ name: p.name, key: p.key, tiles: 0, dry: 0, ready: 0 }));
+    for (const k of this.tilled) {
+      const i = this.plot_of(k);
+      if (i < 0) continue;
+      out[i].tiles += 1;
+      const c = this.crops[k];
+      if (!c || c[0] === 'Grass') continue;
+      if (c[1] >= CROPS[c[0]][2]) out[i].ready += 1;
+      else if (!this.wet.has(k)) out[i].dry += 1;
+    }
+    return out;
+  }
+
+  /** "North Turnips: 4 dry tiles, 2 ready to pick" (null when there is nothing to do there). */
+  plot_line(st: { name: string; dry: number; ready: number }): string | null {
+    const bits: string[] = [];
+    if (st.dry) bits.push(`${st.dry} dry tile${st.dry === 1 ? '' : 's'}`);
+    if (st.ready) bits.push(`${st.ready} ready to pick`);
+    return bits.length ? `${st.name}: ${bits.join(', ')}` : null;
+  }
+
+  /** Stand a Plot Sign on open field ground ahead and name the plot. */
+  async place_plot_sign(tx: number, ty: number): Promise<boolean> {
+    const m = this.maps['farm'];
+    const k = pkey(tx, ty);
+    const tile = m.tile(tx, ty);
+    if (this.mapname !== 'farm' || !['field', 'grass'].includes(tile) || this.tilled.has(k) || this.objs.farm?.[k] || this.crops[k]) {
+      this.msg('Stand a Plot Sign on open ground beside your field (not on tilled soil).', '08');
+      return false;
+    }
+    if (this.plots.length >= PLOT_MAX) {
+      this.msg(`You already have ${PLOT_MAX} named plots. Take one sign down first.`, '08');
+      return false;
+    }
+    const name = (await this.text_input('Name this plot', this.plot_default_name(tx, ty), PLOT_NAME_MAX)).trim().slice(0, PLOT_NAME_MAX);
+    if (!name) return false;
+    this.take('Plot Sign', 1);
+    this.plots.push({ key: k, name, tile });
+    this.place_plots();
+    this.msg(`You put up a sign: "${name}". Today's Plan will call it by name.`, '0B');
+    if (!this.inv['Plot Sign']) this.tool = 'Hoe';
+    return true;
+  }
+
+  /** At a plot sign: how the plot is doing; rename it or take the sign down. */
+  async plot_menu(k: string): Promise<void> {
+    const i = this.plots.findIndex((p) => p.key === k);
+    if (i < 0) return;
+    const st = this.plot_status()[i];
+    const info = [`  ${st.tiles} tilled tile${st.tiles === 1 ? '' : 's'} within ${PLOT_RADIUS} steps.`, `  ${this.plot_line(st) ?? 'Nothing needs you here today.'}`];
+    const opts = ['Rename', 'Take the sign down', 'Leave'];
+    const sel = await this.menu(`⚑ ${this.plots[i].name}`, opts, 2, info);
+    if (sel === 0) {
+      const name = (await this.text_input('Rename this plot', this.plots[i].name, PLOT_NAME_MAX)).trim().slice(0, PLOT_NAME_MAX);
+      if (name) {
+        this.plots[i].name = name;
+        this.msg(`The sign now reads "${name}".`, '0B');
+      }
+    } else if (sel === 1) {
+      const p = this.plots[i];
+      const [x, y] = parseCoordKey(p.key);
+      this.maps['farm'].set(x, y, p.tile);
+      this.plots.splice(i, 1);
+      this.give('Plot Sign', 1);
+      this.msg(`You took down the "${p.name}" sign.`, '0B');
+    }
   }
 
   // ---------------------------------------------------------------- places to stop and sit (mechanics task 44)
@@ -4773,6 +4908,7 @@ export class Game {
         ['Buy Curry Powder (50G)', () => this.buy('Curry Powder', 50)],
         ['Buy Rice (100G)', () => this.buy('Rice', 100)],
         ['Buy Bread (100G)', () => this.buy('Bread', 100)],
+        [`Buy Plot Sign (${PLOT_SIGN_PRICE}G)`, () => this.buy('Plot Sign', PLOT_SIGN_PRICE, PLOT_MAX)],
         ['Buy Chocolate (100G)', () => this.buy('Chocolate', 100)],
         ['Buy Basket (5000G)', () => this.buy('Basket', 5000, 1)],
         ['Buy Blue Feather (1000G)', () => this.buy('Blue Feather', 1000, 1)],
@@ -5318,6 +5454,10 @@ export class Game {
     lines.push(`  Ship   ${binValue ? `${binValue}G waiting` : 'empty'}`);
     lines.push(`         ${ship}`);
     lines.push(`  Water  ${this.crop_water_count()} crop${this.crop_water_count() === 1 ? '' : 's'} still dry`);
+    for (const st of this.plot_status()) {
+      const pl = this.plot_line(st);
+      if (pl) lines.push(`  Plot   ${pl}`);
+    }
     lines.push(`  Feed   ${this.animal_feed_count()} animal${this.animal_feed_count() === 1 ? '' : 's'} still hungry`);
     lines.push(`  Ready  ${this.ready_livestock_count()} product${this.ready_livestock_count() === 1 ? '' : 's'} to collect`);
     for (const mk of this.makers) {
@@ -5794,7 +5934,7 @@ export class Game {
         return { label: 'LOAD', summary: `Load the ${maker}` };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return withTarget('Cast', 'your line', 'CAST');
@@ -5855,7 +5995,7 @@ export class Game {
         return { key: 'x', label: st === 'ready' ? 'COLLECT' : st === 'working' ? 'CHECK' : 'LOAD' };
       }
     }
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
@@ -9508,17 +9648,17 @@ export class Game {
     }
   }
 
-  async text_input(prompt: string, py_default: string = ''): Promise<string> {
+  async text_input(prompt: string, py_default: string = '', max: number = 12): Promise<string> {
     this.typing = true;
     this.onTyping?.();
     try {
-      return await this.read_text(prompt, py_default);
+      return await this.read_text(prompt, py_default, max);
     } finally {
       this.typing = false;
     }
   }
 
-  async read_text(prompt: string, py_default: string = ''): Promise<string> {
+  async read_text(prompt: string, py_default: string = '', max: number = 12): Promise<string> {
     let text = '';
     while (true) {
       const [W] = [this.scr.w, this.scr.h];
@@ -9546,11 +9686,11 @@ export class Game {
       }
       if (k === 'backspace') {
         text = text.slice(0, -1);
-      } else if (k === 'space' && text.length < 12) {
+      } else if (k === 'space' && text.length < max) {
         text += ' ';
       } else if (k === 'esc' || k === 'ctrl-c') {
         return py_default;
-      } else if (k.length === 1 && /^[\x20-\x7E]$/.test(k) && text.length < 12) {
+      } else if (k.length === 1 && /^[\x20-\x7E]$/.test(k) && text.length < max) {
         text += k;
       }
     }

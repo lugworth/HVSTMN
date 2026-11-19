@@ -538,6 +538,11 @@ export const ITEMS: Record<string, any> = {
     0,
     "material"
   ],
+  "Plot Sign": [
+    0,
+    0,
+    "material"
+  ],
   "Milker": [
     0,
     0,
@@ -1996,6 +2001,12 @@ export const TILES: Record<string, any> = {
   ],
   "bench": [
     "╥",
+    "09",
+    "00",
+    false
+  ],
+  "plotsign": [
+    "⚑",
     "09",
     "00",
     false
@@ -3692,6 +3703,15 @@ export const SEATS: Record<string, { map: string; x: number; y: number; title: s
 };
 /** Stamina from a good sit, once a day per seat. */
 export const SEAT_REST = 15;
+
+/**
+ * Named farm plots (mechanics task 42): a Plot Sign stands on open field; the tilled tiles within
+ * PLOT_RADIUS of it (each counted for its nearest sign) are that plot, and Today's Plan uses its name.
+ */
+export const PLOT_RADIUS = 4;
+export const PLOT_MAX = 6;
+export const PLOT_SIGN_PRICE = 50;
+export const PLOT_NAME_MAX = 16;
 
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
