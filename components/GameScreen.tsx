@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Screen, Cell, type PaletteMode } from '@/src/game/screen';
 import { Game } from '@/src/game/engine';
-import { PALETTE, TOOLS } from '@/src/game/constants';
+import { PALETTE, TOOLS, DAY_PACES, type DayPace } from '@/src/game/constants';
 import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, type OutCell } from '@/src/game/enhanced';
 import { isCompact } from '@/src/game/compact';
 import {
@@ -162,6 +162,7 @@ export default function GameScreen() {
   const [haptics, setHapticsState] = useState(true);
   const hapticsRef = useRef(true);
   const [canFullscreen, setCanFullscreen] = useState(false);
+  const [pace, setPaceState] = useState<DayPace>('normal');
 
   // Send a key to the game engine
   const sendKey = useCallback((name: string) => {
@@ -510,6 +511,13 @@ export default function GameScreen() {
             checked: paletteMode === 'isotope',
             run: () => selectPalette('isotope'),
           },
+          ...(Object.keys(DAY_PACES) as DayPace[]).map((p) => ({
+            id: `pace-${p}`,
+            label: `Day pace: ${DAY_PACES[p].label}`,
+            kind: 'radio' as const,
+            checked: pace === p,
+            run: () => gameRef.current?.set_pace(p),
+          })),
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
           ...(isTouch
@@ -825,6 +833,8 @@ export default function GameScreen() {
     // Initialize Game engine
     const game = new Game(screen, autostart);
     gameRef.current = game;
+    setPaceState(game.pace);
+    game.onPace = (p) => setPaceState(p);
     // Focus the name field (touch only; it stays mounted) inside the tap that opened the prompt,
     // so the phone keyboard comes up without a second tap.
     game.onTyping = () => {

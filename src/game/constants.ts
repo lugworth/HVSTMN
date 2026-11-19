@@ -20,6 +20,18 @@ export const PALETTE: Record<string, string> = {
 };
 
 export const SECS_PER_10MIN = 6.0;
+/**
+ * Day pace (mechanics task 52): real seconds per 10 in-game minutes. Normal is SECS_PER_10MIN;
+ * the slower paces only stretch the clock, so the 5 PM pickup, shop hours and festivals stay on
+ * in-game time. A per-browser preference (PACE_KEY), not part of the farm's save.
+ */
+export const DAY_PACES = {
+  normal: { label: 'Normal', secs: SECS_PER_10MIN },
+  relaxed: { label: 'Relaxed', secs: SECS_PER_10MIN * 1.5 },
+  unhurried: { label: 'Unhurried', secs: SECS_PER_10MIN * 2 },
+} as const;
+export type DayPace = keyof typeof DAY_PACES;
+export const PACE_KEY = 'hrvstmn-pace';
 export const SAVE_KEY = "hrvstmn-save";
 
 export const SEASONS = ["Spring", "Summer", "Fall", "Winter"] as const;

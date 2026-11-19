@@ -62,6 +62,9 @@ import {
   FAVOR_FRIENDSHIP,
   FAVOR_GAP,
   FAVOR_WATER_MAX,
+  DAY_PACES,
+  PACE_KEY,
+  SECS_PER_10MIN,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -3952,5 +3955,75 @@ describe('favors from close neighbors (task 05)', () => {
     o.applySaveData(old);
     assert.equal(o.favor, null);
     assert.deepEqual(o.favor_offered, {});
+  });
+});
+
+describe('a relaxed day setting (task 52)', () => {
+  /** Outdoors with `acc` real seconds already banked toward the next 10 in-game minutes. */
+  const banked = (pace: string, acc: number) => {
+    const g = fresh();
+    g.started = true;
+    g.warp('farm', 14, 10, [0, 1]);
+    g.pace = pace;
+    g.minutes = 9 * 60;
+    g.acc = acc;
+    g.last = Date.now() / 1000;
+    return g;
+  };
+
+  test('slower paces stretch real time per in-game hour; normal is unchanged', () => {
+    assert.equal(DAY_PACES.normal.secs, SECS_PER_10MIN);
+    assert.ok(DAY_PACES.relaxed.secs > DAY_PACES.normal.secs);
+    assert.ok(DAY_PACES.unhurried.secs > DAY_PACES.relaxed.secs);
+    const g = fresh();
+    assert.equal(g.pace, 'normal');
+    assert.equal(g.pace_hour(), `${SECS_PER_10MIN * 6} s`);
+    g.pace = 'unhurried';
+    assert.equal(g.pace_hour(), '1 min 12 s');
+  });
+
+  test('the clock ticks on the chosen pace', async () => {
+    const almost = SECS_PER_10MIN + 0.5;
+    const normal = banked('normal', almost);
+    await normal.update();
+    assert.equal(normal.minutes, 9 * 60 + 10, 'normal: 10 minutes pass');
+    const relaxed = banked('relaxed', almost);
+    await relaxed.update();
+    assert.equal(relaxed.minutes, 9 * 60, 'relaxed: not yet');
+    relaxed.acc = DAY_PACES.relaxed.secs;
+    relaxed.last = Date.now() / 1000;
+    await relaxed.update();
+    assert.equal(relaxed.minutes, 9 * 60 + 10);
+  });
+
+  test('the 5 PM pickup still happens at 5 PM on the in-game clock', async () => {
+    const g = banked('unhurried', DAY_PACES.unhurried.secs);
+    g.minutes = 17 * 60 - 10;
+    g.bin = { Turnip: 2 };
+    const gold = g.gold;
+    await g.update();
+    assert.equal(g.minutes, 17 * 60);
+    assert.ok(g.gold > gold && g.zack_paid_today);
+  });
+
+  test('chosen in the Diary or the View menu, kept per browser and not in the farm save', async () => {
+    const g = fresh();
+    let told: string | null = null;
+    g.onPace = (p: string) => { told = p; };
+    const paces = Object.keys(DAY_PACES);
+    g.menu = async (title: string, opts: string[]) =>
+      title === '▤ Diary' ? opts.findIndex((o) => o.startsWith('Day Pace')) : title === 'Day Pace' ? paces.indexOf('relaxed') : null;
+    await g.pause_menu();
+    assert.equal(g.pace, 'relaxed');
+    assert.equal(told, 'relaxed');
+    assert.equal(localStorage.getItem(PACE_KEY), 'relaxed');
+    assert.ok(!('pace' in g.snapshot()));
+    const h = fresh();
+    assert.equal(h.pace, 'relaxed', 'a new session starts at the stored pace');
+    h.set_pace('nonsense');
+    assert.equal(h.pace, 'relaxed');
+    localStorage.setItem(PACE_KEY, 'warp-speed');
+    assert.equal(fresh().pace, 'normal', 'an unknown stored value falls back to normal');
+    localStorage.removeItem(PACE_KEY);
   });
 });
