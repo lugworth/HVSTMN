@@ -3725,6 +3725,9 @@ export const PLOT_MAX = 6;
 export const PLOT_SIGN_PRICE = 50;
 export const PLOT_NAME_MAX = 16;
 
+/** Valley postcards (mechanics task 46): how many the album keeps. */
+export const POSTCARD_MAX = 12;
+
 /**
  * A tiny regional contest (mechanics task 14): the Evening Catch at Willow Bend. On CONTEST_WEEKDAY
  * evenings from Spring to Fall (not on festival days), fish caught at Willow Bend between the two

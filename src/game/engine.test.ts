@@ -2,7 +2,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { Screen } from './screen';
-import { Game, REMINDER_MAX, MEMORY_MAX } from './engine';
+import { Game, REMINDER_MAX, MEMORY_MAX, sanitizePostcards } from './engine';
 import { computeFrame } from './enhanced';
 import { HEDGE_GATE } from './map';
 import {
@@ -67,6 +67,7 @@ import {
   DAY_PACES,
   PACE_KEY,
   SECS_PER_10MIN,
+  POSTCARD_MAX,
 } from './constants';
 import { BASKET_CAPACITY } from './rules';
 import { footbridge_cells, FOOTBRIDGE_SIGN } from './map';
@@ -4133,5 +4134,103 @@ describe('a relaxed day setting (task 52)', () => {
     localStorage.setItem(PACE_KEY, 'warp-speed');
     assert.equal(fresh().pace, 'normal', 'an unknown stored value falls back to normal');
     localStorage.removeItem(PACE_KEY);
+  });
+});
+
+describe('valley postcards (task 46)', () => {
+  const outdoors = () => {
+    const g = fresh();
+    g.first_steps = null;
+    g.started = true;
+    g.warp('town', 36, 14, [0, 1]);
+    g.minutes = 14 * 60 + 20;
+    return g;
+  };
+
+  test('a postcard is the map view as text, trimmed, without the minimap or pin overlays', async () => {
+    const g = outdoors();
+    g.show_minimap = true;
+    g.map_pin = 'museum';
+    g.render();
+    const busy = g.scr.buf.map((r: any[]) => r.map((c) => c[0]).join('')).join('\n');
+    assert.ok(await g.take_postcard());
+    const p = g.postcards[0];
+    assert.equal(p.place, g.map.title);
+    assert.equal(p.map, 'town');
+    assert.equal(p.minutes, 14 * 60 + 20);
+    assert.ok(p.rows.length > 5 && p.rows.length <= g.scr.ctx.view.h);
+    assert.ok(p.rows.every((r: string) => r.length === p.rows[0].length && r.length <= g.scr.ctx.view.w));
+    assert.equal(p.fg.length, p.rows.length);
+    assert.ok(p.fg.every((f: string, i: number) => f.length === p.rows[i].length * 2 && /^([0-9A-F]{2})*$/.test(f)));
+    const text = p.rows.join('\n');
+    assert.ok(text.includes('☻') || text.includes('@'), 'the farmer is in the picture');
+    assert.ok(busy.length > 0);
+    assert.ok(!g.capturing);
+    assert.match(g.postcard_caption(p), /^.+ · Spring 1, Year 1 · 2:20 ?PM$/);
+  });
+
+  test('the album keeps twelve; a full album asks before letting the oldest go', async () => {
+    const g = outdoors();
+    g.menu = async () => 0; // "Yes" at any confirm
+    for (let i = 0; i < POSTCARD_MAX; i++) {
+      g.minutes = 6 * 60 + i * 10;
+      await g.take_postcard();
+    }
+    assert.equal(g.postcards.length, POSTCARD_MAX);
+    g.minutes = 20 * 60;
+    await g.take_postcard();
+    assert.equal(g.postcards.length, POSTCARD_MAX);
+    assert.equal(g.postcards[0].minutes, 6 * 60 + 10, 'the oldest went');
+    assert.equal(g.postcards[POSTCARD_MAX - 1].minutes, 20 * 60);
+    g.menu = async () => 1; // "No"
+    assert.equal(await g.take_postcard(), false);
+    assert.equal(g.postcards[POSTCARD_MAX - 1].minutes, 20 * 60, 'nothing replaced');
+  });
+
+  test('viewing: browse, save as text with the caption, remove after asking', async () => {
+    const g = outdoors();
+    await g.take_postcard();
+    g.minutes += 60;
+    await g.take_postcard();
+    const keys = ['right', 's', 'x', 'esc'];
+    g.modal = async (draw: () => void) => { draw(); return keys.shift(); };
+    const saved: string[] = [];
+    g.download_text = (_f: string, t: string) => { saved.push(t); return true; };
+    g.menu = async () => 0;
+    const [first, second] = g.postcards;
+    await g.view_postcard(0);
+    assert.equal(saved.length, 1);
+    assert.ok(saved[0].startsWith(second.rows[0].trimEnd()), 'the card after browsing right');
+    assert.ok(saved[0].includes(g.postcard_caption(second)) && saved[0].includes('Pete of Moon Farm'));
+    assert.deepEqual(g.postcards, [first], 'that card was removed');
+  });
+
+  test('the viewer fits a phone screen', async () => {
+    const g = new Game(new Screen(50, 28), true) as any;
+    g.new_game('Pete', 'Moon');
+    g.first_steps = null;
+    g.started = true;
+    g.warp('town', 36, 14, [0, 1]);
+    await g.take_postcard();
+    g.render();
+    g.draw_postcard(g.postcards[0], 0);
+    for (const row of g.scr.buf) assert.ok(row.length <= 50);
+    const text = g.scr.buf.map((r: any[]) => r.map((c) => c[0]).join('')).join('\n');
+    assert.ok(text.includes('Postcard 1/1'));
+  });
+
+  test('postcards are saved with the farm; bad entries are dropped', async () => {
+    const g = outdoors();
+    await g.take_postcard();
+    const h = fresh();
+    h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
+    assert.deepEqual(h.postcards, g.postcards);
+    assert.deepEqual(sanitizePostcards([{ place: 'X' }, 'junk', { place: 'Y', day: 3, minutes: 400, rows: ['ab'], fg: ['zz'] }]).map((p) => p.fg), [['']]);
+    assert.equal(sanitizePostcards(Array.from({ length: 20 }, () => ({ place: 'P', day: 1, minutes: 1, rows: ['a'], fg: ['05'] }))).length, POSTCARD_MAX);
+    const old = JSON.parse(JSON.stringify(g.snapshot()));
+    delete old.postcards;
+    const o = fresh();
+    o.applySaveData(old);
+    assert.deepEqual(o.postcards, []);
   });
 });
