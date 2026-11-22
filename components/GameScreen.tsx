@@ -983,7 +983,7 @@ export default function GameScreen() {
         <canvas
           ref={canvasRef}
           id="term"
-          aria-label="HRVSTMN game screen"
+          aria-label="FURROW game screen"
           aria-description="Move with WASD or arrow keys. Space uses the tool. X interacts. Question mark opens keyboard help."
           aria-busy={!ready}
           tabIndex={0}

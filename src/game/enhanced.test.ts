@@ -255,9 +255,9 @@ describe('computeFrame', () => {
 
   test('frames without a scene context (title, menus) pass through', () => {
     const s = new Screen(80, 24);
-    s.put(1, 1, 'HRVSTMN', '0A');
+    s.put(1, 1, 'FURROW', '0A');
     const out = computeFrame(s, 0);
-    assert.equal(out[1][1].ch, 'H');
+    assert.equal(out[1][1].ch, 'F');
   });
 
   test('ground right below a building is shaded', () => {
@@ -337,7 +337,7 @@ describe('computeFrame', () => {
   test('title screen gets a night sky, stars and a gradient logo', () => {
     const s = new Screen(100, 30);
     s.scene = 'title';
-    s.put(10, 2, 'HRVSTMN', '0A', '00', true);
+    s.put(10, 2, 'FURROW', '0A', '00', true);
     for (let i = 0; i < 7; i++) s.tag(10 + i, 2, { t: 'ui', k: 'logo' });
     const out = computeFrame(s, 0);
     assert.notEqual(out[10][50].bg, '#000000');
@@ -1303,7 +1303,7 @@ describe('7 graphical upgrades', () => {
     assert.equal(cropFamily('Tomato'), 'trellis');
     assert.equal(cropFamily('Corn'), 'stalk');
     assert.equal(cropFamily('Cabbage'), 'leafy');
-    assert.equal(cropFamily('Pink Cat Flower'), 'flower');
+    assert.equal(cropFamily('Rosecap Flower'), 'flower');
     assert.equal(cropFamily('Grass'), 'grass');
     assert.equal(cropFamily('Turnip'), 'root');
 
@@ -1506,7 +1506,7 @@ describe('late-season blending, hot-spring steam, hearth embers and CRT scanline
       const s = new Screen(80, 24);
       s.scene = 'title';
       s.reducedMotion = reduced;
-      s.put(30, 3, 'HRVSTMN', '07', '00', true);
+      s.put(30, 3, 'FURROW', '07', '00', true);
       return s;
     };
     const stars = (s: Screen, t: number) => computeFrame(s, t).flat().filter((o) => o.ch === '★').length;
@@ -1923,17 +1923,17 @@ describe('display font for HUD headings', () => {
     return calls;
   };
   const frame: OutCell[][] = [[
-    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'HRVSTMN', scale: 1.45, w: 9, h: 2 } },
+    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'FURROW', scale: 1.45, w: 9, h: 2 } },
     { ch: 'x', fg: '#ffffff', bg: '#000000', bold: false },
   ]];
 
   test('large headings use the display face; every other glyph stays in the grid font', () => {
     const calls = fontsUsed(frame, 'DisplayFace');
-    assert.deepEqual(calls.find((c) => c.text === 'HRVSTMN'), { text: 'HRVSTMN', font: 'bold 23.2px DisplayFace' });
+    assert.deepEqual(calls.find((c) => c.text === 'FURROW'), { text: 'FURROW', font: 'bold 23.2px DisplayFace' });
     assert.equal(calls.find((c) => c.text === 'x')?.font, '16px GridMono');
   });
 
   test('without a display face the headings fall back to the grid font', () => {
-    assert.equal(fontsUsed(frame).find((c) => c.text === 'HRVSTMN')?.font, 'bold 23.2px GridMono');
+    assert.equal(fontsUsed(frame).find((c) => c.text === 'FURROW')?.font, 'bold 23.2px GridMono');
   });
 });

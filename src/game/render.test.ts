@@ -10,7 +10,7 @@ function farm(style?: VisualStyle) {
   const s = new Screen(132, 30);
   if (style) s.style = style;
   const g = new Game(s, true) as any;
-  g.new_game('Pete', 'Moon');
+  g.new_game('Ash', 'Bramble');
   g.warp('farm', 23, 9);
   g.render();
   return { s, g };
@@ -83,7 +83,7 @@ describe('engine + renderer', () => {
     g.animals = [{ name: 'Bess', kind: 'cow', fed: false, ready: false, wool: 0 }];
     const text = g.today_lines().join('\n');
     assert.match(text, /Tomorrow:/);
-    assert.match(text, /Zack collects at 5:00 PM/);
+    assert.match(text, /Otto collects at 5:00 PM/);
     assert.match(text, /1 crop still dry/);
     assert.match(text, /1 animal still hungry/);
   });
@@ -181,7 +181,7 @@ describe('engine + renderer', () => {
         for (let x = 0; x < m.w; x++) if (pass(m, x, y)) assert.ok(seen.has(`${name}:${x},${y}`), `${name} ${x},${y} is unreachable`);
       }
     }
-    // the East Road runs from Rose Square out to Willow Bend
+    // the East Road runs from Market Cross out to Willow Bend
     for (let x = 44; x <= 71; x++) for (const y of [11, 12, 13]) assert.equal(g.maps.town.tile(x, y), 'path', `town ${x},${y}`);
     // every building can be walked to, and stepping back out of it lands at its own front door
     const doors: Record<string, string[]> = {};
@@ -237,7 +237,7 @@ describe('engine + renderer', () => {
 
   test('villagers whose homes moved wait outside their new front doors', () => {
     const { g } = farm();
-    const homes: Record<string, [string, string]> = { Gray: ['grove', 'blacksmith'], Popuri: ['woods', 'poultry'], May: ['woods', 'yodel'], Duke: ['woods', 'winery'], Mary: ['town', 'library'] };
+    const homes: Record<string, [string, string]> = { Rowan: ['grove', 'blacksmith'], Juniper: ['woods', 'poultry'], Pip: ['woods', 'yodel'], Corin: ['woods', 'winery'], Odessa: ['town', 'library'] };
     for (const [who, [map, id]] of Object.entries(homes)) {
       const [mp, ax, ay] = NPCS[who].where!;
       assert.equal(mp, map, `${who} stands in ${map}`);
@@ -443,7 +443,7 @@ describe('right-side Contour Farm HUD', () => {
         assert.ok(y + label.h <= s.ctx!.divY);
         labels.push(label.text);
       }
-      assert.deepEqual(labels, ['HRVSTMN', '01']);
+      assert.deepEqual(labels, ['FURROW', '01']);
       const panel = s.buf.slice(0, s.ctx!.divY).map((row) => row.slice(s.ctx!.divX + 1).map((c) => c[0]).join('')).join('\n');
       for (const text of ['EQUIPPED', 'STAMINA', 'FATIGUE', 'GOLD', 'BIN', 'HELD', '987654321G']) assert.ok(panel.includes(text), `${width}x${height}: ${text}`);
       const meter = computeFrame(s, 0).map((row) => row.slice(s.ctx!.divX + 1).map((o) => o.ch).join(''));

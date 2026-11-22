@@ -195,12 +195,12 @@ export const FORAGE: Record<string, string[]> = {
   "Spring": [
     "Bamboo Shoot",
     "Medicinal Herb",
-    "Moondrop Flower",
-    "Toy Flower"
+    "Duskbell Flower",
+    "Pinwheel Daisy"
   ],
   "Summer": [
-    "Red Grass",
-    "Pink Cat Flower",
+    "Redroot",
+    "Rosecap Flower",
     "Wild Grape",
     "Medicinal Herb"
   ],
@@ -208,10 +208,10 @@ export const FORAGE: Record<string, string[]> = {
     "Mushroom",
     "Truffle",
     "Wild Grape",
-    "Red Grass"
+    "Redroot"
   ],
   "Winter": [
-    "Blue Grass"
+    "Bluewort"
   ]
 };
 
@@ -224,19 +224,19 @@ export const FORAGE_GLYPH: Record<string, any> = {
     "\"",
     "0B"
   ],
-  "Moondrop Flower": [
+  "Duskbell Flower": [
     "*",
     "0C"
   ],
-  "Toy Flower": [
+  "Pinwheel Daisy": [
     "*",
     "0A"
   ],
-  "Red Grass": [
+  "Redroot": [
     "\"",
     "08"
   ],
-  "Pink Cat Flower": [
+  "Rosecap Flower": [
     "*",
     "0E"
   ],
@@ -252,7 +252,7 @@ export const FORAGE_GLYPH: Record<string, any> = {
     "m",
     "04"
   ],
-  "Blue Grass": [
+  "Bluewort": [
     "\"",
     "0D"
   ]
@@ -420,22 +420,22 @@ export const ITEMS: Record<string, any> = {
     8,
     "forage"
   ],
-  "Moondrop Flower": [
+  "Duskbell Flower": [
     60,
     0,
     "forage"
   ],
-  "Toy Flower": [
+  "Pinwheel Daisy": [
     80,
     0,
     "forage"
   ],
-  "Red Grass": [
+  "Redroot": [
     110,
     6,
     "forage"
   ],
-  "Pink Cat Flower": [
+  "Rosecap Flower": [
     70,
     0,
     "forage"
@@ -455,7 +455,7 @@ export const ITEMS: Record<string, any> = {
     6,
     "forage"
   ],
-  "Blue Grass": [
+  "Bluewort": [
     100,
     6,
     "forage"
@@ -495,7 +495,7 @@ export const ITEMS: Record<string, any> = {
     0,
     "ore"
   ],
-  "Mystrile": [
+  "Starsteel": [
     40,
     0,
     "ore"
@@ -520,7 +520,7 @@ export const ITEMS: Record<string, any> = {
     0,
     "material"
   ],
-  "Blue Feather": [
+  "Promise Ribbon": [
     0,
     0,
     "special"
@@ -535,7 +535,7 @@ export const ITEMS: Record<string, any> = {
     15,
     "food"
   ],
-  "Bodigizer": [
+  "Mending Tonic": [
     0,
     100,
     "food"
@@ -740,14 +740,14 @@ export const SHEEP_NAMES = ["Fluffy", "Cotton", "Woolly", "Snowball", "Puff", "L
 
 export const TOOLS = ["Sickle", "Hoe", "Hammer", "Axe", "Watering Can", "Fishing Rod"];
 export const UPGRADABLE = ["Sickle", "Hoe", "Hammer", "Axe", "Watering Can", "Fishing Rod"];
-export const LEVELS = ["Basic", "Copper", "Silver", "Gold", "Mystrile", "Cursed", "Blessed", "Mythic"];
+export const LEVELS = ["Basic", "Copper", "Silver", "Gold", "Starsteel", "Fey", "Hallowed", "Heirloom"];
 export const LEVEL_COL = ["04", "09", "05", "0A", "0C", "0E", "07", "0B"];
 export const UPGRADE: Record<number, [number, string]> = {
   1: [1000, "Copper"],
   2: [2000, "Silver"],
   3: [3000, "Gold"],
-  4: [5000, "Mystrile"],
-  7: [50000, "Mythic Stone"]
+  4: [5000, "Starsteel"],
+  7: [50000, "Heirloom Stone"]
 };
 
 export const CAN_CAP = [30, 55, 85, 130, 200, 250, 250, 500];
@@ -861,16 +861,16 @@ export const HOURS: Record<string, any> = {
 
 export const BUILDINGS: Record<string, string> = {
   "supermarket": "Supermarket",
-  "poultry": "Lillia's Poultry Farm",
-  "blacksmith": "Saibara's Blacksmith",
-  "inn": "Doug's Inn",
+  "poultry": "Rosalind's Feathercote",
+  "blacksmith": "Hilde's Blacksmith",
+  "inn": "Gideon's Inn",
   "clinic": "Clinic",
   "library": "Library",
   "church": "Church",
-  "mayor": "Mayor Thomas' House",
-  "yodel": "Yodel Ranch",
-  "carpenter": "Gotz's Workshop",
-  "museum": "Mineral Town Museum"
+  "mayor": "Mayor Ambrose' House",
+  "yodel": "Highmeadow Dairy",
+  "carpenter": "Ingrid's Workshop",
+  "museum": "Brackenford Museum"
 };
 
 export interface NPCDef {
@@ -887,8 +887,8 @@ export interface NPCDef {
   lines: string[][];
 }
 export const NPCS: Record<string, any> = {
-  "Mary": {
-    "g": "M",
+  "Odessa": {
+    "g": "O",
     "col": "0D",
     "home": "library",
     "out": [
@@ -904,7 +904,7 @@ export const NPCS: Record<string, any> = {
     "bach": true,
     "loves": [
       "Bamboo Shoot",
-      "Moondrop Flower",
+      "Duskbell Flower",
       "Mushroom Rice"
     ],
     "likes": [
@@ -912,7 +912,7 @@ export const NPCS: Record<string, any> = {
       "Potato",
       "Wild Grape",
       "Mushroom",
-      "Blue Grass",
+      "Bluewort",
       "Herb Tea"
     ],
     "hates": [
@@ -922,7 +922,7 @@ export const NPCS: Record<string, any> = {
     ],
     "lines": [
       [
-        "Oh... hello. I'm Mary. My father and I run the library.",
+        "Oh... hello. I'm Odessa. My father and I run the library.",
         "The mountain herbs are so interesting this time of year."
       ],
       [
@@ -935,8 +935,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Karen": {
-    "g": "K",
+  "Priya": {
+    "g": "P",
     "col": "0E",
     "home": "supermarket",
     "out": [
@@ -959,22 +959,22 @@ export const NPCS: Record<string, any> = {
       "Corn",
       "Tomato",
       "Large Fish",
-      "Red Grass",
+      "Redroot",
       "Popcorn",
       "Fried Potatoes"
     ],
     "hates": [
-      "Toy Flower",
-      "Pink Cat Flower"
+      "Pinwheel Daisy",
+      "Rosecap Flower"
     ],
     "lines": [
       [
-        "Hmph, the new farmer, huh? I'm Karen. My parents run the Supermarket.",
+        "Hmph, the new farmer, huh? I'm Priya. My parents run the Supermarket.",
         "This town is so boring. Nothing ever happens here."
       ],
       [
         "You're working pretty hard on that farm. Not bad.",
-        "Rose Square is nice at night. ...Not that I'm inviting you."
+        "Market Cross is nice at night. ...Not that I'm inviting you."
       ],
       [
         "I used to want to leave this town. Now I'm not so sure. Funny, huh?",
@@ -982,8 +982,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Popuri": {
-    "g": "P",
+  "Juniper": {
+    "g": "J",
     "col": "0A",
     "home": "poultry",
     "out": [
@@ -999,13 +999,13 @@ export const NPCS: Record<string, any> = {
     "bach": true,
     "loves": [
       "Strawberry",
-      "Pink Cat Flower",
+      "Rosecap Flower",
       "Strawberry Jam"
     ],
     "likes": [
       "Egg",
-      "Toy Flower",
-      "Moondrop Flower",
+      "Pinwheel Daisy",
+      "Duskbell Flower",
       "Turnip",
       "Fruit Juice",
       "Omelet"
@@ -1014,12 +1014,12 @@ export const NPCS: Record<string, any> = {
       "Copper",
       "Silver",
       "Gold",
-      "Mystrile"
+      "Starsteel"
     ],
     "lines": [
       [
-        "Hi hi! I'm Popuri! We raise chickens at the Poultry Farm!",
-        "My brother Rick is soooo overprotective."
+        "Hi hi! I'm Juniper! We raise chickens at the Feathercote!",
+        "My brother Dennis is soooo overprotective."
       ],
       [
         "Your farm is getting so cute! Do you have chickens yet? You should!",
@@ -1031,8 +1031,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Elli": {
-    "g": "E",
+  "Margit": {
+    "g": "M",
     "col": "07",
     "home": "clinic",
     "out": [
@@ -1047,8 +1047,8 @@ export const NPCS: Record<string, any> = {
     "rain": false,
     "bach": true,
     "loves": [
-      "Moondrop Flower",
-      "Toy Flower",
+      "Duskbell Flower",
+      "Pinwheel Daisy",
       "Pumpkin Pudding"
     ],
     "likes": [
@@ -1065,12 +1065,12 @@ export const NPCS: Record<string, any> = {
     ],
     "lines": [
       [
-        "Hello, I'm Elli, the nurse at the Clinic. Don't overwork yourself!",
+        "Hello, I'm Margit, the nurse at the Clinic. Don't overwork yourself!",
         "If you feel tired, eat something. Your body will thank you."
       ],
       [
         "You look healthy today. Are you eating your vegetables?",
-        "My little brother Stu is a handful, but I love him."
+        "My little brother Toby is a handful, but I love him."
       ],
       [
         "I worry about you, you know. Please take care of yourself... for me.",
@@ -1078,8 +1078,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Ann": {
-    "g": "A",
+  "Tess": {
+    "g": "T",
     "col": "09",
     "home": "inn",
     "out": [
@@ -1113,7 +1113,7 @@ export const NPCS: Record<string, any> = {
     ],
     "lines": [
       [
-        "Hi! I'm Ann! My dad Doug runs the Inn. Come eat with us!",
+        "Hi! I'm Tess! My dad Gideon runs the Inn. Come eat with us!",
         "I'm terrible at cooking but great at fixing things!"
       ],
       [
@@ -1126,8 +1126,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Thomas": {
-    "g": "T",
+  "Ambrose": {
+    "g": "A",
     "col": "08",
     "home": "mayor",
     "out": [
@@ -1155,20 +1155,20 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "Ho ho! Welcome to Mineral Town! I'm Mayor Thomas.",
+        "Ho ho! Welcome to Brackenford! I'm Mayor Ambrose.",
         "If you need anything, just ask! Hm hm!"
       ],
       [
         "Your farm is coming along nicely! Your grandfather would be proud.",
-        "Rose Square is the heart of our little town!"
+        "Market Cross is the heart of our little town!"
       ],
       [
-        "Mineral Town is lucky to have you, my friend! Ho ho!"
+        "Brackenford is lucky to have you, my friend! Ho ho!"
       ]
     ]
   },
-  "Gray": {
-    "g": "G",
+  "Rowan": {
+    "g": "R",
     "col": "04",
     "home": "blacksmith",
     "out": [
@@ -1184,7 +1184,7 @@ export const NPCS: Record<string, any> = {
     "bach": false,
     "loves": [
       "Gold",
-      "Mystrile"
+      "Starsteel"
     ],
     "likes": [
       "Copper",
@@ -1194,12 +1194,12 @@ export const NPCS: Record<string, any> = {
       "Curry Rice"
     ],
     "hates": [
-      "Toy Flower",
-      "Pink Cat Flower"
+      "Pinwheel Daisy",
+      "Rosecap Flower"
     ],
     "lines": [
       [
-        "...I'm Gray. Apprentice at the blacksmith. Got a problem?",
+        "...I'm Rowan. Apprentice at the blacksmith. Got a problem?",
         "Gramps works me to the bone."
       ],
       [
@@ -1211,8 +1211,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Cliff": {
-    "g": "C",
+  "Felix": {
+    "g": "F",
     "col": "0C",
     "home": "inn",
     "out": [
@@ -1242,11 +1242,11 @@ export const NPCS: Record<string, any> = {
     ],
     "lines": [
       [
-        "Oh... hi. I'm Cliff. I'm just passing through. I think.",
+        "Oh... hi. I'm Felix. I'm just passing through. I think.",
         "The lake is calm today."
       ],
       [
-        "Mineral Town feels like it could be home. Maybe.",
+        "Brackenford feels like it could be home. Maybe.",
         "I've been looking for work. Doesn't seem to be much around."
       ],
       [
@@ -1254,8 +1254,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Rick": {
-    "g": "R",
+  "Dennis": {
+    "g": "D",
     "col": "0F",
     "home": "poultry",
     "out": [
@@ -1280,11 +1280,11 @@ export const NPCS: Record<string, any> = {
       "Boiled Egg"
     ],
     "hates": [
-      "Moondrop Flower"
+      "Duskbell Flower"
     ],
     "lines": [
       [
-        "I'm Rick. I look after the chickens. And stay away from my sister.",
+        "I'm Dennis. I look after the chickens. And stay away from my sister.",
         "Chickens are smarter than people think."
       ],
       [
@@ -1292,12 +1292,12 @@ export const NPCS: Record<string, any> = {
         "Fill their feed boxes every day and they'll lay every day."
       ],
       [
-        "Popuri talks about you a lot. ...I suppose that's okay."
+        "Juniper talks about you a lot. ...I suppose that's okay."
       ]
     ]
   },
-  "May": {
-    "g": "Y",
+  "Pip": {
+    "g": "p",
     "col": "0B",
     "home": "yodel",
     "out": [
@@ -1313,7 +1313,7 @@ export const NPCS: Record<string, any> = {
     "bach": false,
     "loves": [
       "Strawberry",
-      "Toy Flower",
+      "Pinwheel Daisy",
       "Fruit Juice"
     ],
     "likes": [
@@ -1328,7 +1328,7 @@ export const NPCS: Record<string, any> = {
     ],
     "lines": [
       [
-        "I'm May! I live at Yodel Ranch with Grandpa Barley!",
+        "I'm Pip! I live at Highmeadow Dairy with Grandpa Abel!",
         "Do you like cows? I like cows."
       ],
       [
@@ -1340,8 +1340,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Jeff": {
-    "g": "J",
+  "Hollis": {
+    "g": "H",
     "col": "05",
     "home": "supermarket",
     "out": null,
@@ -1349,7 +1349,7 @@ export const NPCS: Record<string, any> = {
     "rain": false,
     "bach": false,
     "loves": [
-      "Moondrop Flower"
+      "Duskbell Flower"
     ],
     "likes": [
       "Turnip",
@@ -1359,7 +1359,7 @@ export const NPCS: Record<string, any> = {
     "lines": [
       [
         "W-welcome to the Supermarket. Please, take your time.",
-        "My wife Sasha handles... most things."
+        "My wife Meena handles... most things."
       ],
       [
         "Seeds sell well this time of year. I think."
@@ -1369,8 +1369,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Saibara": {
-    "g": "S",
+  "Hilde": {
+    "g": "h",
     "col": "06",
     "home": "blacksmith",
     "out": null,
@@ -1378,7 +1378,7 @@ export const NPCS: Record<string, any> = {
     "rain": false,
     "bach": false,
     "loves": [
-      "Mystrile",
+      "Starsteel",
       "Diamond"
     ],
     "likes": [
@@ -1388,8 +1388,8 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "Hmph. I'm Saibara. Bring me ore and gold and I'll make your tools sing.",
-        "Copper, Silver, Gold, Mystrile. That is the path of the craftsman."
+        "Hmph. I'm Hilde. Bring me ore and gold and I'll make your tools sing.",
+        "Copper, Silver, Gold, Starsteel. That is the path of the craftsman."
       ],
       [
         "You treat your tools well. Good."
@@ -1399,8 +1399,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Doug": {
-    "g": "D",
+  "Gideon": {
+    "g": "G",
     "col": "09",
     "home": "inn",
     "out": null,
@@ -1420,8 +1420,8 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "Welcome to Doug's Inn! Hungry? Lunch is always on.",
-        "Ann's a good kid. Wish she'd wear a dress once in a while."
+        "Welcome to Gideon's Inn! Hungry? Lunch is always on.",
+        "Tess's a good kid. Wish she'd wear a dress once in a while."
       ],
       [
         "You look like you need a hot meal."
@@ -1431,8 +1431,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Doctor": {
-    "g": "T",
+  "Dr. Sayer": {
+    "g": "Y",
     "col": "04",
     "home": "clinic",
     "out": null,
@@ -1441,7 +1441,7 @@ export const NPCS: Record<string, any> = {
     "bach": false,
     "loves": [
       "Medicinal Herb",
-      "Blue Grass"
+      "Bluewort"
     ],
     "likes": [
       "Herb Tea",
@@ -1451,7 +1451,7 @@ export const NPCS: Record<string, any> = {
     "lines": [
       [
         "I'm the town doctor. Hmm. You should get more sleep.",
-        "A Bodigizer will restore your strength in a pinch."
+        "A Mending Tonic will restore your strength in a pinch."
       ],
       [
         "Your health is improving. Keep it up."
@@ -1461,8 +1461,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Lillia": {
-    "g": "L",
+  "Rosalind": {
+    "g": "r",
     "col": "0A",
     "home": "poultry",
     "out": null,
@@ -1470,8 +1470,8 @@ export const NPCS: Record<string, any> = {
     "rain": false,
     "bach": false,
     "loves": [
-      "Moondrop Flower",
-      "Toy Flower"
+      "Duskbell Flower",
+      "Pinwheel Daisy"
     ],
     "likes": [
       "Egg"
@@ -1479,18 +1479,18 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "I'm Lillia. Welcome to our Poultry Farm. Chickens are 1500G.",
+        "I'm Rosalind. Welcome to our Feathercote. Chickens are 1500G.",
         "Keep their feed boxes full and they'll give you an egg every day."
       ],
       [
         "My children are a blessing. And so are chickens!"
       ],
       [
-        "Thank you for looking after Popuri and Rick."
+        "Thank you for looking after Juniper and Dennis."
       ]
     ]
   },
-  "Barley": {
+  "Abel": {
     "g": "B",
     "col": "05",
     "home": "yodel",
@@ -1508,19 +1508,19 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "Welcome to Yodel Ranch. I'm Barley. We sell fresh milk.",
-        "May is all I have left. She keeps me young."
+        "Welcome to Highmeadow Dairy. I'm Abel. We sell fresh milk.",
+        "Pip is all I have left. She keeps me young."
       ],
       [
         "Cows need love, just like people."
       ],
       [
-        "You've been a good friend to May. Thank you."
+        "You've been a good friend to Pip. Thank you."
       ]
     ]
   },
-  "Carter": {
-    "g": "C",
+  "Lucan": {
+    "g": "L",
     "col": "07",
     "home": "church",
     "out": null,
@@ -1528,7 +1528,7 @@ export const NPCS: Record<string, any> = {
     "rain": false,
     "bach": false,
     "loves": [
-      "Moondrop Flower"
+      "Duskbell Flower"
     ],
     "likes": [
       "Wild Grape"
@@ -1536,19 +1536,19 @@ export const NPCS: Record<string, any> = {
     "hates": [],
     "lines": [
       [
-        "Welcome to the church. I'm Pastor Carter. May the Goddess bless you.",
+        "Welcome to the church. I'm Brother Lucan. May the Wellkeeper bless you.",
         "Confession is good for the soul."
       ],
       [
-        "The Harvest Goddess smiles on hard workers."
+        "The Wellkeeper smiles on hard workers."
       ],
       [
         "You have a kind heart. I can tell."
       ]
     ]
   },
-  "Basil": {
-    "g": "B",
+  "Silas": {
+    "g": "S",
     "col": "0B",
     "home": "library",
     "out": null,
@@ -1561,13 +1561,13 @@ export const NPCS: Record<string, any> = {
     ],
     "likes": [
       "Medicinal Herb",
-      "Red Grass",
-      "Blue Grass"
+      "Redroot",
+      "Bluewort"
     ],
     "hates": [],
     "lines": [
       [
-        "I'm Basil, a botanist. Mary is my daughter.",
+        "I'm Silas. I draw maps of the valley. Odessa is my daughter.",
         "The mountains are full of rare plants. Have you looked?"
       ],
       [
@@ -1578,8 +1578,8 @@ export const NPCS: Record<string, any> = {
       ]
     ]
   },
-  "Gotz": {
-    "g": "G",
+  "Ingrid": {
+    "g": "I",
     "col": "09",
     "home": "carpenter",
     "out": null,
@@ -1596,11 +1596,11 @@ export const NPCS: Record<string, any> = {
       "Hot Milk"
     ],
     "hates": [
-      "Toy Flower"
+      "Pinwheel Daisy"
     ],
     "lines": [
       [
-        "I'm Gotz. Carpenter. Bring lumber and gold and I'll build what you need.",
+        "I'm Ingrid. Carpenter. Bring lumber and gold and I'll build what you need.",
         "A good house starts with good lumber. Chop branches and stumps."
       ],
       [
@@ -1633,7 +1633,7 @@ export const FESTIVAL_LIST: FestivalDef[] = [
   {
     "season": 0,
     "day": 8,
-    "name": "Goddess Festival",
+    "name": "Well Dressing Day",
     "start": 10,
     "end": 18,
     "kind": "goddess"
@@ -1649,7 +1649,7 @@ export const FESTIVAL_LIST: FestivalDef[] = [
   {
     "season": 0,
     "day": 22,
-    "name": "Chicken Sumo",
+    "name": "Hen Show",
     "start": 10,
     "end": 16,
     "kind": "sumo"
@@ -1681,7 +1681,7 @@ export const FESTIVAL_LIST: FestivalDef[] = [
   {
     "season": 2,
     "day": 13,
-    "name": "Harvest Festival",
+    "name": "Harvest Supper",
     "start": 10,
     "end": 18,
     "kind": "harvest"
@@ -1705,7 +1705,7 @@ export const FESTIVAL_LIST: FestivalDef[] = [
   {
     "season": 3,
     "day": 24,
-    "name": "Starry Night",
+    "name": "Lantern Night",
     "start": 18,
     "end": 22,
     "kind": "starry"
@@ -1721,89 +1721,89 @@ export const FESTIVAL_LIST: FestivalDef[] = [
 ];
 export const FESTIVALS: Record<string, [string, number, number, string]> = {
   "0,1": ["New Year's Day", 9, 17, "newyear"],
-  "0,8": ["Goddess Festival", 10, 18, "goddess"],
+  "0,8": ["Well Dressing Day", 10, 18, "goddess"],
   "0,18": ["Flower Festival", 10, 18, "dance"],
-  "0,22": ["Chicken Sumo", 10, 16, "sumo"],
+  "0,22": ["Hen Show", 10, 16, "sumo"],
   "1,8": ["Egg Hunt", 10, 16, "egghunt"],
   "1,20": ["Crop Festival", 10, 18, "crops"],
   "1,24": ["Fireworks Festival", 18, 22, "fireworks"],
-  "2,13": ["Harvest Festival", 10, 18, "harvest"],
+  "2,13": ["Harvest Supper", 10, 18, "harvest"],
   "2,20": ["Moon Viewing", 18, 22, "moon"],
   "3,14": ["Thanksgiving", 10, 18, "thanks"],
-  "3,24": ["Starry Night", 18, 22, "starry"],
+  "3,24": ["Lantern Night", 18, 22, "starry"],
   "3,30": ["New Year's Eve", 18, 23, "nye"]
 };
 
 export const BIRTHDAYS: Record<string, [number, number]> = {
-  "Mary": [
+  "Odessa": [
     3,
     20
   ],
-  "Karen": [
+  "Priya": [
     2,
     15
   ],
-  "Popuri": [
+  "Juniper": [
     1,
     3
   ],
-  "Elli": [
+  "Margit": [
     0,
     16
   ],
-  "Ann": [
+  "Tess": [
     1,
     17
   ],
-  "Thomas": [
+  "Ambrose": [
     1,
     25
   ],
-  "Gray": [
+  "Rowan": [
     3,
     6
   ],
-  "Cliff": [
+  "Felix": [
     1,
     6
   ],
-  "Rick": [
+  "Dennis": [
     2,
     27
   ],
-  "May": [
+  "Pip": [
     3,
     26
   ],
-  "Jeff": [
+  "Hollis": [
     3,
     29
   ],
-  "Saibara": [
+  "Hilde": [
     1,
     21
   ],
-  "Doug": [
+  "Gideon": [
     1,
     12
   ],
-  "Doctor": [
+  "Dr. Sayer": [
     2,
     19
   ],
-  "Lillia": [
+  "Rosalind": [
     0,
     19
   ],
-  "Barley": [
+  "Abel": [
     1,
     26
   ],
-  "Carter": [
+  "Lucan": [
     2,
     6
   ],
-  "Basil": [
+  "Silas": [
     1,
     11
   ]
@@ -2472,7 +2472,7 @@ export const RECIPES: Record<string, any> = {
         2
       ],
       [
-        "Red Grass",
+        "Redroot",
         1
       ]
     ],
@@ -2536,11 +2536,11 @@ export const SPOUSE_POS: [number, number] = [11, 3];
 export const HOUSE_WAKE: [number, number] = [1, 2];
 
 export const LOGO = [
-  String.raw` _   _ ____  __     __ ____ _____ __  __ _   _ `,
-  String.raw`| | | |  _ \ \ \   / // ___|_   _|  \/  | \ | |`,
-  String.raw`| |_| | |_) | \ \ / / \___ \ | | | |\/| |  \| |`,
-  String.raw`|  _  |  _ <   \ V /   ___) || | | |  | | |\  |`,
-  String.raw`|_| |_|_| \_\   \_/   |____/ |_| |_|  |_|_| \_|`,
+  String.raw` _____ _   _ ____  ____   _____        __`,
+  String.raw`|  ___| | | |  _ \|  _ \ / _ \ \      / /`,
+  String.raw`| |_  | | | | |_) | |_) | | | \ \ /\ / / `,
+  String.raw`|  _| | |_| |  _ <|  _ <| |_| |\ V  V /  `,
+  String.raw`|_|    \___/|_| \_\_| \_\\___/  \_/\_/   `,
 ];
 
 export function pkey(x: number, y: number): string {
@@ -2575,14 +2575,14 @@ export function fmt_hour(h: number): string {
 export const BOOKS: string[] = [
   "'Turnips for Beginners': Turnips grow in 4 days. Plant in 3x3 or U-shaped blocks so you can reach every crop!",
   "'Seed Unlocks': Ship 100 each of Turnip, Potato, and Cucumber to unlock Strawberry Seeds at the Supermarket (same for Pumpkin in Summer and Spinach in Fall).",
-  "'The Craftsman's Path': Saibara upgrades all 6 tools from Copper to Mystrile—and even Mythic once all 6 Cursed Tools are Blessed!",
-  "'Mysteries of the Two Mines': Spring Mine holds Copper, Silver, Gold, Mystrile, Orichalc, Adamantite, Goddess Jewels, and the Teleport Stone on F255. The Winter Lake Mine holds Gems, Kappa Jewels, and Cursed Tools on floors 29, 39, 49, 59, 69, and 79.",
-  "'Blessing Cursed Tools': Carter at the Church Confession Booth can remove or bless Cursed Tools. Bless Hoe/Can 10x, equip Sickle/Hammer 10 days, or swing Rod/Axe 255 times!",
-  "'The Seven Harvest Sprites': In a hut at Willow Bend, east of town, live Chef, Nappy, Hoggy, Timid, Aqua, Staid, and Bold. Befriend them to 3 hearts with Flour or Grass to hire them or play mini-games!",
-  "'Of Livestock & Makers': Saibara builds Mayonnaise, Cheese, and Yarn Makers with Adamantite. Festival winners produce Golden, P-Type, and rare X-Type goods!",
-  "'The Goddess & The Kappa': Throw offerings into the Goddess Pond on Mother's Hill for a Power Berry, and throw 10 Cucumbers into the Lake for Kappa's Blue Berry (no rain fatigue!).",
-  "'TV & Saturday Shopping': Watch TV on Tuesday for cooking recipes and Saturday for TV Shopping—then order at Doug's Inn telephone!",
-  "'Marriage & Family': See all 4 Heart Events, upgrade your house with a Big Bed, and present the Blue Feather at Red Heart!",
+  "'The Craftsman's Path': Hilde upgrades all 6 tools from Copper to Starsteel—and even Heirloom once all 6 Fey Tools are Hallowed!",
+  "'Mysteries of the Two Mines': Copperseam Mine holds Copper, Silver, Gold, Starsteel, Sunbrass, Deepiron, Wellkeeper Jewels, and the Waystone on F255. The Winter Mirewater Mine holds Gems, Reed Heron Jewels, and Fey Tools on floors 29, 39, 49, 59, 69, and 79.",
+  "'Blessing Fey Tools': Lucan at the Church Confession Booth can remove or bless Fey Tools. Bless Hoe/Can 10x, equip Sickle/Hammer 10 days, or swing Rod/Axe 255 times!",
+  "'The Seven Hearthfolk': In a hut at Willow Bend, east of town, live Crumb, Drowse, Snout, Wisp, Puddle, Grumble, and Brass. Befriend them to 3 hearts with Flour or Grass to hire them or play mini-games!",
+  "'Of Livestock & Makers': Hilde builds Mayonnaise, Cheese, and Yarn Makers with Deepiron. Festival winners produce Golden, P-Type, and rare X-Type goods!",
+  "'The Wellkeeper & The Reed Heron': Throw offerings into the Wellkeeper Pond on Beacon Hill for a Heartseed, and throw 10 Cucumbers into the Lake for Reed Heron's Blue Berry (no rain fatigue!).",
+  "'TV & Saturday Shopping': Watch TV on Tuesday for cooking recipes and Saturday for TV Shopping—then order at Gideon's Inn telephone!",
+  "'Marriage & Family': See all 4 Heart Events, upgrade your house with a Big Bed, and present the Promise Ribbon at Red Heart!",
 ];
 
 export const HELP: string[] = [
@@ -2600,9 +2600,9 @@ export const HELP: string[] = [
   "VILLAGERS r   hearts, favourite gifts and usual whereabouts",
   "DIARY     esc Save/Load anywhere (2 slots), Teleport, Status",
   "",
-  "Zack picks up shipments at 5:00 PM daily. Sleep in bed to advance day.",
-  "Visit the Hot Spring on Mother's Hill or your Bathroom to recover.",
-  "Befriend the 7 Harvest Sprites at Willow Bend to automate chores!",
+  "Otto picks up shipments at 5:00 PM daily. Sleep in bed to advance day.",
+  "Visit the Hot Spring on Beacon Hill or your Bathroom to recover.",
+  "Befriend the 7 Hearthfolk at Willow Bend to automate chores!",
 ];
 
 // --- EXPANDED HARVEST MOON: FRIENDS OF MINERAL TOWN DATA ---
@@ -2612,49 +2612,49 @@ Object.assign(WEATHER_COL, {
   "Blizzard": "0C",
 });
 
-// Additional Crops & Flowers (Grass, Moondrop, Toy Flower, Pink Cat, Magic Red)
+// Additional Crops & Flowers (Grass, Duskbell, Pinwheel Daisy, Rosecap, Emberbloom)
 Object.assign(CROPS, {
   "Grass": ["Spring", 500, 9, 3, 20, "\"", "0B"],
-  "Moondrop Flower": ["Spring", 300, 6, 0, 60, "*", "09"],
-  "Toy Flower": ["Spring", 400, 12, 0, 100, "*", "07"],
-  "Pink Cat Flower": ["Summer", 300, 6, 0, 70, "*", "0A"],
-  "Magic Red Flower": ["Fall", 600, 10, 0, 200, "*", "08"],
+  "Duskbell Flower": ["Spring", 300, 6, 0, 60, "*", "09"],
+  "Pinwheel Daisy": ["Spring", 400, 12, 0, 100, "*", "07"],
+  "Rosecap Flower": ["Summer", 300, 6, 0, 70, "*", "0A"],
+  "Emberbloom Flower": ["Fall", 600, 10, 0, 200, "*", "08"],
 });
 
 Object.assign(FORAGE, {
-  "Spring": ["Bamboo Shoot", "Blue Grass", "Yellow Grass", "Orange Grass", "Moondrop Flower", "Toy Flower", "Medicinal Herb"],
-  "Summer": ["Blue Grass", "Green Grass", "Red Grass", "Purple Grass", "Indigo Grass", "Pink Cat Flower", "Wild Grape"],
-  "Fall": ["Mushroom", "Poisonous Mushroom", "Truffle", "Green Grass", "Red Grass", "Magic Red Flower", "Apple", "Wild Grape"],
-  "Winter": ["White Grass", "Black Grass", "Blue Grass"],
+  "Spring": ["Bamboo Shoot", "Bluewort", "Goldenrod", "Saffronleaf", "Duskbell Flower", "Pinwheel Daisy", "Medicinal Herb"],
+  "Summer": ["Bluewort", "Greenmint", "Redroot", "Heatherwort", "Woad", "Rosecap Flower", "Wild Grape"],
+  "Fall": ["Mushroom", "Poisonous Mushroom", "Truffle", "Greenmint", "Redroot", "Emberbloom Flower", "Apple", "Wild Grape"],
+  "Winter": ["Frostwort", "Nightshade", "Bluewort"],
 });
 
 Object.assign(FORAGE_GLYPH, {
-  "Yellow Grass": ["\"", "09"],
-  "Orange Grass": ["\"", "09"],
-  "Green Grass": ["\"", "0B"],
-  "Purple Grass": ["\"", "0E"],
-  "Indigo Grass": ["\"", "0D"],
-  "Black Grass": ["\"", "03"],
-  "White Grass": ["\"", "07"],
+  "Goldenrod": ["\"", "09"],
+  "Saffronleaf": ["\"", "09"],
+  "Greenmint": ["\"", "0B"],
+  "Heatherwort": ["\"", "0E"],
+  "Woad": ["\"", "0D"],
+  "Nightshade": ["\"", "03"],
+  "Frostwort": ["\"", "07"],
   "Poisonous Mushroom": ["m", "0E"],
-  "Magic Red Flower": ["*", "08"],
-  "Blue Magic Grass": ["*", "0D"],
+  "Emberbloom Flower": ["*", "08"],
+  "Wishing Moss": ["*", "0D"],
   "Apple": ["a", "08"],
   "SUGDW Apple": ["a", "08"],
   "HMSGB Apple": ["a", "0A"],
   "AEPFE Apple": ["a", "09"],
   "Honey": ["h", "09"],
-  "Moondrop Honey": ["h", "0A"],
-  "Toy Flower Honey": ["h", "0E"],
-  "Pink Cat Honey": ["h", "0A"],
-  "Magic Red Honey": ["h", "08"],
+  "Duskbell Honey": ["h", "0A"],
+  "Pinwheel Daisy Honey": ["h", "0E"],
+  "Rosecap Honey": ["h", "0A"],
+  "Emberbloom Honey": ["h", "08"],
 });
 
 Object.assign(TILES, {
   "spring": ["~", "0C", "01", true],   // Hot Spring water (walkable / soakable)
-  "pond": ["~", "0B", "00", false],    // Goddess Pond
+  "pond": ["~", "0B", "00", false],    // Wellkeeper Pond
   "ice": ["=", "0C", "01", true],      // Frozen Lake in Winter
-  "sand": [".", "09", "00", true],     // Mineral Beach sand
+  "sand": [".", "09", "00", true],     // Brackenford Beach sand
   "mill": ["%", "09", "01", false],    // Corn Mill by Coop
   "doghouse": ["D", "08", "01", false],
   "stable": ["H", "09", "01", false],
@@ -2670,31 +2670,31 @@ Object.assign(TILES, {
 Object.assign(ITEMS, {
   // Seeds
   "Grass Seeds": [0, 0, "seed"],
-  "Moondrop Flower Seeds": [0, 0, "seed"],
-  "Toy Flower Seeds": [0, 0, "seed"],
-  "Pink Cat Flower Seeds": [0, 0, "seed"],
-  "Magic Red Flower Seeds": [0, 0, "seed"],
+  "Duskbell Flower Seeds": [0, 0, "seed"],
+  "Pinwheel Daisy Seeds": [0, 0, "seed"],
+  "Rosecap Flower Seeds": [0, 0, "seed"],
+  "Emberbloom Flower Seeds": [0, 0, "seed"],
   "Grass": [20, 0, "forage"],
-  "Magic Red Flower": [200, 0, "forage"],
-  "Blue Magic Grass": [90, 0, "forage"],
+  "Emberbloom Flower": [200, 0, "forage"],
+  "Wishing Moss": [90, 0, "forage"],
   // Wild Grasses & Forage
-  "Green Grass": [100, 10, "forage"],
-  "Yellow Grass": [120, 12, "forage"],
-  "Orange Grass": [100, 10, "forage"],
-  "Purple Grass": [120, 12, "forage"],
-  "Indigo Grass": [100, 15, "forage"],
-  "Black Grass": [10, 15, "forage"],
-  "White Grass": [150, 25, "forage"],
+  "Greenmint": [100, 10, "forage"],
+  "Goldenrod": [120, 12, "forage"],
+  "Saffronleaf": [100, 10, "forage"],
+  "Heatherwort": [120, 12, "forage"],
+  "Woad": [100, 15, "forage"],
+  "Nightshade": [10, 15, "forage"],
+  "Frostwort": [150, 25, "forage"],
   "Poisonous Mushroom": [100, -25, "forage"],
   "Apple": [50, 8, "forage"],
   "SUGDW Apple": [500, 15, "forage"],
   "HMSGB Apple": [500, 15, "forage"],
   "AEPFE Apple": [500, 15, "forage"],
   "Honey": [50, 10, "forage"],
-  "Moondrop Honey": [90, 14, "forage"],
-  "Toy Flower Honey": [110, 14, "forage"],
-  "Pink Cat Honey": [100, 14, "forage"],
-  "Magic Red Honey": [160, 16, "forage"],
+  "Duskbell Honey": [90, 14, "forage"],
+  "Pinwheel Daisy Honey": [110, 14, "forage"],
+  "Rosecap Honey": [100, 14, "forage"],
+  "Emberbloom Honey": [160, 16, "forage"],
   "Spa-Boiled Egg": [80, 15, "animal"],
   // Egg & Mayonnaise Quality Ladder
   "Good Egg": [60, 10, "animal"],
@@ -2729,11 +2729,11 @@ Object.assign(ITEMS, {
   "Golden Yarn": [1000, 0, "animal"],
   "P Yarn": [1500, 0, "animal"],
   "X Yarn": [4000, 0, "animal"],
-  // Spring & Lake Mine Ores, Gems & Artifacts
+  // Spring & Mirewater Mine Ores, Gems & Artifacts
   "Junk Ore": [1, 0, "ore"],
-  "Orichalc": [50, 0, "ore"],
-  "Adamantite": [50, 0, "ore"],
-  "Mythic Stone": [20000, 0, "ore"],
+  "Sunbrass": [50, 0, "ore"],
+  "Deepiron": [50, 0, "ore"],
+  "Heirloom Stone": [20000, 0, "ore"],
   "Agate": [62, 0, "ore"],
   "Fluorite": [65, 0, "ore"],
   "Peridot": [68, 0, "ore"],
@@ -2745,15 +2745,15 @@ Object.assign(ITEMS, {
   "Pink Diamond": [10000, 0, "ore"],
   "Alexandrite": [10000, 0, "ore"],
   // Jewels & Gems
-  "Goddess Jewel": [0, 0, "special"],
-  "Kappa Jewel": [0, 0, "special"],
+  "Wellkeeper Jewel": [0, 0, "special"],
+  "Reed Heron Jewel": [0, 0, "special"],
   "Truth Jewel": [0, 0, "special"],
-  "Gem of the Goddess": [0, 0, "special"],
-  "Gem of the Kappa": [0, 0, "special"],
+  "Gem of the Wellkeeper": [0, 0, "special"],
+  "Gem of the Reed Heron": [0, 0, "special"],
   "Gem of Truth": [0, 0, "special"],
-  "Teleport Stone": [0, 0, "tool"],
+  "Waystone": [0, 0, "tool"],
   "Pedometer": [0, 0, "tool"],
-  "Power Berry": [0, 50, "special"],
+  "Heartseed": [0, 50, "special"],
   "Mystic Berry": [0, 50, "special"],
   // Fishing Kings & Sea Treasures
   "Catfish": [500, 40, "fish"],
@@ -2784,9 +2784,9 @@ Object.assign(ITEMS, {
   "Chocolate": [100, 10, "food"],
   "Wine": [300, 15, "food"],
   "Grape Juice": [200, 20, "food"],
-  "Bodigizer XL": [0, 150, "food"],
-  "Turbojolt": [0, 50, "food"],
-  "Turbojolt XL": [0, 100, "food"],
+  "Mending Tonic XL": [0, 150, "food"],
+  "Brisk Tonic": [0, 50, "food"],
+  "Brisk Tonic XL": [0, 100, "food"],
   "Animal Medicine": [0, 0, "tool"],
   "Miracle Potion": [0, 0, "tool"],
   "Bell": [0, 0, "tool"],
@@ -2811,7 +2811,7 @@ Object.assign(ITEMS, {
   "Seasoning Set": [0, 0, "utensil"],
   // Extra Cooked Dishes
   "Failed Dish": [1, -10, "dish"],
-  "Elli Leaves": [0, 250, "dish"],
+  "Margit Leaves": [0, 250, "dish"],
   "Relaxation Tea Leaves": [1000, 50, "ingredient"],
   "Relaxation Tea": [1200, 120, "dish"],
   "Cookies": [200, 25, "dish"],
@@ -2875,20 +2875,20 @@ Object.assign(RECIPES, {
   "Baked Sweet Potato": [[["Sweet Potato", 1]], "Oven", 35, 240],
   "Apple Pie": [[["Apple", 1], ["Flour", 1], ["Egg", 1]], "Oven", 55, 450],
   "Relaxation Tea": [[["Relaxation Tea Leaves", 1]], "Pot", 120, 1200],
-  "Bodigizer": [[["Red Grass", 1], ["Black Grass", 1], ["Honey", 1]], "Pot", 100, 250],
-  "Bodigizer XL": [[["Bodigizer", 1], ["Blue Grass", 1]], "Mixer", 150, 500],
-  "Turbojolt": [[["Red Grass", 1], ["White Grass", 1], ["Honey", 1]], "Pot", 50, 300],
-  "Turbojolt XL": [[["Turbojolt", 1], ["Green Grass", 1]], "Mixer", 100, 600],
-  "Elli Leaves": [[["Failed Dish", 1], ["Bodigizer", 1], ["Turbojolt", 1]], "Knife", 250, 1000],
+  "Mending Tonic": [[["Redroot", 1], ["Nightshade", 1], ["Honey", 1]], "Pot", 100, 250],
+  "Mending Tonic XL": [[["Mending Tonic", 1], ["Bluewort", 1]], "Mixer", 150, 500],
+  "Brisk Tonic": [[["Redroot", 1], ["Frostwort", 1], ["Honey", 1]], "Pot", 50, 300],
+  "Brisk Tonic XL": [[["Brisk Tonic", 1], ["Greenmint", 1]], "Mixer", 100, 600],
+  "Margit Leaves": [[["Failed Dish", 1], ["Mending Tonic", 1], ["Brisk Tonic", 1]], "Knife", 250, 1000],
   "X Egg": [[["Egg", 1], ["Good Egg", 1], ["High Egg", 1], ["Golden Egg", 1], ["P Egg", 1]], "Seasoning Set", 50, 350],
   "X Milk": [[["Small Milk", 1], ["Medium Milk", 1], ["Large Milk", 1], ["Golden Milk", 1], ["P Milk", 1]], "Seasoning Set", 75, 800],
 });
 
 Object.assign(BUILDINGS, {
-  "winery": "Aja Winery",
-  "sprites": "Harvest Sprite Hut",
-  "zack": "Zack & Won's Beach House",
-  "kai_shack": "Kai's Seaside Lodge",
+  "winery": "Thornvale Vineyard",
+  "sprites": "Hearthfolk Hut",
+  "zack": "Otto & Ferreira's Beach House",
+  "kai_shack": "Nico's Seaside Lodge",
 });
 
 Object.assign(HOURS, {
@@ -2927,27 +2927,27 @@ Object.assign(INTERIOR_LAYOUTS, {
   ],
 });
 
-// Add Remaining Villagers, Harvest Goddess, Kappa, Won, Kai, Duke, Manna, Anna, Sasha, Harris, Zack, Ellen, Stu
+// Add Remaining Villagers, Wellkeeper, Reed Heron, Ferreira, Nico, Corin, Elspeth, Clara, Meena, Wes, Otto, Edith, Toby
 Object.assign(NPCS, {
-  "Harvest Goddess": {
-    g: "G",
+  "Wellkeeper": {
+    g: "W",
     col: "0C",
     home: "church",
     out: [6, 22],
     where: ["mountain", 47, 7],
     rain: true,
     bach: true,
-    loves: ["Strawberry", "Pineapple", "Moondrop Flower", "Toy Flower", "Pink Cat Flower", "Magic Red Flower", "Relaxation Tea"],
+    loves: ["Strawberry", "Pineapple", "Duskbell Flower", "Pinwheel Daisy", "Rosecap Flower", "Emberbloom Flower", "Relaxation Tea"],
     likes: ["Turnip", "Potato", "Cucumber", "Egg", "Milk", "Apple", "Honey"],
     hates: ["Junk Ore", "Boot", "Empty Can", "Poisonous Mushroom", "Failed Dish"],
     lines: [
-      ["Tadaaa! I am the Harvest Goddess! Toss an offering into my pond each day for blessings!"],
-      ["You work so diligently on your farm! Keep collecting the 9 Goddess Jewels in the Spring Mine."],
-      ["You have proven yourself a true master of Mineral Town! My heart is yours."],
+      ["Tadaaa! I am the Wellkeeper! Toss an offering into my pond each day for blessings!"],
+      ["You work so diligently on your farm! Keep collecting the 9 Wellkeeper Jewels in the Copperseam Mine."],
+      ["You have proven yourself a true master of Brackenford! My heart is yours."],
     ],
   },
-  "Kappa": {
-    g: "K",
+  "Reed Heron": {
+    g: "e",
     col: "0B",
     home: "church",
     out: [8, 20],
@@ -2958,30 +2958,30 @@ Object.assign(NPCS, {
     likes: ["Small Fish", "Medium Fish", "Large Fish"],
     hates: ["Junk Ore", "Failed Dish"],
     lines: [
-      ["...Kappa. (He stares at you from the lake. Try giving him a Cucumber.)"],
+      ["...Reed Heron. (He stares at you from the lake. Try giving him a Cucumber.)"],
       ["...Good Cucumber. Bring 10 and I will grant you the Mystic Blue Berry."],
       ["...You hold the power of the lake. Rain will never tire you."],
     ],
   },
-  "Won": {
-    g: "W",
+  "Ferreira": {
+    g: "f",
     col: "09",
     home: "zack",
     out: [11, 16],
     where: ["town", 24, 15],
     rain: false,
     bach: false,
-    loves: ["Gold", "Mystrile", "Diamond", "Pink Diamond", "Alexandrite", "SUGDW Apple"],
+    loves: ["Gold", "Starsteel", "Diamond", "Pink Diamond", "Alexandrite", "SUGDW Apple"],
     likes: ["Apple", "Copper", "Silver", "Jade"],
     hates: ["Boot", "Empty Can", "Junk Ore"],
     lines: [
-      ["Hehehe! Welcome, my friend! I am Won, purveyor of rare seeds and exotic treasures!"],
+      ["Hehehe! Welcome, my friend! I am Ferreira, purveyor of rare seeds and exotic treasures!"],
       ["Looking for Cabbage, Pineapple, or Green Pepper seeds? Or perhaps a Frisbee for your dog?"],
       ["For a discerning customer like you, I even have a Jewel of Truth and a Record Player!"],
     ],
   },
-  "Kai": {
-    g: "k",
+  "Nico": {
+    g: "N",
     col: "0E",
     home: "kai_shack",
     out: [9, 19],
@@ -2994,11 +2994,11 @@ Object.assign(NPCS, {
     lines: [
       ["Hey! Nothing beats the ocean breeze in summer. Come grab a bite at my shack!"],
       ["The guys in town think I'm a slacker, but you actually treat me like a friend."],
-      ["Maybe I don't have to leave Mineral Town after summer... if I'm here with you."],
+      ["Maybe I don't have to leave Brackenford after summer... if I'm here with you."],
     ],
   },
-  "Duke": {
-    g: "u",
+  "Corin": {
+    g: "C",
     col: "0E",
     home: "winery",
     out: [13, 18],
@@ -3009,47 +3009,47 @@ Object.assign(NPCS, {
     likes: ["Eggplant", "Cheese Fondue", "Tomato", "Spinach"],
     hates: ["Junk Ore", "Failed Dish"],
     lines: [
-      ["Welcome to Aja Winery! Our vines soak up the sunshine off Mother's Hill."],
+      ["Welcome to Thornvale Vineyard! Our vines soak up the sunshine off Beacon Hill."],
       ["Come fall, we always need extra hands for the grape harvest."],
       ["Here's to a fine vintage and a fine neighbour!"],
     ],
   },
-  "Manna": {
-    g: "n",
+  "Elspeth": {
+    g: "E",
     col: "0A",
     home: "winery",
     out: [13, 17],
     where: ["town", 33, 13],
     rain: false,
     bach: false,
-    loves: ["Wine", "Honey", "Pink Cat Flower", "Medium Fish", "Mushroom"],
-    likes: ["Milk", "Moondrop Flower", "Tomato", "Carrot"],
+    loves: ["Wine", "Honey", "Rosecap Flower", "Medium Fish", "Mushroom"],
+    likes: ["Milk", "Duskbell Flower", "Tomato", "Carrot"],
     hates: ["Failed Dish", "Junk Ore"],
     lines: [
-      ["Oh, hello dear! Have you met my husband Duke? Once I start talking I never stop,aha!"],
-      ["Our daughter Aja moved to the city, you know. Working alongside Cliff really cheered Duke up!"],
+      ["Oh, hello dear! Have you met my husband Corin? Once I start talking I never stop,aha!"],
+      ["Our daughter Thornvale moved to the city, you know. Working alongside Felix really cheered Corin up!"],
       ["You're always welcome at the winery—and at Rose Plaza for our daily chat!"],
     ],
   },
-  "Zack": {
-    g: "Z",
+  "Otto": {
+    g: "o",
     col: "0D",
     home: "zack",
     out: [16, 18],
     where: ["farm", 20, 7],
     rain: true,
     bach: false,
-    loves: ["Large Fish", "Orichalc", "Diamond", "Cucumber", "Tomato", "Curry Noodles"],
+    loves: ["Large Fish", "Sunbrass", "Diamond", "Cucumber", "Tomato", "Curry Noodles"],
     likes: ["Small Fish", "Medium Fish", "Egg", "Apple"],
     hates: ["Poisonous Mushroom", "Junk Ore"],
     lines: [
       ["Hey there! I pick up everything from your shipping bin at 5:00 PM sharp every day."],
-      ["Have you tried ocean fishing off Mineral Beach? My old Fishing Rod still has plenty of luck in it!"],
+      ["Have you tried ocean fishing off Brackenford Beach? My old Fishing Rod still has plenty of luck in it!"],
       ["Your farm's shipments keep getting bigger! Your grandfather would be proud."],
     ],
   },
-  "Harris": {
-    g: "H",
+  "Wes": {
+    g: "w",
     col: "0D",
     home: "mayor",
     out: [9, 19],
@@ -3058,11 +3058,11 @@ Object.assign(NPCS, {
     bach: false,
     loves: ["Cake", "Hot Milk", "Spa-Boiled Egg", "Small Fish", "Apple Pie"],
     likes: ["Potato", "Egg", "Honey", "Apple", "Bread"],
-    hates: ["Poisonous Mushroom", "Red Grass"],
+    hates: ["Poisonous Mushroom", "Redroot"],
     lines: [
-      ["Good day! Keeping the peace and delivering the mail in Mineral Town is my duty!"],
-      ["Everything's peaceful today... well, except when Won tries peddling strange apples."],
-      ["If I ever work up the courage to write a letter to Aja in the city, I hope it turns out well."],
+      ["Good day! Keeping the peace and delivering the mail in Brackenford is my duty!"],
+      ["Everything's peaceful today... well, except when Ferreira tries peddling strange apples."],
+      ["If I ever work up the courage to write a letter to Thornvale in the city, I hope it turns out well."],
     ],
   },
   "Curator": {
@@ -3073,55 +3073,55 @@ Object.assign(NPCS, {
     where: null,
     rain: true,
     bach: false,
-    loves: ["Diamond", "Pink Diamond", "Alexandrite", "Moondrop Flower"],
-    likes: ["Copper", "Silver", "Gold", "Mystrile", "Medicinal Herb"],
+    loves: ["Diamond", "Pink Diamond", "Alexandrite", "Duskbell Flower"],
+    likes: ["Copper", "Silver", "Gold", "Starsteel", "Medicinal Herb"],
     hates: ["Junk Ore", "Boot", "Empty Can"],
     lines: [
-      ["Welcome to the Mineral Town Museum. Bring me a fish, ore, forage or crop and I'll add it to the collection."],
+      ["Welcome to the Brackenford Museum. Bring me a fish, ore, forage or crop and I'll add it to the collection."],
       ["Every donation helps us rebuild the old exhibits. Milestones earn a small reward from the town fund."],
-      ["The collection is looking better every season. Thank you for helping us remember Mineral Town's natural history."],
+      ["The collection is looking better every season. Thank you for helping us remember Brackenford's natural history."],
     ],
   },
 });
 
-// Make all 5 original Bachelors also eligible for Heart Events & Blue Feather (Remake + Classic support!)
-for (const bachelor of ["Gray", "Rick", "Cliff", "Doctor", "Kai"]) {
+// Make all 5 original Bachelors also eligible for Heart Events & Promise Ribbon (Remake + Classic support!)
+for (const bachelor of ["Rowan", "Dennis", "Felix", "Dr. Sayer", "Nico"]) {
   if (NPCS[bachelor]) {
     NPCS[bachelor].bach = true;
   }
 }
 
 Object.assign(BIRTHDAYS, {
-  "Harvest Goddess": [0, 8],
-  "Won": [3, 19],
-  "Kai": [1, 22],
-  "Duke": [3, 15],
-  "Manna": [2, 11],
-  "Zack": [1, 29],
-  "Harris": [1, 4],
+  "Wellkeeper": [0, 8],
+  "Ferreira": [3, 19],
+  "Nico": [1, 22],
+  "Corin": [3, 15],
+  "Elspeth": [2, 11],
+  "Otto": [1, 29],
+  "Wes": [1, 4],
 });
 
 // All 20+ Festivals across Spring, Summer, Fall, and Winter
 Object.assign(FESTIVALS, {
   "0,1": ["New Year's Festival", 9, 18, "newyear"],
-  "0,8": ["Spring Goddess Festival", 10, 18, "goddess"],
+  "0,8": ["Spring Well Dressing Day", 10, 18, "goddess"],
   "0,14": ["Spring Thanksgiving", 9, 18, "spring_thanks"],
   "0,18": ["Spring Horse Race", 10, 18, "horserace"],
   "0,22": ["Cooking Festival", 10, 18, "cooking"],
   "1,1": ["Beach Day Frisbee Contest", 10, 18, "beach"],
-  "1,7": ["Chicken Sumo Festival", 10, 18, "sumo"],
+  "1,7": ["Hen Show Festival", 10, 18, "sumo"],
   "1,8": ["Egg Hunt", 10, 16, "egghunt"],
   "1,20": ["Cow Festival", 10, 18, "cowfest"],
   "1,24": ["Fireworks Festival", 18, 22, "fireworks"],
   "2,3": ["Music Festival", 18, 22, "music"],
-  "2,9": ["Harvest Festival", 10, 18, "harvest"],
+  "2,9": ["Harvest Supper", 10, 18, "harvest"],
   "2,13": ["Moon Viewing Festival", 18, 22, "moon"],
   "2,18": ["Fall Horse Race", 10, 18, "horserace"],
   "2,21": ["Sheep Festival", 10, 18, "sheepfest"],
   "2,30": ["Pumpkin Festival", 10, 18, "pumpkin"],
-  "3,2": ["Thomas's Winter Request", 9, 18, "winter_req"],
+  "3,2": ["Ambrose's Winter Request", 9, 18, "winter_req"],
   "3,14": ["Winter Thanksgiving", 10, 18, "thanks"],
-  "3,24": ["Starry Night Festival", 18, 22, "starry"],
+  "3,24": ["Lantern Night Festival", 18, 22, "starry"],
   "3,25": ["Stocking Festival", 9, 18, "stocking"],
   "3,30": ["New Year's Eve Noodles", 18, 23, "nye"],
 });
@@ -3135,13 +3135,13 @@ export interface SpriteDef {
 }
 
 export const SPRITES: SpriteDef[] = [
-  { name: "Chef", colorName: "Red", col: "08", grass: "Red Grass", bday: [2, 14] },
-  { name: "Nappy", colorName: "Orange", col: "09", grass: "Orange Grass", bday: [3, 22] },
-  { name: "Hoggy", colorName: "Yellow", col: "0A", grass: "Yellow Grass", bday: [2, 10] },
-  { name: "Timid", colorName: "Green", col: "0B", grass: "Green Grass", bday: [1, 16] },
-  { name: "Aqua", colorName: "Blue", col: "0C", grass: "Blue Grass", bday: [0, 26] },
-  { name: "Staid", colorName: "Indigo", col: "0D", grass: "Indigo Grass", bday: [2, 15] },
-  { name: "Bold", colorName: "Purple", col: "0E", grass: "Purple Grass", bday: [0, 4] },
+  { name: "Crumb", colorName: "Red", col: "08", grass: "Redroot", bday: [2, 14] },
+  { name: "Drowse", colorName: "Orange", col: "09", grass: "Saffronleaf", bday: [3, 22] },
+  { name: "Snout", colorName: "Yellow", col: "0A", grass: "Goldenrod", bday: [2, 10] },
+  { name: "Wisp", colorName: "Green", col: "0B", grass: "Greenmint", bday: [1, 16] },
+  { name: "Puddle", colorName: "Blue", col: "0C", grass: "Bluewort", bday: [0, 26] },
+  { name: "Grumble", colorName: "Indigo", col: "0D", grass: "Woad", bday: [2, 15] },
+  { name: "Brass", colorName: "Purple", col: "0E", grass: "Heatherwort", bday: [0, 4] },
 ];
 
 export const TV_SHOPPING_ITEMS: [string, number, string][] = [
@@ -3158,54 +3158,54 @@ export const TV_SHOPPING_ITEMS: [string, number, string][] = [
   ["Oven", 2500, "Kitchen utensil for cakes, cookies, pizza, and pies."],
   ["Seasoning Set", 2500, "Sugar, Salt, Vinegar, Soy Sauce, and Miso for recipes."],
   ["Rug", 5000, "A plush carpet for your farmhouse floor."],
-  ["Power Berry", 10000, "Increases your maximum Stamina by +10!"],
+  ["Heartseed", 10000, "Increases your maximum Stamina by +10!"],
 ];
 
 export const HEART_EVENTS: Record<string, [string, string, string, string]> = {
-  "Mary": [
-    "Black Heart Event: Mary drops a stack of botany books in the Library. You help her gather them, and she shyly thanks you.",
-    "Purple Heart Event: Mary asks your opinion on the rough draft of her novel about a brave farmer and a forest spirit.",
-    "Blue Heart Event: On Mother's Hill, Mary gifts you a pressed bookmark and confesses you inspired her story's hero.",
-    "Yellow Heart Event: Basil and Anna invite you to dinner; Mary beams when you praise her homemade vegetable stew.",
+  "Odessa": [
+    "Black Heart Event: Odessa drops a stack of botany books in the Library. You help her gather them, and she shyly thanks you.",
+    "Purple Heart Event: Odessa asks your opinion on the rough draft of her novel about a brave farmer and a forest spirit.",
+    "Blue Heart Event: On Beacon Hill, Odessa gifts you a pressed bookmark and confesses you inspired her story's hero.",
+    "Yellow Heart Event: Silas and Clara invite you to dinner; Odessa beams when you praise her homemade vegetable stew.",
   ],
-  "Karen": [
-    "Black Heart Event: At the Supermarket, Karen gives you a bag of Grass Seeds on the house to help get your farm started.",
-    "Purple Heart Event: Karen asks you to help pick betweenMoondrop and Pink Cat flower seeds for Sasha's garden.",
-    "Blue Heart Event: At Aja Winery, Duke gifts Karen a bottle of wine brewed the year she was born—and she shares a glass with you.",
-    "Yellow Heart Event: Karen cooks you her signature dish; even though it's a little burnt, eating it with a smile wins her heart.",
+  "Priya": [
+    "Black Heart Event: At the Supermarket, Priya gives you a bag of Grass Seeds on the house to help get your farm started.",
+    "Purple Heart Event: Priya asks you to help pick betweenMoondrop and Rosecap flower seeds for Meena's garden.",
+    "Blue Heart Event: At Thornvale Vineyard, Corin gifts Priya a bottle of wine brewed the year she was born—and she shares a glass with you.",
+    "Yellow Heart Event: Priya cooks you her signature dish; even though it's a little burnt, eating it with a smile wins her heart.",
   ],
-  "Popuri": [
-    "Black Heart Event: Popuri chases an escaped hen outside the Poultry Farm; you catch it gently for her.",
-    "Purple Heart Event: Popuri asks if you'd like to give her a tour of your farm—she loves seeing your crops and animals!",
-    "Blue Heart Event: By the Hot Spring, Popuri gives you a keepsake Mud Ball she made and promises to always cheer you on.",
-    "Yellow Heart Event: Lillia and Rick invite you for lunch, and Popuri proudly serves her homemade omelet.",
+  "Juniper": [
+    "Black Heart Event: Juniper chases an escaped hen outside the Feathercote; you catch it gently for her.",
+    "Purple Heart Event: Juniper asks if you'd like to give her a tour of your farm—she loves seeing your crops and animals!",
+    "Blue Heart Event: By the Hot Spring, Juniper gives you a keepsake Mud Ball she made and promises to always cheer you on.",
+    "Yellow Heart Event: Rosalind and Dennis invite you for lunch, and Juniper proudly serves her homemade omelet.",
   ],
-  "Elli": [
-    "Black Heart Event: Stu scrapes his knee outside the Clinic; you help Elli calm him down while she bandages it.",
-    "Purple Heart Event: Elli asks for your encouragement as she studies late to become a better nurse alongside the Doctor.",
-    "Blue Heart Event: On her day off, Elli brings you homemade sandwiches to test if they're nutritious enough for hard-working farmers.",
-    "Yellow Heart Event: At Mineral Beach, Elli opens up about her grandmother Ellen and how much your kindness means to her.",
+  "Margit": [
+    "Black Heart Event: Toby scrapes his knee outside the Clinic; you help Margit calm him down while she bandages it.",
+    "Purple Heart Event: Margit asks for your encouragement as she studies late to become a better nurse alongside Dr. Sayer.",
+    "Blue Heart Event: On her day off, Margit brings you homemade sandwiches to test if they're nutritious enough for hard-working farmers.",
+    "Yellow Heart Event: At Brackenford Beach, Margit opens up about her grandmother Edith and how much your kindness means to her.",
   ],
-  "Ann": [
-    "Black Heart Event: At Doug's Inn, Ann serves you a huge complimentary meal to see if you have a healthy appetite!",
-    "Purple Heart Event: Ann tries cleaning the upper rooms of the Inn and tumbles into your arms, blushing furiously.",
-    "Blue Heart Event: Ann gives you a cherished broken Music Box that belonged to her mother, trusting you with it.",
-    "Yellow Heart Event: Doug pulls you aside at the Inn and admits he'd be proud if someone as hardworking as you looked after Ann.",
+  "Tess": [
+    "Black Heart Event: At Gideon's Inn, Tess serves you a huge complimentary meal to see if you have a healthy appetite!",
+    "Purple Heart Event: Tess tries cleaning the upper rooms of the Inn and tumbles into your arms, blushing furiously.",
+    "Blue Heart Event: Tess gives you a cherished broken Music Box that belonged to her mother, trusting you with it.",
+    "Yellow Heart Event: Gideon pulls you aside at the Inn and admits he'd be proud if someone as hardworking as you looked after Tess.",
   ],
-  "Harvest Goddess": [
-    "Black Heart Event: The Harvest Goddess rises from the waterfall in a cascade of light to applaud your first 10 offerings.",
-    "Purple Heart Event: She tests your knowledge of Mineral Town's crops and animals, laughing delightedly at your answers.",
-    "Blue Heart Event: She blesses your fields with golden light and gifts you a rare White Grass from the heavens.",
+  "Wellkeeper": [
+    "Black Heart Event: The Wellkeeper rises from the waterfall in a cascade of light to applaud your first 10 offerings.",
+    "Purple Heart Event: She tests your knowledge of Brackenford's crops and animals, laughing delightedly at your answers.",
+    "Blue Heart Event: She blesses your fields with golden light and gifts you a rare Frostwort from the heavens.",
     "Yellow Heart Event: She reveals that only a true master of the land, mines, and waters may win her hand in marriage.",
   ],
 };
 
 export const RIVAL_PAIRS: [string, string, string][] = [
-  ["Mary", "Gray", "Gray spends his afternoons reading quietly in Mary's library, bonding over craftsmanship and stories."],
-  ["Karen", "Rick", "Rick and Karen reminisce by the stream about growing up together in Mineral Town."],
-  ["Popuri", "Kai", "Popuri visits Kai's seaside shack, fascinated by his stories of life beyond Mineral Town."],
-  ["Elli", "Doctor", "The Doctor praises Elli's dedication at the Clinic and admits he couldn't run it without her."],
-  ["Ann", "Cliff", "Ann brings Cliff a warm lunch from Doug's Inn and encourages him to make Mineral Town his home."],
+  ["Odessa", "Rowan", "Rowan spends his afternoons reading quietly in Odessa's library, bonding over craftsmanship and stories."],
+  ["Priya", "Dennis", "Dennis and Priya reminisce by the stream about growing up together in Brackenford."],
+  ["Juniper", "Nico", "Juniper visits Nico's seaside shack, fascinated by his stories of life beyond Brackenford."],
+  ["Margit", "Dr. Sayer", "Dr. Sayer praises Margit's dedication at the Clinic and admits she couldn't run it without her."],
+  ["Tess", "Felix", "Tess brings Felix a warm lunch from Gideon's Inn and encourages him to make Brackenford his home."],
 ];
 
 
@@ -3267,28 +3267,28 @@ Object.assign(FORAGE_GLYPH, {
 /** Seasonal forage for each outer region (other maps use the valley-wide FORAGE lists). */
 export const REGION_FORAGE: Record<string, Record<string, string[]>> = {
   grove: {
-    Spring: ["Fiddlehead", "Medicinal Herb", "Yellow Grass", "Toy Flower"],
-    Summer: ["Blackberry", "Medicinal Herb", "Red Grass", "Purple Grass"],
-    Fall: ["Mushroom", "Chanterelle", "Cedar Cone", "Orange Grass"],
-    Winter: ["Cedar Cone", "White Grass", "Black Grass"],
+    Spring: ["Fiddlehead", "Medicinal Herb", "Goldenrod", "Pinwheel Daisy"],
+    Summer: ["Blackberry", "Medicinal Herb", "Redroot", "Heatherwort"],
+    Fall: ["Mushroom", "Chanterelle", "Cedar Cone", "Saffronleaf"],
+    Winter: ["Cedar Cone", "Frostwort", "Nightshade"],
   },
   woods: {
-    Spring: ["Fiddlehead", "Bamboo Shoot", "Medicinal Herb", "Moondrop Flower"],
-    Summer: ["Blackberry", "Wild Grape", "Medicinal Herb", "Green Grass"],
+    Spring: ["Fiddlehead", "Bamboo Shoot", "Medicinal Herb", "Duskbell Flower"],
+    Summer: ["Blackberry", "Wild Grape", "Medicinal Herb", "Greenmint"],
     Fall: ["Chanterelle", "Mushroom", "Truffle", "Poisonous Mushroom"],
-    Winter: ["Cedar Cone", "Black Grass", "Blue Grass"],
+    Winter: ["Cedar Cone", "Nightshade", "Bluewort"],
   },
   ridge: {
-    Spring: ["Mountain Thyme", "Medicinal Herb", "Yellow Grass", "Toy Flower"],
-    Summer: ["Edelweiss", "Mountain Thyme", "Indigo Grass", "Purple Grass"],
-    Fall: ["Juniper Berry", "Red Grass", "Orange Grass", "Mushroom"],
-    Winter: ["Juniper Berry", "White Grass", "Blue Grass"],
+    Spring: ["Mountain Thyme", "Medicinal Herb", "Goldenrod", "Pinwheel Daisy"],
+    Summer: ["Edelweiss", "Mountain Thyme", "Woad", "Heatherwort"],
+    Fall: ["Juniper Berry", "Redroot", "Saffronleaf", "Mushroom"],
+    Winter: ["Juniper Berry", "Frostwort", "Bluewort"],
   },
   river: {
-    Spring: ["Watercress", "Willow Catkin", "Green Grass", "Blue Grass"],
-    Summer: ["Watercress", "Cattail", "Pink Cat Flower", "Blue Grass"],
-    Fall: ["Cattail", "Wild Grape", "Red Grass", "Mushroom"],
-    Winter: ["Willow Catkin", "Blue Grass", "Black Grass"],
+    Spring: ["Watercress", "Willow Catkin", "Greenmint", "Bluewort"],
+    Summer: ["Watercress", "Cattail", "Rosecap Flower", "Bluewort"],
+    Fall: ["Cattail", "Wild Grape", "Redroot", "Mushroom"],
+    Winter: ["Willow Catkin", "Bluewort", "Nightshade"],
   },
   point: {
     Spring: ["Kelp", "Spiral Shell", "Sea Glass"],
@@ -3393,7 +3393,7 @@ export const LIGHTHOUSE_LOG: string[] = [
 export const TIDE_POOL_TEXT =
   "A tide pool among the rocks. Tiny crabs scuttle under the weed, and a red anemone opens and closes like a slow heartbeat.";
 
-/** A Friday-evening scene at Doug's Inn (task 01). */
+/** A Friday-evening scene at Gideon's Inn (task 01). */
 export interface InnScene {
   id: string;
   title: string;
@@ -3418,49 +3418,49 @@ export const INN_SCENES: InnScene[] = [
   {
     id: 'cards',
     title: 'Cards at the corner table',
-    cast: ['Doug', 'Gotz', 'Duke'],
+    cast: ['Gideon', 'Ingrid', 'Corin'],
     listen: [
-      ['Gotz', 'Three of a kind. Read it and weep, Doug.'],
-      ['Doug', "That's the third Friday running. I'm checking that deck for sawdust."],
-      ['Duke', 'Deal me in again. A winemaker knows a hand improves with patience.'],
+      ['Ingrid', 'Three of a kind. Read it and weep, Gideon.'],
+      ['Gideon', "That's the third Friday running. I'm checking that deck for sawdust."],
+      ['Corin', 'Deal me in again. A winemaker knows a hand improves with patience.'],
     ],
     join: 'Take the empty chair',
     joined: [
-      ['Doug', 'Pull up a chair. House rules: no betting the farm, just the pot.'],
+      ['Gideon', 'Pull up a chair. House rules: no betting the farm, just the pot.'],
     ],
   },
   {
     id: 'recipes',
     title: 'Recipe swap by the stove',
-    cast: ['Ann', 'Manna', 'Lillia'],
+    cast: ['Tess', 'Elspeth', 'Rosalind'],
     listen: [
-      ['Manna', 'A spoon of grape must in the stew. Duke swears he can taste it, he cannot.'],
-      ['Lillia', 'I fold a little honey into my bread dough. The crust browns like autumn leaves.'],
-      ['Ann', "Dad says recipes are for writing down. Mine are for changing every time."],
+      ['Elspeth', 'A spoon of grape must in the stew. Corin swears he can taste it, he cannot.'],
+      ['Rosalind', 'I fold a little honey into my bread dough. The crust browns like autumn leaves.'],
+      ['Tess', "Dad says recipes are for writing down. Mine are for changing every time."],
     ],
     join: 'Trade a recipe from the farm',
     joined: [
-      ['Ann', 'Ooh, roasted with the skins on? I am trying that tomorrow. Here, take a plate of mine.'],
+      ['Tess', 'Ooh, roasted with the skins on? I am trying that tomorrow. Here, take a plate of mine.'],
     ],
   },
   {
     id: 'story',
-    title: "Barley's harvest story",
-    cast: ['Barley', 'Saibara'],
+    title: "Abel's harvest story",
+    cast: ['Abel', 'Hilde'],
     listen: [
-      ['Barley', 'The year the valley flooded, we carried the seed sacks up to the mine road on our backs.'],
-      ['Saibara', 'Hmph. And I forged the hinges for the new barn doors that winter. Still swinging.'],
-      ['Barley', 'Every field you see started with somebody stubborn. Remember that.'],
+      ['Abel', 'The year the valley flooded, we carried the seed sacks up to the mine road on our backs.'],
+      ['Hilde', 'Hmph. And I forged the hinges for the new barn doors that winter. Still swinging.'],
+      ['Abel', 'Every field you see started with somebody stubborn. Remember that.'],
     ],
     join: 'Ask what the valley was like',
     joined: [
-      ['Barley', 'Before the town road, the only way in was the river trail. My father fished the bend every dawn.'],
-      ['Saibara', 'The old folk said the deep mine floors were warmer then. Bring me what you find down there.'],
+      ['Abel', 'Before the town road, the only way in was the river trail. My father fished the bend every dawn.'],
+      ['Hilde', 'The old folk said the deep mine floors were warmer then. Bring me what you find down there.'],
     ],
   },
 ];
 
-/** Task 04: Gray's two-chapter request. Chapter one asks for Spring Mine copper. */
+/** Task 04: Rowan's two-chapter request. Chapter one asks for Copperseam Mine copper. */
 export const GRAY_COPPER_QTY = 3;
 export const GRAY_COPPER_REWARD = 300;
 export const GRAY_QUEST_FRIEND = 5;
@@ -3482,7 +3482,7 @@ export const VALLEY_GRID: Record<string, [number, number]> = {
 export const VALLEY_SHORT: Record<string, string> = {
   farm: 'Your Farm',
   town: 'Town',
-  mountain: "Mother's",
+  mountain: "Beacon",
   beach: 'Beach',
   woods: 'Cedar',
   ridge: 'Ridge',
@@ -3507,34 +3507,34 @@ export interface ValleyLandmark {
 /** Major landmarks, each with its own symbol. Positions are the door or sign on its map. */
 export const VALLEY_LANDMARKS: ValleyLandmark[] = [
   { id: 'farmhouse', name: 'Your farmhouse', glyph: '▣', map: 'farm', x: 8, y: 5 },
-  { id: 'forge', name: "Saibara's Forge", glyph: '⚒', map: 'grove', x: 18, y: 16, bid: 'blacksmith' },
+  { id: 'forge', name: "Hilde's Forge", glyph: '⚒', map: 'grove', x: 18, y: 16, bid: 'blacksmith' },
   { id: 'quarry', name: 'Old Quarry', glyph: '▙', map: 'grove', x: 23, y: 5 },
   { id: 'supermarket', name: 'Supermarket', glyph: '$', map: 'town', x: 8, y: 6, bid: 'supermarket' },
   { id: 'mayor', name: "Mayor's house", glyph: '▦', map: 'town', x: 57, y: 6, bid: 'mayor' },
   { id: 'church', name: 'Church', glyph: '†', map: 'town', x: 67, y: 6, bid: 'church' },
-  { id: 'square', name: 'Rose Square board', glyph: '✦', map: 'town', x: 42, y: 10 },
+  { id: 'square', name: 'Market Cross board', glyph: '✦', map: 'town', x: 42, y: 10 },
   { id: 'clinic', name: 'Clinic', glyph: '♥', map: 'town', x: 8, y: 19, bid: 'clinic' },
-  { id: 'inn', name: "Doug's Inn", glyph: '☻', map: 'town', x: 22, y: 19, bid: 'inn' },
+  { id: 'inn', name: "Gideon's Inn", glyph: '☻', map: 'town', x: 22, y: 19, bid: 'inn' },
   { id: 'library', name: 'Library', glyph: '▤', map: 'town', x: 50, y: 19, bid: 'library' },
   { id: 'museum', name: 'Museum', glyph: '◉', map: 'town', x: 65, y: 19, bid: 'museum' },
-  { id: 'carpenter', name: "Gotz's workshop", glyph: '▮', map: 'mountain', x: 40, y: 6, bid: 'carpenter' },
-  { id: 'spring_mine', name: 'Spring Mine', glyph: '▼', map: 'mountain', x: 52, y: 4 },
-  { id: 'lake_mine', name: 'Lake Mine', glyph: '◣', map: 'mountain', x: 15, y: 8 },
-  { id: 'goddess', name: 'Goddess Pond', glyph: '❀', map: 'mountain', x: 44, y: 8 },
+  { id: 'carpenter', name: "Ingrid's workshop", glyph: '▮', map: 'mountain', x: 40, y: 6, bid: 'carpenter' },
+  { id: 'spring_mine', name: 'Copperseam Mine', glyph: '▼', map: 'mountain', x: 52, y: 4 },
+  { id: 'lake_mine', name: 'Mirewater Mine', glyph: '◣', map: 'mountain', x: 15, y: 8 },
+  { id: 'goddess', name: 'Wellkeeper Pond', glyph: '❀', map: 'mountain', x: 44, y: 8 },
   { id: 'hot_spring', name: 'Hot Spring', glyph: '≋', map: 'mountain', x: 5, y: 17 },
   { id: 'lookout', name: 'Ridge lookout', glyph: '▲', map: 'ridge', x: 33, y: 6 },
-  { id: 'poultry', name: 'Poultry Farm', glyph: '●', map: 'woods', x: 44, y: 6, bid: 'poultry' },
-  { id: 'yodel', name: 'Yodel Ranch', glyph: '♉', map: 'woods', x: 57, y: 6, bid: 'yodel' },
+  { id: 'poultry', name: 'Feathercote', glyph: '●', map: 'woods', x: 44, y: 6, bid: 'poultry' },
+  { id: 'yodel', name: 'Highmeadow Dairy', glyph: '♉', map: 'woods', x: 57, y: 6, bid: 'yodel' },
   { id: 'winery', name: 'Winery', glyph: '♠', map: 'woods', x: 35, y: 18, bid: 'winery' },
   { id: 'pier', name: 'Beach pier', glyph: '≈', map: 'beach', x: 30, y: 12 },
-  { id: 'sprites', name: 'Sprite hut', glyph: '✿', map: 'river', x: 53, y: 9 },
+  { id: 'sprites', name: 'Hearthfolk hut', glyph: '✿', map: 'river', x: 53, y: 9 },
   { id: 'footbridge', name: 'Willow Bend footbridge', glyph: '≡', map: 'river', x: 31, y: 18, when: 'footbridge' },
-  { id: 'zack', name: 'Zack & Won', glyph: '¦', map: 'point', x: 23, y: 9, bid: 'zack' },
+  { id: 'zack', name: 'Otto & Ferreira', glyph: '¦', map: 'point', x: 23, y: 9, bid: 'zack' },
   { id: 'lighthouse', name: 'Lighthouse', glyph: '☾', map: 'point', x: 45, y: 10 },
 ];
 
 /**
- * Task 12, small public works: Gotz and Basil rebuild the Willow Bend footbridge once the
+ * Task 12, small public works: Ingrid and Silas rebuild the Willow Bend footbridge once the
  * valley chips in. Materials come from forestry (Lumber), mining (Copper) and the farm
  * (crop_qty of any one crop, to feed the crew).
  */
@@ -3546,21 +3546,21 @@ export const PUBLIC_WORKS = {
   days: 2,
   /** Friendship with each helper when it opens. */
   friend: 5,
-  helpers: ['Gotz', 'Basil'],
+  helpers: ['Ingrid', 'Silas'],
 };
 
 // ---------------------------------------------------------------- companion planting (mechanics task 17)
 /**
- * One pairing to start with: a Moondrop Flower in bloom draws bees to the Cucumber vines around it
+ * One pairing to start with: a Duskbell Flower in bloom draws bees to the Cucumber vines around it
  * (the eight tiles that touch it), and each of those gives one more cucumber every picking. Both
- * are spring crops on sale from the first day (Cucumber at Jeff's, Moondrop at Won's), and the
+ * are spring crops on sale from the first day (Cucumber at Hollis's, Duskbell at Ferreira's), and the
  * flower blooms in 6 days, before the vines are ready at 9.
  */
-export const COMPANION = { helper: 'Moondrop Flower', crop: 'Cucumber', bonus: 1 } as const;
+export const COMPANION = { helper: 'Duskbell Flower', crop: 'Cucumber', bonus: 1 } as const;
 
 // ---------------------------------------------------------------- seed saving (mechanics task 19)
 /**
- * Where each Maker stands on the farm once Saibara installs it (mechanics task 30), and how many
+ * Where each Maker stands on the farm once Hilde installs it (mechanics task 30), and how many
  * in-game hours a batch takes. The Mayonnaise Maker is under the coop, west of its door; the Cheese
  * and Yarn Makers flank the barn door. The clock keeps running through the night for a batch.
  */
@@ -3581,7 +3581,7 @@ export interface OrderPiece {
 
 /**
  * Orders for finished goods (mechanics task 32): a small bundle from one villager, posted on the
- * Rose Square board beside the single-item requests. Pieces can be handed over a few at a time; the
+ * Market Cross board beside the single-item requests. Pieces can be handed over a few at a time; the
  * board shows which are still missing, and the reward comes when the bundle is complete. An order
  * is only posted once everything in it can be made (`needs`): a Kitchen, and any Maker named.
  */
@@ -3595,10 +3595,10 @@ export const ORDERS: {
 }[] = [
   {
     id: 'inn_supper',
-    npc: 'Doug',
+    npc: 'Gideon',
     title: 'a supper basket for the inn',
     pieces: [
-      { label: 'Bread', any: ['Bread'], qty: 1, where: "Jeff's General Store, 100G" },
+      { label: 'Bread', any: ['Bread'], qty: 1, where: "Hollis's General Store, 100G" },
       { label: 'Pickled Turnip', any: ['Pickled Turnip'], qty: 1, where: 'Kitchen: 2 Turnip' },
       { label: 'Dried Herbs', any: ['Dried Herbs'], qty: 1, where: 'Kitchen: 3 Medicinal Herb' },
     ],
@@ -3607,10 +3607,10 @@ export const ORDERS: {
   },
   {
     id: 'inn_cheese',
-    npc: 'Doug',
+    npc: 'Gideon',
     title: 'a cheese board for the inn',
     pieces: [
-      { label: 'Bread', any: ['Bread'], qty: 1, where: "Jeff's General Store, 100G" },
+      { label: 'Bread', any: ['Bread'], qty: 1, where: "Hollis's General Store, 100G" },
       { label: 'Cheese', any: ['Small Cheese', 'Medium Cheese', 'Large Cheese', 'Golden Cheese', 'P Cheese', 'X Cheese'], qty: 2, where: 'Cheese Maker, from your cows\' milk' },
       { label: 'Dried Herbs', any: ['Dried Herbs'], qty: 1, where: 'Kitchen: 3 Medicinal Herb' },
     ],
@@ -3619,7 +3619,7 @@ export const ORDERS: {
   },
   {
     id: 'manna_scarf',
-    npc: 'Manna',
+    npc: 'Elspeth',
     title: 'yarn for a winter scarf',
     pieces: [{ label: 'Yarn', any: ['Small Yarn', 'Medium Yarn', 'Large Yarn', 'Golden Yarn', 'P Yarn', 'X Yarn'], qty: 2, where: 'Yarn Maker, from your sheep\'s wool' }],
     reward: 1200,
@@ -3639,7 +3639,7 @@ export const COMPOST_SCRAPS = 5;
 export const COMPOST_BONUS = 1;
 
 /**
- * One crab pot (mechanics task 39): Kai's old pot hangs off the end of the Mineral Beach pier, at
+ * One crab pot (mechanics task 39): Nico's old pot hangs off the end of the Brackenford Beach pier, at
  * [map, x, y] (a water tile; you stand on the pier end just north of it). Set it one day, haul it on
  * a later trip. The bait decision: a fish draws crabs; unbaited it is a gamble.
  */
@@ -3669,17 +3669,17 @@ export const DOG_CLUE_AFF = 30;
  * happens, they bring it up instead of small talk, once. `{item}` / `{case}` are filled in.
  */
 export const MILESTONE_LINES = {
-  /** Zack, after your first shipment ({item}: what you have shipped most of). */
+  /** Otto, after your first shipment ({item}: what you have shipped most of). */
   first_shipment: "I still remember the first crate I picked up from your bin. {item}, wasn't it? You've come a long way since.",
   /** The curator, once per museum case you complete. */
   museum_case: 'The {case} case is complete, thanks to you. Visitors stop and read every label. I wrote your name on the card.',
   /** Neighbours who notice the footbridge you helped rebuild at Willow Bend. */
   footbridge: {
-    Popuri: 'I walked over the new footbridge at Willow Bend yesterday! Mom says you brought half the materials.',
-    Rick: "That footbridge you and Gotz put up is solid. I'd have built the rail a little higher, mind you.",
-    Ann: 'Dad says the Willow Bend crowd come in for lunch now that the footbridge is back. Thanks for that!',
-    Mary: 'I read on the new footbridge at Willow Bend most mornings. The river sounds different from up there.',
-    Elli: "Grandma can cross at Willow Bend again with the footbridge fixed. She asked me to say thank you.",
+    Juniper: 'I walked over the new footbridge at Willow Bend yesterday! Mom says you brought half the materials.',
+    Dennis: "That footbridge you and Ingrid put up is solid. I'd have built the rail a little higher, mind you.",
+    Tess: 'Dad says the Willow Bend crowd come in for lunch now that the footbridge is back. Thanks for that!',
+    Odessa: 'I read on the new footbridge at Willow Bend most mornings. The river sounds different from up there.',
+    Margit: "Grandma can cross at Willow Bend again with the footbridge fixed. She asked me to say thank you.",
   } as Record<string, string>,
 };
 
@@ -3691,10 +3691,10 @@ export const MILESTONE_LINES = {
 export const HIVE_SPOT: [number, number] = [7, 6];
 export const HIVE_RANGE = 8;
 export const HONEY_FLAVOURS: Record<string, { item: string; fans: string[] }> = {
-  'Moondrop Flower': { item: 'Moondrop Honey', fans: ['Mary', 'Elli', 'Lillia'] },
-  'Toy Flower': { item: 'Toy Flower Honey', fans: ['May', 'Popuri'] },
-  'Pink Cat Flower': { item: 'Pink Cat Honey', fans: ['Manna', 'Popuri'] },
-  'Magic Red Flower': { item: 'Magic Red Honey', fans: ['Harvest Goddess', 'Doctor'] },
+  'Duskbell Flower': { item: 'Duskbell Honey', fans: ['Odessa', 'Margit', 'Rosalind'] },
+  'Pinwheel Daisy': { item: 'Pinwheel Daisy Honey', fans: ['Pip', 'Juniper'] },
+  'Rosecap Flower': { item: 'Rosecap Honey', fans: ['Elspeth', 'Juniper'] },
+  'Emberbloom Flower': { item: 'Emberbloom Honey', fans: ['Wellkeeper', 'Dr. Sayer'] },
 };
 
 /**
@@ -3709,9 +3709,9 @@ export const SEATS: Record<string, { map: string; x: number; y: number; title: s
     x: 22,
     y: 6,
     title: 'Town Green bench',
-    sunset: 'The pond turns to copper and the carp rise for the last flies of the day. Rose Square goes quiet behind you.',
+    sunset: 'The pond turns to copper and the carp rise for the last flies of the day. Market Cross goes quiet behind you.',
     rain: 'A soft rain stipples the pond. The flowers lean in, and the town smells of wet stone and blossom.',
-    friend: { npc: 'Mary', weekday: 4, line: 'Mary sits down with a book she is not reading. "Fridays, I come here to watch the light go. You too?"' },
+    friend: { npc: 'Odessa', weekday: 4, line: 'Odessa sits down with a book she is not reading. "Fridays, I come here to watch the light go. You too?"' },
   },
   porch: {
     map: 'farm',
@@ -3728,7 +3728,7 @@ export const SEATS: Record<string, { map: string; x: number; y: number; title: s
     title: 'Skyline Ridge lookout',
     sunset: 'The sun drops into the sea and the whole valley goes gold, then violet.',
     rain: 'A light rain blows across the ridge in long grey veils, and the valley below goes soft and quiet.',
-    friend: { npc: 'Cliff', weekday: 6, line: 'Cliff is already here, sitting on a rock. "Sundays I climb up and think about where I have been. It is good to have company."' },
+    friend: { npc: 'Felix', weekday: 6, line: 'Felix is already here, sitting on a rock. "Sundays I climb up and think about where I have been. It is good to have company."' },
   },
 };
 /** Stamina from a good sit, once a day per seat. */
@@ -3771,35 +3771,35 @@ export interface FavorDef {
   memory: string;
 }
 export const FAVORS: Record<string, FavorDef> = {
-  Rick: {
+  Dennis: {
     kind: 'feed',
     offer: "I'm up before the roosters anyway. Want me to feed your chickens tomorrow morning? Bring my own feed and everything.",
-    plan: 'Rick feeds your chickens',
-    done: 'Rick came by at dawn and fed your chickens, as he promised.',
-    memory: 'Rick fed your chickens one morning, with his own feed.',
+    plan: 'Dennis feeds your chickens',
+    done: 'Dennis came by at dawn and fed your chickens, as he promised.',
+    memory: 'Dennis fed your chickens one morning, with his own feed.',
   },
-  Cliff: {
+  Felix: {
     kind: 'water',
     offer: "I have nowhere to be tomorrow morning. I could water your field for you... if that would help.",
-    plan: 'Cliff waters your field',
-    done: 'Cliff came by early and watered your field, as he said he would.',
-    memory: 'Cliff watered your field one morning, just to help.',
+    plan: 'Felix waters your field',
+    done: 'Felix came by early and watered your field, as he said he would.',
+    memory: 'Felix watered your field one morning, just to help.',
   },
-  Mary: {
+  Odessa: {
     kind: 'hours',
     offer: "I'm writing out the shop hours for the library board. Shall I copy tomorrow's out for you too?",
-    plan: "Mary leaves a note of the day's shop hours",
-    done: "Mary left a note on your door with today's shop hours (see Today's Plan).",
-    memory: "Mary wrote out a day's shop hours for you in her neat hand.",
+    plan: "Odessa leaves a note of the day's shop hours",
+    done: "Odessa left a note on your door with today's shop hours (see Today's Plan).",
+    memory: "Odessa wrote out a day's shop hours for you in her neat hand.",
   },
 };
 /** Friendship a neighbor needs before offering a favor, and the hours of a "free afternoon". */
 export const FAVOR_FRIENDSHIP = 60;
 export const FAVOR_HOURS: [number, number] = [12, 18];
-/** Days before the same neighbor offers again, and how many dry crops Cliff waters. */
+/** Days before the same neighbor offers again, and how many dry crops Felix waters. */
 export const FAVOR_GAP = 7;
 export const FAVOR_WATER_MAX = 12;
-/** The shops on Mary's note, in her order. */
+/** The shops on Odessa's note, in her order. */
 export const FAVOR_SHOPS = ['supermarket', 'blacksmith', 'poultry', 'carpenter', 'clinic', 'library'];
 
 /**
@@ -3843,7 +3843,7 @@ export const EXHIBITS: { id: string; title: string; pieces: string[]; note: stri
 
 /**
  * One recipe to start with: set aside three Cucumbers and dry their seeds into one bag (which sows
- * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Jeff's, so it
+ * a 3x3 patch like a bought one). Three cucumbers ship for less than the bag costs at Hollis's, so it
  * is a fair trade, not free seed: the harvest goes to the next planting instead of the bin or pot.
  */
 export const SEED_SAVING: { crop: string; need: number; bags: number }[] = [{ crop: 'Cucumber', need: 3, bags: 1 }];
@@ -3855,34 +3855,34 @@ export const STALL_STOCK_BY = 12;
 export const STALL_CLOSE = 17;
 export const STALL_SLOTS = 3;
 export const STALL_SLOT_MAX = 5;
-/** Where the stall stands: the east side of Rose Square, clear of the road to the beach. */
+/** Where the stall stands: the east side of Market Cross, clear of the road to the beach. */
 export const STALL_SPOT: [number, number] = [40, 16];
 /** What a market stall can carry: produce and food, by ITEMS category. */
 export const STALL_CATEGORIES = ['crop', 'forage', 'fish', 'animal', 'food', 'dish'];
 /** What shoppers pay over the shipping price, by how much they like the good. */
 export const STALL_MARKUP = { love: 1.5, like: 1.25, neutral: 1.1 } as const;
 /**
- * Task 10: two market regulars with a shopping list each week. Doug stocks the inn's pantry with
- * plain staples; Lillia hunts for one unusual flower of the season. Their lists are known all
+ * Task 10: two market regulars with a shopping list each week. Gideon stocks the inn's pantry with
+ * plain staples; Rosalind hunts for one unusual flower of the season. Their lists are known all
  * week (Today's Plan, the market sign, the stocking menu), so filling the three slots is a choice
  * between what they want and what sells to everyone else.
  */
 export const MARKET_SHOPPERS = {
-  pantry: { name: 'Doug', hour: 12, each: 3, markup: 1.6, wants: 2 },
-  flower: { name: 'Lillia', hour: 15, each: 2, markup: 2 },
+  pantry: { name: 'Gideon', hour: 12, each: 3, markup: 1.6, wants: 2 },
+  flower: { name: 'Rosalind', hour: 15, each: 2, markup: 2 },
 } as const;
 /**
  * Preserves (mechanics task 31): kitchen goods that keep. Pickled Turnip and Dried Herbs need no
  * utensil (spring turnips and spring herbs); Strawberry Jam needs a Pot. Their use in town: when
- * the fields go quiet, Doug stocks the inn's pantry, so in Fall and Winter one of his two picks at
+ * the fields go quiet, Gideon stocks the inn's pantry, so in Fall and Winter one of his two picks at
  * the Saturday stall is always a preserve.
  */
 export const PRESERVES = ['Pickled Turnip', 'Dried Herbs', 'Strawberry Jam'];
-/** The seasons (0 Spring … 3 Winter) when Doug asks for a preserve. */
+/** The seasons (0 Spring … 3 Winter) when Gideon asks for a preserve. */
 export const PRESERVE_SEASONS = [2, 3];
-/** What Doug may ask for: eggs any week, these crops in their own season. */
+/** What Gideon may ask for: eggs any week, these crops in their own season. */
 export const PANTRY_STAPLES = ['Egg', 'Potato', 'Turnip', 'Cabbage', 'Onion', 'Corn', 'Tomato', 'Carrot', 'Sweet Potato', 'Spinach'];
-/** The unusual flower Lillia hunts for, by season (each one grows or can be foraged then). None in winter. */
-export const MARKET_FLOWERS: string[][] = [['Toy Flower', 'Moondrop Flower'], ['Pink Cat Flower', 'Edelweiss'], ['Magic Red Flower'], []];
+/** The unusual flower Rosalind hunts for, by season (each one grows or can be foraged then). None in winter. */
+export const MARKET_FLOWERS: string[][] = [['Pinwheel Daisy', 'Duskbell Flower'], ['Rosecap Flower', 'Edelweiss'], ['Emberbloom Flower'], []];
 export const STALL_SIGN =
   'Saturday Market — On Saturdays this stall is yours. Put out up to three goods before noon; folk stop by on the hour until 5 PM and pay a little over the shipping price, more for the things they love.';

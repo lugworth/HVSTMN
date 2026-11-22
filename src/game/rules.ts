@@ -1,4 +1,4 @@
-// Pure game rules and mechanics for Harvest Moon: Friends of Mineral Town (ASCII Edition)
+// Pure game rules and mechanics for FURROW
 import { fmt_hour, SEASONS } from './constants';
 
 import type { CatchEntry, CatchTable } from './constants';
@@ -8,10 +8,10 @@ export const TOOL_LEVEL_NAMES = [
   'Copper',
   'Silver',
   'Gold',
-  'Mystrile',
-  'Cursed',
-  'Blessed',
-  'Mythic',
+  'Starsteel',
+  'Fey',
+  'Hallowed',
+  'Heirloom',
 ] as const;
 
 export const TOOL_LEVEL_COLORS = [
@@ -19,10 +19,10 @@ export const TOOL_LEVEL_COLORS = [
   '09', // Copper
   '05', // Silver
   '0A', // Gold
-  '0C', // Mystrile
-  '0E', // Cursed
-  '07', // Blessed
-  '0B', // Mythic
+  '0C', // Starsteel
+  '0E', // Fey
+  '07', // Hallowed
+  '0B', // Heirloom
 ] as const;
 
 export const WATERING_CAN_CAPACITIES = [30, 55, 85, 130, 200, 250, 250, 500] as const;
@@ -32,7 +32,7 @@ export const POWER_BERRY_BONUS = 10;
 export const MAX_POWER_BERRIES = 10;
 export const MAX_FATIGUE = 100;
 
-export const CURSED_TOOL_FLOORS: Record<number, string> = {
+export const FEY_TOOL_FLOORS: Record<number, string> = {
   29: 'Fishing Rod',
   39: 'Hoe',
   49: 'Axe',
@@ -88,7 +88,7 @@ export function getToolArea(
     if (lvl === 3) return forwardRect(4, 0);
     if (lvl === 4) return forwardRect(6, 0);
     if (lvl === 5 || lvl === 6) return forwardRect(12, 1); // 3x12
-    return forwardRect(18, 2); // Mythic: 5x18
+    return forwardRect(18, 2); // Heirloom: 5x18
   }
 
   if (tool === 'Watering Can') {
@@ -98,7 +98,7 @@ export function getToolArea(
     if (lvl === 3) return forwardRect(3, 1); // 3x3
     if (lvl === 4) return forwardRect(3, 2); // 3x5
     if (lvl === 5 || lvl === 6) return forwardRect(6, 3); // 6x7 (compact representation of 6x13)
-    return forwardRect(9, 5); // Mythic wide field
+    return forwardRect(9, 5); // Heirloom wide field
   }
 
   if (tool === 'Sickle') {
@@ -108,7 +108,7 @@ export function getToolArea(
     if (lvl === 3) return centeredSquare(1); // 3x3
     if (lvl === 4) return centeredSquare(2); // 5x5
     if (lvl === 5 || lvl === 6) return centeredSquare(4); // 9x9
-    return centeredSquare(6); // Mythic 13x13
+    return centeredSquare(6); // Heirloom 13x13
   }
 
   if (tool === 'Hammer' || tool === 'Axe') {
@@ -148,7 +148,7 @@ export function calculateStaminaSpend(
     options.weather === 'Typhoon' ||
     options.weather === 'Blizzard';
   const isLateNight = (options.minutes ?? 360) >= 22 * 60 || (options.minutes ?? 360) < 6 * 60;
-  // Kappa's Blue Berry (hasMysticBerry) negates rain/snow fatigue penalty completely
+  // Reed Heron's Blue Berry (hasMysticBerry) negates rain/snow fatigue penalty completely
   const weatherPenalty = isHarshWeather && !options.hasMysticBerry ? 1 : 0;
   const nightPenalty = isLateNight ? 1 : 0;
   const envPenalty = weatherPenalty + nightPenalty;
@@ -307,12 +307,12 @@ export function makerBatch(maker: string, inv: Record<string, number>): MakerSte
 
 export function rollSpringMineDrop(floor: number, allToolsBlessed: boolean, rngPct: number): string | null {
   if (allToolsBlessed && (floor === 60 || floor === 102 || floor === 123 || floor === 152 || floor >= 200)) {
-    if (rngPct < 8) return 'Mythic Stone';
+    if (rngPct < 8) return 'Heirloom Stone';
   }
   const table: [string, number, number][] = [
-    ['Adamantite', 6, 10],
-    ['Orichalc', 8, 10],
-    ['Mystrile', 12, 5],
+    ['Deepiron', 6, 10],
+    ['Sunbrass', 8, 10],
+    ['Starsteel', 12, 5],
     ['Gold', 14, 3],
     ['Silver', 18, 1],
     ['Copper', 24, 1],
@@ -364,10 +364,10 @@ export const WON_EXCLUSIVE_CROPS = new Set([
   'Cabbage',
   'Pineapple',
   'Green Pepper',
-  'Moondrop Flower',
-  'Toy Flower',
-  'Pink Cat Flower',
-  'Magic Red Flower',
+  'Duskbell Flower',
+  'Pinwheel Daisy',
+  'Rosecap Flower',
+  'Emberbloom Flower',
 ]);
 
 export function checkSecretCropUnlock(
@@ -433,7 +433,7 @@ export function regionCatchOdds(table: CatchTable, ctx: { season: number; weathe
 }
 
 /**
- * Every water without its own table: the farm pond, the town river, Mother's Hill lake, the beach
+ * Every water without its own table: the farm pond, the town river, Beacon Hill lake, the beach
  * and the smaller pools. A better rod finds the big fish; the best rods find something special.
  */
 export function valleyCatchOdds(ctx: { map: string; season: number; rodLvl: number }): CatchOdds {
@@ -493,7 +493,7 @@ export function innCardsWin(absday: number): boolean {
   return ((absday * 2654435761) >>> 0) % 3 !== 0;
 }
 
-/** One watering-can step: the level it reaches, what Saibara charges, and what it waters. */
+/** One watering-can step: the level it reaches, what Hilde charges, and what it waters. */
 export interface CanStep {
   level: number;
   cost: number;
@@ -503,9 +503,9 @@ export interface CanStep {
 }
 
 /**
- * Gray's advice on the watering can (task 04). From the current level, `next` is the upgrade
- * to save for now and `big` is the later Saibara upgrade that adds the most tiles per pour.
- * Null once the can is Mystrile or beyond: Saibara's ore upgrades stop there.
+ * Rowan's advice on the watering can (task 04). From the current level, `next` is the upgrade
+ * to save for now and `big` is the later Hilde upgrade that adds the most tiles per pour.
+ * Null once the can is Starsteel or beyond: Hilde's ore upgrades stop there.
  */
 export function canUpgradeAdvice(
   level: number,
@@ -665,10 +665,10 @@ const marketSeed = (day: number, salt: number) => {
 };
 
 /**
- * What the regulars want on the market held on absolute day `marketDay`, in `season`. Doug wants
- * `count` different staples: eggs, or a crop in season (`inSeason` says which crops are). Lillia
+ * What the regulars want on the market held on absolute day `marketDay`, in `season`. Gideon wants
+ * `count` different staples: eggs, or a crop in season (`inSeason` says which crops are). Rosalind
  * wants one of the season's unusual flowers, or nothing in winter. With `keeps` (the preserves, in
- * Fall and Winter), Doug's first pick is always one of them and the rest are staples.
+ * Fall and Winter), Gideon's first pick is always one of them and the rest are staples.
  */
 export function marketWants(
   marketDay: number,

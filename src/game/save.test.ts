@@ -60,11 +60,11 @@ describe('save module pure helpers', () => {
     assert.equal(parseSaveJson('[]'), null);
     assert.equal(parseSaveJson(JSON.stringify({ gold: 500 })), null);
     assert.equal(isValidSavePayload({ name: '   ', tilled: [] }), false);
-    assert.equal(isValidSavePayload({ name: 'Pete', tilled: 'not-array' }), false);
-    assert.equal(isValidSavePayload({ name: 'Pete', season: 9 }), false);
-    assert.equal(isValidSavePayload({ name: 'Pete', day: 35 }), false);
-    assert.equal(isValidSavePayload({ name: 'Pete', inv: ['Turnip'] }), false);
-    assert.equal(isValidSavePayload({ name: 'Pete', tilled: ['10,10'], inv: { Turnip: 2 }, crops: { '10,10': ['Turnip', 1] } }), true);
+    assert.equal(isValidSavePayload({ name: 'Ash', tilled: 'not-array' }), false);
+    assert.equal(isValidSavePayload({ name: 'Ash', season: 9 }), false);
+    assert.equal(isValidSavePayload({ name: 'Ash', day: 35 }), false);
+    assert.equal(isValidSavePayload({ name: 'Ash', inv: ['Turnip'] }), false);
+    assert.equal(isValidSavePayload({ name: 'Ash', tilled: ['10,10'], inv: { Turnip: 2 }, crops: { '10,10': ['Turnip', 1] } }), true);
   });
 
   test('writeSaveSlot, readSaveSlot, and deleteSaveSlot handle storage errors gracefully', () => {
@@ -79,12 +79,12 @@ describe('save module pure helpers', () => {
         throw new Error('blocked');
       },
     };
-    const writeFail = writeSaveSlot(failingStorage, 'auto', { name: 'Pete' });
+    const writeFail = writeSaveSlot(failingStorage, 'auto', { name: 'Ash' });
     assert.equal(writeFail.ok, false);
     assert.match(writeFail.error || '', /QuotaExceededError/);
     assert.equal(readSaveSlot(failingStorage, 1), null);
     assert.equal(deleteSaveSlot(failingStorage, 1), false);
-    assert.equal(writeSaveSlot(null, 1, { name: 'Pete' }).ok, false);
+    assert.equal(writeSaveSlot(null, 1, { name: 'Ash' }).ok, false);
   });
 
   test('summarizeSave and listSaveSlots compute accurate farm & inventory metadata', () => {
@@ -129,14 +129,14 @@ describe('save module pure helpers', () => {
     const original = {
       inv: { Turnip: 3 },
       crops: { '10,10': ['Turnip', 2] },
-      talked: new Set(['Ann', 'Popuri']),
+      talked: new Set(['Tess', 'Juniper']),
     };
     const cloned = cloneSaveValue(original) as any;
     original.inv.Turnip = 99;
     original.crops['10,10'][1] = 0;
     assert.equal(cloned.inv.Turnip, 3);
     assert.equal(cloned.crops['10,10'][1], 2);
-    assert.deepEqual(cloned.talked, ['Ann', 'Popuri']);
+    assert.deepEqual(cloned.talked, ['Tess', 'Juniper']);
   });
 });
 
@@ -173,8 +173,8 @@ describe('Game localStorage persistence across sessions', () => {
     }
     a.objs.woods = { '10,10': 'dig' };
     a.forage.woods = { [woodsGrassKey]: 'Truffle' };
-    a.talked.add('Elli');
-    a.gifted.add('Elli');
+    a.talked.add('Margit');
+    a.gifted.add('Margit');
 
     a.autosave(true);
     assert.ok(mockStorage.data[AUTOSAVE_KEY]);
@@ -212,14 +212,14 @@ describe('Game localStorage persistence across sessions', () => {
     assert.equal(b.hp['19,12'], 4);
     assert.equal(b.objs.woods['10,10'], 'dig');
     assert.equal(b.forage.woods[woodsGrassKey], 'Truffle');
-    assert.ok(b.talked instanceof Set && b.talked.has('Elli'));
-    assert.ok(b.gifted instanceof Set && b.gifted.has('Elli'));
-    assert.doesNotThrow(() => b.talked.add('Mary'));
+    assert.ok(b.talked instanceof Set && b.talked.has('Margit'));
+    assert.ok(b.gifted instanceof Set && b.gifted.has('Margit'));
+    assert.doesNotThrow(() => b.talked.add('Odessa'));
   });
 
   test('autostart resumes from existing auto-save and falls back cleanly if corrupted', async () => {
     const a = new Game(new Screen(132, 30), true);
-    a.new_game('Pete', 'Moon');
+    a.new_game('Ash', 'Bramble');
     a.gold = 999;
     a.give('Turnip', 3);
     a.tilled.add('15,15');
@@ -256,7 +256,7 @@ describe('Game localStorage persistence across sessions', () => {
 
   test('manual save to Slot 1 or Slot 2 also updates Auto-Save and preserves independent slots', () => {
     const g = new Game(new Screen(132, 30), true);
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     g.gold = 700;
     assert.equal(g.save(1), true);
     g.gold = 1200;
@@ -270,7 +270,7 @@ describe('Game localStorage persistence across sessions', () => {
 });
 
 describe('morning backups (task 55)', () => {
-  const morning = (day: number, extra: Record<string, any> = {}) => ({ name: 'Pete', farm: 'Moon', year: 1, season: 0, day, minutes: 360, gold: day * 100, ...extra });
+  const morning = (day: number, extra: Record<string, any> = {}) => ({ name: 'Ash', farm: 'Bramble', year: 1, season: 0, day, minutes: 360, gold: day * 100, ...extra });
 
   test('newest first, at most DAWN_MAX, and a second save of the same morning replaces the first', () => {
     for (let d = 1; d <= DAWN_MAX + 2; d++) assert.ok(pushDawnBackup(mockStorage, morning(d)).ok);
@@ -282,7 +282,7 @@ describe('morning backups (task 55)', () => {
     assert.equal(list.filter((d) => d.day === 5).length, 1);
     assert.equal(list[0].gold, 1);
     pushDawnBackup(mockStorage, morning(5, { farm: 'Cedar' }));
-    assert.deepEqual(readDawnBackups(mockStorage).map((d) => d.farm), ['Cedar', 'Moon', 'Moon'], 'another farm is another backup');
+    assert.deepEqual(readDawnBackups(mockStorage).map((d) => d.farm), ['Cedar', 'Bramble', 'Bramble'], 'another farm is another backup');
   });
 
   test('unreadable entries are skipped, a full store sheds the oldest, and clearing removes them all', () => {
