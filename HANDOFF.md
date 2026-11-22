@@ -1,5 +1,15 @@
 # Handoff: FURROW
 
+## Farm symbols, 2026-11-22
+
+- The canvas uses `public/fonts/FurrowFarmSymbols.woff` for one-cell farm drawings.
+  Edit the drawings in `scripts/build-farm-font.py` and run it with Python 3 and
+  FontTools to regenerate the font and its TypeScript glyph map. The canvas paints
+  standard character substitutes while the font loads.
+- Fir, pine and broadleaf silhouettes follow world coordinates. Skyline Ridge has
+  more evergreens, broadleaf trees show bare branches in winter, and the farm's hive
+  tree stays broadleaf. The new tree glyphs stay full size in both detail modes.
+
 ## High-res detail is a setting again, 2026-11-19
 
 - The player asked for the contour look back. `Screen.setHires()` / `onHiresChange` are restored;

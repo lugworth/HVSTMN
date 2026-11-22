@@ -14,6 +14,12 @@
   font-weight: 700;
   font-display: swap;
 }
+@font-face {
+  font-family: "FURROW Farm Symbols";
+  src: url("/fonts/FurrowFarmSymbols.woff") format("woff");
+  font-weight: 400 700;
+  unicode-range: U+E9??;
+}
 /* Pixelify Sans (see public/fonts/LICENSE-PixelifySans.txt): the display face for headings and the
    controls around the map. The map grid and all body text stay in HRVSTMN Mono. */
 @font-face {
