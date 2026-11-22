@@ -5,6 +5,7 @@ import { Screen, Cell, type PaletteMode } from '@/src/game/screen';
 import { Game } from '@/src/game/engine';
 import { PALETTE, TOOLS, DAY_PACES, type DayPace } from '@/src/game/constants';
 import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, type OutCell } from '@/src/game/enhanced';
+import { FARM_SYMBOLS } from '@/src/game/farm-symbols';
 import { isCompact } from '@/src/game/compact';
 import {
   chooseGrid,
@@ -19,7 +20,8 @@ import {
 import GameMenu, { type MenuClose, type MenuItem, type MenuSection } from './GameMenu';
 import { PIXEL_ICONS, bitmapToBoxShadow, toolIconId, type ToolbarIconId } from '@/src/game/toolbarIcons';
 
-const FONT = '"HRVSTMN Mono", "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace';
+const FARM_FONT = '"FURROW Farm Symbols"';
+const FONT = `"HRVSTMN Mono", ${FARM_FONT}, "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
 /** Pixelify Sans, for the large HUD headings (the same face as the toolbar and menu). */
 const DISPLAY_FONT = `"HRVSTMN Display", ${FONT}`;
 
@@ -566,6 +568,8 @@ export default function GameScreen() {
 
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
+    let isMounted = true;
+    let farmSymbolsReady = false;
 
     let fontPx = 16;
     let cw = 9.6;
@@ -726,7 +730,10 @@ export default function GameScreen() {
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
       lastSig = sig;
-      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
+      drawFrame(ctx, frame, {
+        cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr,
+        hires: screen.hires, crt: screen.crt, farmSymbols: farmSymbolsReady,
+      }, dirty ?? undefined);
       prevFrame = frame;
     };
 
@@ -776,6 +783,7 @@ export default function GameScreen() {
     // Re-measure, rebuild the canvas and repaint (the engine redraws a resized grid itself;
     // outside dialogs we ask for that right away so the screen never flashes blank).
     const relayout = () => {
+      if (!isMounted) return;
       layout();
       prevBuf = null;
       prevFrame = null;
@@ -790,6 +798,16 @@ export default function GameScreen() {
       Promise.all([FONT, DISPLAY_FONT].flatMap((f) => [document.fonts.load(`16px ${f}`), document.fonts.load(`bold 16px ${f}`)]))
         .then(relayout)
         .catch(() => {});
+      document.fonts.load(`16px ${FARM_FONT}`, FARM_SYMBOLS.fir)
+        .then((faces) => {
+          if (!isMounted || !faces.length) return;
+          farmSymbolsReady = true;
+          // The grid metrics are unchanged. Repaint any fallback glyphs now that the font is ready.
+          prevFrame = null;
+          lastSig = '';
+          screen.onRender?.();
+        })
+        .catch(() => {}); // The canvas keeps using the fallback glyphs.
     }
 
     // Keyboard handling
@@ -892,7 +910,6 @@ export default function GameScreen() {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Start game loop in background
-    let isMounted = true;
     (async () => {
       try {
         await game.run();

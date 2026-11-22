@@ -1,5 +1,5 @@
 // World-anchored character textures. No screen coordinates, animation, or game state.
-export type ContourTexture = { x: number; y: number; kind: 'ground' | 'sand' | 'roof' | 'water' | 'tree' };
+export type ContourTexture = { x: number; y: number; kind: 'ground' | 'sand' | 'roof' | 'water' };
 
 const patterns = new Map<string, string>();
 
@@ -35,12 +35,8 @@ export function contourPattern(texture: ContourTexture, n: number): string {
   const cached = patterns.get(key);
   if (cached !== undefined) return cached;
   let pattern = '';
-  if (kind === 'tree') {
-    pattern = n === 1 ? '♠' : n === 2 ? '/\\/\\' : ' ^ /|\\/|\\';
-  } else {
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) pattern += mark(x + (c + 0.5) / n, y + (r + 0.5) / n, kind);
-    }
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) pattern += mark(x + (c + 0.5) / n, y + (r + 0.5) / n, kind);
   }
   if (patterns.size >= 8192) patterns.clear();
   patterns.set(key, pattern);

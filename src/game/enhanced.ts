@@ -7,9 +7,10 @@
 // changes game state, so 'classic' and 'enhanced' are pure presentation.
 
 import type { Cell, CellTag, EmoteKind, HudLabel, PaletteMode, RenderCtx, Screen } from './screen';
-import { PALETTE } from './constants';
+import { HIVE_SPOT, PALETTE } from './constants';
 import { contourPattern, type ContourTexture } from './contour';
 import { FENCE_PITCH, SEASON_GLYPHS } from './chrome';
+import { FARM_SYMBOLS, FARM_SYMBOL_FALLBACK } from './farm-symbols';
 
 export type OutCell = {
   ch: string;
@@ -412,7 +413,6 @@ type Theme = {
   tuft: string;
   trees: string[];
   treeBg: string;
-  treeGlyphs: [string, string];
   soilBg: string;
   soilDot: string;
   weed: string;
@@ -430,7 +430,7 @@ export const THEMES: Theme[] = [
   {
     // Spring
     grassBg: '#0c1f0b', grassBg2: '#11290f', grassDetail: '#2c6e1e', tuft: '#4fc12c',
-    trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606', treeGlyphs: ['♣', '♠'],
+    trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606',
     soilBg: '#231910', soilDot: '#4a3826', weed: '#3fa52a',
     waterBg: '#03204e', waterBg2: '#062c66', waterFg: '#3d8cff',
     blossom: ['#ffa8d8', '#ffd0ec', '#ff80c0'], wildflowers: ['#ffe27a', '#ff9ad0', '#ffffff', '#b8a0ff'],
@@ -438,7 +438,7 @@ export const THEMES: Theme[] = [
   {
     // Summer
     grassBg: '#0a2408', grassBg2: '#0f300b', grassDetail: '#2f8a1a', tuft: '#62dc2c',
-    trees: ['#2fd010', '#22aa0c', '#188a08'], treeBg: '#041404', treeGlyphs: ['♣', '♠'],
+    trees: ['#2fd010', '#22aa0c', '#188a08'], treeBg: '#041404',
     soilBg: '#22180e', soilDot: '#55402a', weed: '#48b82a',
     waterBg: '#022456', waterBg2: '#053272', waterFg: '#45a0ff',
     fruit: '#ff4a3a', wildflowers: ['#ffe27a', '#ff6a6a', '#ffffff'],
@@ -446,7 +446,7 @@ export const THEMES: Theme[] = [
   {
     // Fall
     grassBg: '#1f1a0b', grassBg2: '#272010', grassDetail: '#6e5a22', tuft: '#b0902c',
-    trees: ['#ff9900', '#ff5a1a', '#e8b400', '#c8361a', '#ff7a10'], treeBg: '#170c04', treeGlyphs: ['♣', '♠'],
+    trees: ['#ff9900', '#ff5a1a', '#e8b400', '#c8361a', '#ff7a10'], treeBg: '#170c04',
     soilBg: '#1f140c', soilDot: '#4a3424', weed: '#a8a030',
     waterBg: '#0a2040', waterBg2: '#0e2a52', waterFg: '#4a88d8',
     leaves: ['#ff9900', '#ff5a1a', '#e8b400'],
@@ -454,7 +454,7 @@ export const THEMES: Theme[] = [
   {
     // Winter
     grassBg: '#4a5464', grassBg2: '#566072', grassDetail: '#eef2fa', tuft: '#c4ceda',
-    trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820', treeGlyphs: ['♠', '♠'],
+    trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820',
     soilBg: '#394049', soilDot: '#a4aebc', weed: '#d0d8e0',
     waterBg: '#10304e', waterBg2: '#143a5c', waterFg: '#8ac8ff',
     snow: true,
@@ -795,7 +795,7 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       case 'obj:boulder':
         return { ch: '●', fg: '#8c8c98', bg: mix(soil, '#3a342e', 0.6), bold: false };
       case 'obj:stump':
-        return { ch: '◉', fg: '#b8702e', bg: soil, bold: false };
+        return { ch: FARM_SYMBOLS.stump, fg: '#b8702e', bg: soil, bold: false };
       case 'obj:branch':
         return { ch: '╱', fg: '#c58a4a', bg: soil, bold: true };
       case 'obj:dig': {
@@ -831,7 +831,7 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       if (fam === 'leafy') return { ch: 'ʷ', fg: '#68d43c', bg, bold: true, detail: drop };
       if (fam === 'flower') return { ch: ',', fg: '#7ad04a', bg, bold: true, detail: drop ?? { ch: '·', fg: '#ffa8d8' } };
       if (fam === 'grass') return { ch: '`', fg: '#62cc38', bg, bold: false };
-      return { ch: ',', fg: '#7ad04a', bg, bold: true, detail: drop };
+      return { ch: FARM_SYMBOLS.sprout, fg: '#7ad04a', bg, bold: true, detail: drop };
     }
     if (k.startsWith('crop:young')) {
       if (fam === 'trellis') return { ch: '┼', fg: '#48c828', bg, bold: true, plain: true, detail: drop ?? { ch: '·', fg: '#ffe066' } };
@@ -889,9 +889,12 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       return { ch: pick(['✿', '❀'], hash(wx, wy, 2)), fg: pal(fg), bg: gb, bold: true, accent: true };
     }
     case 'tree': {
-      const windy = !F.indoor && (F.weather === 'Typhoon' || F.weather === 'Blizzard');
-      const sway = windy ? hash(wx * 2, wy, 90 + (Math.floor(F.t * 3) % 2)) < 0.5 : false;
-      const ch = (hs < 0.72) !== sway ? th.treeGlyphs[0] : th.treeGlyphs[1];
+      // World coordinates keep a tree recognizable as the view and seasons change.
+      const hive = F.map === 'farm' && wx === HIVE_SPOT[0] && wy === HIVE_SPOT[1];
+      const deciduous = hive || hs >= (F.map === 'ridge' ? 0.82 : 0.54);
+      const ch = deciduous
+        ? (th.snow ? FARM_SYMBOLS.bareTree : FARM_SYMBOLS.broadleaf)
+        : (hs < 0.29 ? FARM_SYMBOLS.fir : FARM_SYMBOLS.pine);
       const bg = mix(th.treeBg, '#000000', hash(wx, wy, 2) * 0.5);
       let fgc = pick(th.trees, hash(wx * 2, wy, 1));
       // canopies are lit from above: bright crown, shaded underside
@@ -901,14 +904,14 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       else if (!dn || dn.t !== 'tree') fgc = mix(fgc, '#000000', 0.32);
       // seasonal accents: spring blossom, summer fruit, winter snow on the tips
       const acc = hash(wx * 2, wy, 41);
-      // two-tone canopies: the tree stays grey, the blossom or fruit is a small colour detail
-      if (th.blossom && acc < 0.12) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
-      if (th.fruit && acc < 0.07) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
-      if (th.leaves && acc < 0.18) return { ch, fg: fgc, bg, bold: true, accent: true }; // a few turning leaves
+      // Deciduous crowns carry the existing blossom, fruit and fall accents.
+      if (deciduous) {
+        if (th.blossom && acc < 0.23) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
+        if (th.fruit && acc < 0.13) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
+        if (th.leaves && acc < 0.36) return { ch, fg: fgc, bg, bold: true, accent: true };
+      }
       if (th.snow && acc < 0.3) fgc = '#eef4fc';
-      // summer canopies are fuller: an extra leafy glyph now and then
-      const leafy = th.fruit && acc > 0.9 ? '♠' : ch;
-      return { ch: leafy, fg: fgc, bg, bold: true };
+      return { ch, fg: fgc, bg, bold: true };
     }
     case 'field': {
       const soil = groundBg(F, tag);
@@ -1111,7 +1114,8 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
     }
   }
   // Generic: furniture, signs, bins, doghouse... keep the readable glyph on a grounded background.
-  return { ch: g, fg: pal(fg), bg: F.indoor || (cell[2] === '01' && !tag.hl && !tag.hlArea) ? '#3a2818' : groundBg(F, tag), bold, accent: INTEREST.has(tag.t) };
+  const ch = tag.t === 'bin' && F.map === 'farm' ? FARM_SYMBOLS.shippingCrate : g;
+  return { ch, fg: pal(fg), bg: F.indoor || (cell[2] === '01' && !tag.hl && !tag.hlArea) ? '#3a2818' : groundBg(F, tag), bold, accent: INTEREST.has(tag.t) };
 }
 
 export type CropFamily = 'root' | 'trellis' | 'stalk' | 'leafy' | 'flower' | 'grass';
@@ -1132,8 +1136,8 @@ export function cropFamily(cropName?: string): CropFamily {
 }
 
 function ripeCropGlyph(cropName: string, fam: CropFamily, fallback: string): { ch: string; detail?: { ch: string; fg: string } } {
-  if (cropName === 'Carrot') return { ch: '▼', detail: { ch: 'ʷ', fg: '#52d834' } };
-  if (cropName === 'Corn') return { ch: '║', detail: { ch: 'ʷ', fg: '#52d834' } };
+  if (cropName === 'Carrot') return { ch: FARM_SYMBOLS.carrot, detail: { ch: 'ʷ', fg: '#52d834' } };
+  if (cropName === 'Corn') return { ch: FARM_SYMBOLS.corn, detail: { ch: 'ʷ', fg: '#52d834' } };
   if (cropName === 'Pineapple') return { ch: '◉', detail: { ch: 'ʷ', fg: '#48d030' } };
   if (cropName === 'Pumpkin') return { ch: '◉', detail: { ch: '`', fg: '#48d030' } };
   if (cropName === 'Cabbage') return { ch: '❀' };
@@ -1179,7 +1183,7 @@ function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 
     if ('▄◢◣'.includes(o.ch)) return { ...o, ch: o.ch === '◢' ? '╱' : o.ch === '◣' ? '╲' : '─', fg: fullCol ? o.fg : '#d0d0d0' };
     return { ...o, ch: contourPattern(texture, 1), fg: fullCol ? o.fg : '#d0d0d0', bg: mix(o.bg, '#000000', fullCol ? 0.25 : 0.6), texture };
   }
-  if (tag.t === 'tree') return { ...o, fg: mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4), texture: { x, y, kind: 'tree' } };
+  if (tag.t === 'tree') return { ...o, fg: mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4) };
   if (tag.t === 'wall' && tag.k !== 'deco') return { ...o, ch: o.ch === '▀' ? '─' : o.ch, fg: mix(o.fg, '#ffffff', fullCol ? 0.25 : 0.55) };
   if (WATERY.has(tag.t)) {
     const texture: ContourTexture = { x: x + (Math.floor(F.t * 1.5) % 8) * 0.15, y, kind: 'water' };
@@ -1229,7 +1233,7 @@ const WEATHER_ICON: Record<string, [string, string]> = {
   Blizzard: ['❄', '#9ae8ff'],
 };
 /** Creature glyphs for animals and pets (engine letters -> pictograms). */
-const CREATURE_GLYPH: Record<string, string> = { H: '♞', C: '♉', S: '☁', s: '◦', c: 'ˇ', d: '▴' };
+const CREATURE_GLYPH: Record<string, string> = { H: '♞', C: '♉', S: '☁', s: '◦', c: FARM_SYMBOLS.hen, d: '▴' };
 const EMOTE_STYLE: Record<EmoteKind, [string, string]> = {
   heart: ['♥', '#ff4fa8'],
   note: ['✦', '#ffe066'],
@@ -2790,7 +2794,7 @@ function connectedBorders(
 
 /**
  * Populate sub-cell architectural & terrain micro-detail metadata on world cells.
- * Trees are intentionally left untouched to preserve their classic `/\/\` & `♣`/`♠` silhouette.
+ * Trees keep their full-size silhouettes.
  */
 function worldMicroDetail(
   out: OutCell[][],
@@ -3322,6 +3326,8 @@ export type Metrics = {
   font: string;
   /** The display face for the large HUD headings; the grid font when absent. */
   displayFont?: string;
+  /** True after the bundled farm symbol font has loaded. */
+  farmSymbols?: boolean;
   dpr?: number;
   hires?: boolean;
   crt?: boolean;
@@ -3523,6 +3529,7 @@ export function rowAlpha(ch: string, seed: number, r: number, n: number): number
 export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Metrics, dirty?: DirtyRect) {
   const { cw, ch, fontPx, font } = m;
   const level = effectiveHiresLevel(fontPx, m.dpr ?? 1, m.hires ?? true);
+  const fallback = m.farmSymbols ? undefined : FARM_SYMBOL_FALLBACK;
   const X0 = Math.max(0, dirty?.x0 ?? 0);
   const Y0 = Math.max(0, dirty?.y0 ?? 0);
   const X1 = Math.min(frame[0]?.length ?? 0, dirty?.x1 ?? frame[0]?.length ?? 0);
@@ -3737,7 +3744,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         glowOn = false;
       }
       g.fillStyle = o.fg;
-      g.fillText(o.ch, px, py + ch / 2 + 1);
+      g.fillText(fallback?.[o.ch] ?? o.ch, px, py + ch / 2 + 1);
     }
   }
   // a glyph's glow must not leak into the passes below (small glyphs, overlays, CRT scanlines)
