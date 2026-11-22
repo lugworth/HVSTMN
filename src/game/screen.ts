@@ -125,6 +125,12 @@ export type RenderCtx = {
   fx?: RenderFx[];
   /** A heavy hit shakes the view: seconds since the hit and its strength (1 light, 2 heavy). */
   shake?: { age: number; strength: number };
+  /**
+   * The player's last step (engine.step_fx), for the slide and wall-bump animation: `at` is the
+   * player's screen cell, (dx, dy) where the token starts (a slide) or leans (a bump), `born`
+   * in performance-clock seconds.
+   */
+  step?: { kind: 'slide' | 'bump'; at: [number, number]; dx: number; dy: number; born: number };
   /** Radial lantern-iris map transition wipe when warping between maps. */
   wipe?: { age: number; duration: number; focus?: [number, number] };
 };

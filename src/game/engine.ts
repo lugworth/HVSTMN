@@ -1,6 +1,6 @@
 // FURROW — a farming tale in ASCII: the complete engine
 
-import { Screen, CellTag, FxExtra, FxKind, BoxStyle, EmoteKind, PaletteMode } from './screen';
+import { Screen, CellTag, FxExtra, FxKind, BoxStyle, EmoteKind, PaletteMode, type RenderCtx } from './screen';
 import { COMPACT_MIN_COLS, MIN_ROWS, isCompact, fitMessages, fitText, reflowPages, wrapLine, wrapLines } from './compact';
 import { fencePost, SEASON_GLYPHS } from './chrome';
 import {
@@ -656,6 +656,14 @@ export class Game {
   npc_pos: Record<string, [number, number]> = {};
   fx: (FxExtra & { kind: FxKind; map: string; x: number; y: number; born: number; life: number })[] = [];
   shake_fx: { born: number; strength: number } | null = null;
+  /**
+   * The player's last step for the renderer: 'slide' eases the token in from where it was
+   * (dx, dy cells back), 'bump' nudges it toward a wall it walked into. `born` is in
+   * performance-clock seconds, the same clock the renderer animates with.
+   */
+  step_fx: { kind: 'slide' | 'bump'; dx: number; dy: number; born: number; from?: [number, number] } | null = null;
+  /** Where the player was drawn last frame, in screen cells, and on which map. */
+  player_screen: { map: string; x: number; y: number } | null = null;
   warp_fx: { born: number; duration: number } | null = null;
   wetness: Record<string, number> = {};
   mine_type: 'spring' | 'lake' = 'spring';
@@ -1540,13 +1548,52 @@ export class Game {
     this.update_npcs();
   }
 
+  /**
+   * The step animation for the renderer, in screen cells. A slide starts where the token was
+   * drawn last frame, not a tile back: the camera may have scrolled in between.
+   */
+  step_ctx(sx: number, sy: number): RenderCtx['step'] {
+    const prev = this.player_screen;
+    this.player_screen = { map: this.mapname, x: sx, y: sy };
+    const st = this.step_fx;
+    if (!st || this.scr.reducedMotion) return undefined;
+    const born = st.born;
+    const now = (globalThis.performance?.now() ?? Date.now()) / 1000;
+    if (now - born > 0.3) {
+      this.step_fx = null;
+      return undefined;
+    }
+    if (st.kind === 'bump') return { kind: 'bump', at: [sx, sy], dx: st.dx, dy: st.dy, born };
+    if (!st.from) st.from = prev && prev.map === this.mapname ? [prev.x - sx, prev.y - sy] : [0, 0];
+    const [dx, dy] = st.from;
+    return dx || dy ? { kind: 'slide', at: [sx, sy], dx, dy, born } : undefined;
+  }
+
+  /** Record a step for the slide animation, or a bump when a wall stopped it (same map only). */
+  note_step(map: string, bx: number, by: number, dx: number, dy: number): void {
+    if (this.mapname !== map || this.modal_depth > 0) {
+      this.step_fx = null;
+      return;
+    }
+    const born = (globalThis.performance?.now() ?? Date.now()) / 1000;
+    const [mx, my] = [this.px - bx, this.py - by];
+    this.step_fx = mx || my ? { kind: 'slide', dx: mx, dy: my, born } : { kind: 'bump', dx, dy, born };
+  }
+
   async handle(k: string): Promise<void> {
     if (k in DIRS) {
       const [dx, dy] = DIRS[k];
+      const [map, bx, by] = [this.mapname, this.px, this.py];
       await this.move(dx, dy);
       if (this.riding_horse && this.mapname === 'farm') {
         await this.move(dx, dy);
       }
+      this.note_step(map, bx, by, dx, dy);
+    } else if (k.startsWith('turn-') && k.slice(5) in DIRS) {
+      // a tap of a new direction (see held.ts): face that way without stepping
+      this.face = DIRS[k.slice(5)];
+      this.step_fx = null;
+      this.markDirty(false);
     } else if (k === 'space' || k === 'z') {
       await this.use_tool();
       this.first_steps_update();
@@ -4748,7 +4795,7 @@ export class Game {
         this.take(item);
         const gain = ITEMS[item][1];
         this.stamina = clamp(this.stamina + gain, 0, this.max_stamina);
-        if (item.includes('Brisk Tonic') || item === 'Margit Leaves' || item === 'Relaxation Tea' || item === 'Frostwort') {
+        if (item.includes('Brisk Tonic') || item === 'Hedgerow Tea' || item === 'Relaxation Tea' || item === 'Frostwort') {
           this.fatigue = Math.max(0, this.fatigue - 35);
         }
         this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina)`, '0B');
@@ -9179,6 +9226,7 @@ export class Game {
         .filter((f) => f.map === this.mapname)
         .map((f) => ({ ...f, x: ox + f.x - cx, y: oy + f.y - cy, age: now - f.born, life: f.life }));
       s.ctx.shake = this.shake_fx && now - this.shake_fx.born < 0.3 ? { age: now - this.shake_fx.born, strength: this.shake_fx.strength } : undefined;
+      s.ctx.step = this.step_ctx(ox + this.px - cx, oy + this.py - cy);
       s.ctx.wipe =
         this.warp_fx && now - this.warp_fx.born < this.warp_fx.duration
           ? { age: now - this.warp_fx.born, duration: this.warp_fx.duration, focus: [ox + this.px - cx, oy + this.py - cy] }
@@ -10771,7 +10819,7 @@ export class Game {
         if (s === 0) {
           return [
             '  Combine any ingredient from your rucksack to experiment!',
-            '  Invalid combinations produce a Failed Dish (needed for Margit Leaves!).',
+            '  Invalid combinations produce a Failed Dish (needed for Hedgerow Tea!).',
           ];
         }
         const d = dishes[s - 1];
@@ -10806,7 +10854,7 @@ export class Game {
           const used = usable[ingSel];
           this.take(used, 1);
           this.give('Failed Dish', 1);
-          this.msg(`You experimented with ${used} and made a Failed Dish! (Used in Margit Leaves!)`, '0E');
+          this.msg(`You experimented with ${used} and made a Failed Dish! (Used in Hedgerow Tea!)`, '0E');
         }
         continue;
       }
