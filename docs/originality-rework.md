@@ -80,7 +80,7 @@ Approved and applied on `feat/original-setting`. Old saves are migrated on load 
 `src/game/legacy_names.ts` (tested in `legacy_names.test.ts`); add to that table whenever
 something stored in a save is renamed.
 
-Names found during the rework that were not in the first list (pending sign-off):
+Names found during the rework, approved separately:
 
 | Now | New |
 |---|---|
