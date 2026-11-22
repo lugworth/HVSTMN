@@ -538,6 +538,123 @@ export function link_regions(maps: Record<string, GameMap>): void {
   for (const name of ['woods', 'ridge', 'river', 'point', 'grove']) sealUnreachable(maps[name]);
 }
 
+// ---------------------------------------------------------------- wayfinding signs
+const open = (m: GameMap, x: number, y: number) => m.inside(x, y) && !!TILES[m.tile(x, y)]?.[3];
+const STEPS4: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** Steps from `from` to every cell reachable on foot (doors count as reachable, not passable). */
+function walkSteps(m: GameMap, from: [number, number]): Map<string, number> {
+  const d = new Map<string, number>([[pkey(...from), 0]]);
+  let frontier = [from];
+  for (let n = 1; frontier.length; n++) {
+    const next: [number, number][] = [];
+    for (const [x, y] of frontier) {
+      for (const [dx, dy] of STEPS4) {
+        const [nx, ny] = [x + dx, y + dy];
+        const k = pkey(nx, ny);
+        if (d.has(k)) continue;
+        if (k in m.doors) d.set(k, n);
+        else if (open(m, nx, ny)) {
+          d.set(k, n);
+          next.push([nx, ny]);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return d;
+}
+
+/** How many open cells can be walked to from the map's entrances. */
+function reachableCells(m: GameMap): number {
+  const seen = new Set<string>();
+  for (const k of Object.keys(m.warps)) {
+    if (seen.has(k)) continue;
+    for (const c of walkSteps(m, k.split(',').map(Number) as [number, number]).keys()) seen.add(c);
+  }
+  return seen.size;
+}
+
+const compass = (dx: number, dy: number): string =>
+  Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'east' : 'west') : dy >= 0 ? 'south' : 'north';
+
+/** The map's entrances: its edge warps grouped by where they lead, with the cell just inside. */
+function entrances(m: GameMap): { to: string; mid: [number, number]; inward: [number, number] }[] {
+  const groups = new Map<string, [number, number][]>();
+  for (const [k, [to]] of Object.entries(m.warps)) {
+    const cell = k.split(',').map(Number) as [number, number];
+    if (!groups.has(to)) groups.set(to, []);
+    groups.get(to)!.push(cell);
+  }
+  return [...groups.entries()].map(([to, cells]) => {
+    cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const mid = cells[Math.floor(cells.length / 2)];
+    const inward: [number, number] =
+      mid[0] === 0 ? [1, 0] : mid[0] === m.w - 1 ? [-1, 0] : mid[1] === 0 ? [0, 1] : [0, -1];
+    return { to, mid, inward };
+  });
+}
+
+/**
+ * Where an entrance's sign goes: beside the path a few steps in, on plain ground, never on the
+ * path itself and never where it would wall anything off. Null if there is no such spot.
+ */
+function signSpot(m: GameMap, mid: [number, number], inward: [number, number]): [number, number] | null {
+  const side: [number, number] = [Math.abs(inward[1]), Math.abs(inward[0])];
+  const before = reachableCells(m);
+  for (const depth of [2, 3, 4, 5, 1]) {
+    for (const off of [2, -2, 3, -3, 4, -4, 1, -1]) {
+      const x = mid[0] + inward[0] * depth + side[0] * off;
+      const y = mid[1] + inward[1] * depth + side[1] * off;
+      const k = pkey(x, y);
+      if (!m.inside(x, y) || !['grass', 'field', 'sand'].includes(m.tile(x, y))) continue;
+      if (k in m.warps || k in m.doors || k in m.signs) continue;
+      // something must already be in view of the path: a sign standing out in a meadow is noise
+      if (!STEPS4.some(([dx, dy]) => m.tile(x + dx, y + dy) === 'path')) continue;
+      const was = m.tile(x, y);
+      m.set(x, y, 'sign');
+      if (reachableCells(m) === before - 1) return [x, y];
+      m.set(x, y, was);
+    }
+  }
+  return null;
+}
+
+const PLACE_NAMES: Record<string, string> = { mine: 'Copperseam Mine', lakemine: 'Mirewater Mine (across the ice in Winter)' };
+
+/**
+ * Wayfinding: at each way into a region (the farm excepted), a sign beside the path says what
+ * is here, which way and how many steps, and where the other paths lead. Generated from the
+ * map, so it stays right when buildings or paths move.
+ */
+export function add_wayfinding_signs(maps: Record<string, GameMap>, names: Record<string, string>): void {
+  for (const [name, m] of Object.entries(maps)) {
+    if (name === 'farm' || m.indoor) continue;
+    const ways = entrances(m);
+    for (const { to, mid, inward } of ways) {
+      const spot = signSpot(m, mid, inward);
+      if (!spot) continue;
+      const steps = walkSteps(m, spot);
+      const here = Object.entries(m.doors)
+        .map(([k, id]) => {
+          const [x, y] = k.split(',').map(Number);
+          return { label: PLACE_NAMES[id] ?? names[id] ?? id, n: steps.get(k), dir: compass(x - spot[0], y - spot[1]) };
+        })
+        .filter((p) => p.n !== undefined && !p.label.includes('_'))
+        .sort((a, b) => a.n! - b.n!);
+      // the nearest few: a sign is read in passing, and the rest are a short walk further
+      const near = here.slice(0, 3).map((p) => `${p.label} ${p.dir}, ${p.n} steps`);
+      if (here.length > 3) near.push(`${here.length - 3} more further in`);
+      const onward = ways
+        .filter((w) => w.to !== to && maps[w.to])
+        .map((w) => `${compass(-w.inward[0], -w.inward[1])} to ${maps[w.to].title}`);
+      const back = `${compass(-inward[0], -inward[1])} back to ${maps[to]?.title ?? 'the valley'}`;
+      const what = near.length ? near.join(' · ') : 'Open country: forage and quiet';
+      m.signs[pkey(...spot)] = `${m.title} — ${what}. Paths: ${[...onward, back].join(', ')}.`;
+    }
+  }
+}
+
 /** Every outdoor map, built and joined: a fresh valley with no shortcuts opened. */
 export function build_valley(): Record<string, GameMap> {
   const maps: Record<string, GameMap> = {
@@ -553,6 +670,7 @@ export function build_valley(): Record<string, GameMap> {
   };
   link_regions(maps);
   add_hedge_gate_signs(maps);
+  add_wayfinding_signs(maps, BUILDINGS);
   return maps;
 }
 

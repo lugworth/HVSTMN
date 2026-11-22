@@ -29,6 +29,10 @@ export type OutCell = {
   face?: [number, number];
   /** Mounted state on player token. */
   riding?: boolean;
+  /** The player token is mid-step: drawn this many cells off its cell (see stepOffset). */
+  shift?: [number, number];
+  /** A neighbour the sliding token overlaps: changes with it so the cell repaints each frame. */
+  ghost?: number;
   /** Keeps its colour in the monochrome pass: things of interest. */
   accent?: boolean;
   /** HUD / panel cell: left untouched by the scene passes. */
@@ -1400,6 +1404,43 @@ function styleMinimapCell(k: string, t: number): OutCell {
  * Build the styled frame for the current screen contents.
  * @param t seconds, used for animation (water, rain, snow, fireflies)
  */
+/** How long a step's slide and a wall bump last, in seconds (both shorter than one walking step). */
+export const STEP_SLIDE_SECS = 0.09;
+export const STEP_BUMP_SECS = 0.12;
+
+/**
+ * Where the player token is drawn, in cells off its own cell, `t` seconds into the performance
+ * clock: a slide starts at the old spot and eases out onto the new one; a bump leans a fifth of
+ * a cell toward the wall and back. Null once it has finished, or with motion off (t = 0).
+ */
+export function stepOffset(step: RenderCtx['step'], t: number): [number, number] | null {
+  if (!step || t <= 0) return null;
+  const age = t - step.born;
+  const life = step.kind === 'slide' ? STEP_SLIDE_SECS : STEP_BUMP_SECS;
+  // the epsilon: born + life - born can land a hair under life in floating point
+  if (age < 0 || age >= life - 1e-9) return null;
+  const p = age / life;
+  const k = step.kind === 'slide' ? (1 - p) ** 2 : 0.2 * Math.sin(Math.PI * p);
+  return [step.dx * k, step.dy * k];
+}
+
+/** Offset the player token for its step, and mark the cells it crosses so they repaint with it. */
+function applyStep(out: OutCell[][], step: RenderCtx['step'], t: number, W: number, H: number): void {
+  const off = stepOffset(step, t);
+  if (!off || !step) return;
+  const [x, y] = step.at;
+  const o = out[y]?.[x];
+  if (!o?.token) return;
+  o.shift = off;
+  const stamp = Math.round((Math.abs(off[0]) + Math.abs(off[1])) * 100) + 1;
+  const reach = Math.ceil(Math.max(Math.abs(off[0]), Math.abs(off[1]))) + 1;
+  for (let i = 1; i <= reach; i++) {
+    const nx = x + Math.sign(off[0]) * i;
+    const ny = y + Math.sign(off[1]) * i;
+    if (nx >= 0 && ny >= 0 && nx < W && ny < H && (nx !== x || ny !== y)) out[ny][nx] = { ...out[ny][nx], ghost: stamp };
+  }
+}
+
 export function computeFrame(
   scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires'>>,
   t: number,
@@ -1942,6 +1983,7 @@ export function computeFrame(
     monochrome(out, boxes, { ...tod, light: lightMap, tags, base });
   }
   if (ctx.wipe && motion && t > 0) applyWipe(out, v, W, H, ctx.wipe);
+  if (ctx.step && motion) applyStep(out, ctx.step, t, W, H);
   decorateBoxes(out, boxes, W, H, t);
   snapFrame(out);
   return out;
@@ -3353,6 +3395,7 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.ch !== n.ch || p.fg !== n.fg || p.bg !== n.bg || p.bold !== n.bold ||
         p.glow !== n.glow || p.glowR !== n.glowR || p.token !== n.token || p.rim !== n.rim ||
         p.face?.[0] !== n.face?.[0] || p.face?.[1] !== n.face?.[1] || p.riding !== n.riding ||
+        p.shift?.[0] !== n.shift?.[0] || p.shift?.[1] !== n.shift?.[1] || p.ghost !== n.ghost ||
         p.plain !== n.plain || p.ui !== n.ui || p.accent !== n.accent || p.seed !== n.seed ||
         p.foam !== n.foam || p.foamCol !== n.foamCol ||
         p.plot !== n.plot || p.plotCol !== n.plotCol ||
@@ -3536,6 +3579,28 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
   const mini = (x: number, y: number, str: string, fg: string, a: number, b: boolean) => {
     mx.push(x); my.push(y); ms.push(str); mf.push(fg); ma.push(a); mb.push(b);
   };
+  const sliding: [OutCell, number, number][] = [];
+  /** A villager, animal or player disc: fill, rim and the facing dot. */
+  const drawToken = (o: OutCell, px: number, py: number) => {
+    g.beginPath();
+    g.ellipse(px + cw / 2, py + ch / 2, cw * 0.62, ch * 0.46, 0, 0, Math.PI * 2);
+    g.fillStyle = o.token!;
+    g.fill();
+    if (o.rim) {
+      g.strokeStyle = o.rim;
+      g.lineWidth = o.riding ? 1.8 : 1.2;
+      g.stroke();
+    }
+    if (o.face && (o.face[0] !== 0 || o.face[1] !== 0)) {
+      const [fx, fy] = o.face;
+      const tipX = px + cw / 2 + fx * cw * 0.66;
+      const tipY = py + ch / 2 + fy * ch * 0.5;
+      g.beginPath();
+      g.arc(tipX, tipY, Math.max(1.6, cw * 0.14), 0, Math.PI * 2);
+      g.fillStyle = o.fg;
+      g.fill();
+    }
+  };
   g.save();
   g.textBaseline = 'middle';
   g.shadowBlur = 0;
@@ -3561,6 +3626,11 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       const o = row[x];
       const px = x * cw;
       const py = y * ch;
+      // a token mid-step goes on top of everything else, once the cells it crosses are painted
+      if (o.shift) {
+        sliding.push([o, px + o.shift[0] * cw, py + o.shift[1] * ch]);
+        continue;
+      }
       let skipFillerGlyph = false;
       if (hiresMicro && o.micro && !o.ui) {
         skipFillerGlyph = paintMicroDetail(g, o, px, py, cw, ch);
@@ -3704,24 +3774,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       }
       if (o.token) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
-        g.beginPath();
-        g.ellipse(px + cw / 2, py + ch / 2, cw * 0.62, ch * 0.46, 0, 0, Math.PI * 2);
-        g.fillStyle = o.token;
-        g.fill();
-        if (o.rim) {
-          g.strokeStyle = o.rim;
-          g.lineWidth = o.riding ? 1.8 : 1.2;
-          g.stroke();
-        }
-        if (o.face && (o.face[0] !== 0 || o.face[1] !== 0)) {
-          const [fx, fy] = o.face;
-          const tipX = px + cw / 2 + fx * cw * 0.66;
-          const tipY = py + ch / 2 + fy * ch * 0.5;
-          g.beginPath();
-          g.arc(tipX, tipY, Math.max(1.6, cw * 0.14), 0, Math.PI * 2);
-          g.fillStyle = o.fg;
-          g.fill();
-        }
+        drawToken(o, px, py);
       }
       const f = `${o.bold ? 'bold ' : ''}${fontPx}px ${font}`;
       if (f !== curFont) {
@@ -3756,6 +3809,24 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       }
     }
     g.globalAlpha = 1;
+  }
+  // the player mid-step, over the cells it is crossing
+  for (const [o, px, py] of sliding) {
+    g.shadowBlur = 0;
+    drawToken(o, px, py);
+    g.font = `${o.bold ? 'bold ' : ''}${fontPx}px ${font}`;
+    if (o.glow) {
+      g.shadowColor = o.glow;
+      g.shadowBlur = (o.glowR ?? 6) * (m.crt ? 1.4 : 1);
+    }
+    g.fillStyle = o.fg;
+    g.fillText(o.ch, px, py + ch / 2 + 1);
+    g.shadowBlur = 0;
+    if (o.detail) {
+      g.font = `bold ${fontPx / Math.max(2, level)}px ${font}`;
+      g.fillStyle = o.detail.fg;
+      g.fillText(o.detail.ch, px + cw * 0.48, py + ch * 0.3);
+    }
   }
 
   // shoreline foam, connected tilled-plot borders, and connected AoE tool reticles
@@ -4555,6 +4626,6 @@ function paintMicroDetail(
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.shift ? `S${o.shift[0].toFixed(3)},${o.shift[1].toFixed(3)}` : '') + (o.ghost ? `G${o.ghost}` : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
   return s;
 }

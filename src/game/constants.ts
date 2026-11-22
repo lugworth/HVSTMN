@@ -867,7 +867,7 @@ export const BUILDINGS: Record<string, string> = {
   "clinic": "Clinic",
   "library": "Library",
   "church": "Church",
-  "mayor": "Mayor Ambrose' House",
+  "mayor": "Mayor Ambrose's House",
   "yodel": "Highmeadow Dairy",
   "carpenter": "Ingrid's Workshop",
   "museum": "Brackenford Museum"
@@ -2586,7 +2586,8 @@ export const BOOKS: string[] = [
 ];
 
 export const HELP: string[] = [
-  "MOVE      arrows / WASD / hjkl",
+  "MOVE      arrows / WASD / hjkl; hold to walk",
+  "          tap a new direction to turn without stepping",
   "USE TOOL  space or z (uses equipped tool or sows seeds)",
   "ACT       x / e / enter   talk, gift held item, harvest, forage,",
   "                          ship, enter doors, soak in Hot Spring",
@@ -2605,7 +2606,7 @@ export const HELP: string[] = [
   "Befriend the 7 Hearthfolk at Willow Bend to automate chores!",
 ];
 
-// --- EXPANDED HARVEST MOON: FRIENDS OF MINERAL TOWN DATA ---
+// --- EXPANDED VALLEY DATA ---
 
 Object.assign(WEATHER_COL, {
   "Typhoon": "08",
@@ -2811,7 +2812,7 @@ Object.assign(ITEMS, {
   "Seasoning Set": [0, 0, "utensil"],
   // Extra Cooked Dishes
   "Failed Dish": [1, -10, "dish"],
-  "Margit Leaves": [0, 250, "dish"],
+  "Hedgerow Tea": [0, 250, "dish"],
   "Relaxation Tea Leaves": [1000, 50, "ingredient"],
   "Relaxation Tea": [1200, 120, "dish"],
   "Cookies": [200, 25, "dish"],
@@ -2879,7 +2880,7 @@ Object.assign(RECIPES, {
   "Mending Tonic XL": [[["Mending Tonic", 1], ["Bluewort", 1]], "Mixer", 150, 500],
   "Brisk Tonic": [[["Redroot", 1], ["Frostwort", 1], ["Honey", 1]], "Pot", 50, 300],
   "Brisk Tonic XL": [[["Brisk Tonic", 1], ["Greenmint", 1]], "Mixer", 100, 600],
-  "Margit Leaves": [[["Failed Dish", 1], ["Mending Tonic", 1], ["Brisk Tonic", 1]], "Knife", 250, 1000],
+  "Hedgerow Tea": [[["Failed Dish", 1], ["Mending Tonic", 1], ["Brisk Tonic", 1]], "Knife", 250, 1000],
   "X Egg": [[["Egg", 1], ["Good Egg", 1], ["High Egg", 1], ["Golden Egg", 1], ["P Egg", 1]], "Seasoning Set", 50, 350],
   "X Milk": [[["Small Milk", 1], ["Medium Milk", 1], ["Large Milk", 1], ["Golden Milk", 1], ["P Milk", 1]], "Seasoning Set", 75, 800],
 });

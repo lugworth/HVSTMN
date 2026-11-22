@@ -57,6 +57,8 @@ export const LEGACY_NAMES: readonly (readonly [string, string])[] = [
   ['Popuri', 'Juniper'],
   ['Rick', 'Dennis'],
   ['Lillia', 'Rosalind'],
+  ['Elli Leaves', 'Hedgerow Tea'],
+  ['Margit Leaves', 'Hedgerow Tea'],
   ['Elli', 'Margit'],
   ['Ellen', 'Edith'],
   ['Stu', 'Toby'],

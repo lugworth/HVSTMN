@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Screen, Cell, type PaletteMode } from '@/src/game/screen';
 import { Game } from '@/src/game/engine';
 import { PALETTE, TOOLS, DAY_PACES, type DayPace } from '@/src/game/constants';
-import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, type OutCell } from '@/src/game/enhanced';
+import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, stepOffset, type OutCell } from '@/src/game/enhanced';
+import { HeldDirections, type HeldContext } from '@/src/game/held';
 import { isCompact } from '@/src/game/compact';
 import {
   chooseGrid,
@@ -12,7 +13,6 @@ import {
   dpadDirection,
   firstStep,
   lineHeight,
-  REPEAT_DELAY_MS,
   REPEAT_MS,
   type Dir,
 } from '@/src/game/viewport';
@@ -54,6 +54,14 @@ const TOOLBAR = [
 ] as const;
 const TOOLBAR_FLAT: readonly (typeof TOOLBAR)[number][number][] = TOOLBAR.flat();
 const MENU_ID = 'game-menu';
+
+/** Keyboard keys that walk, by the name the engine knows them by (arrows, WASD, hjkl). */
+const WALK_KEYS: Record<string, Dir> = {
+  up: 'up', w: 'up', k: 'up',
+  down: 'down', s: 'down', j: 'down',
+  left: 'left', a: 'left', h: 'left',
+  right: 'right', d: 'right', l: 'right',
+};
 
 const KEYMAP: Record<string, string> = {
   ArrowUp: 'up',
@@ -182,12 +190,46 @@ export default function GameScreen() {
     }
   }, []);
 
+  // ---- Held directions (keyboard and D-pad): one walking rhythm, owned by the game (held.ts).
+  const held = useRef(new HeldDirections());
+  const heldTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heldCtx = useCallback((): HeldContext | null => {
+    const game = gameRef.current;
+    const screen = screenRef.current;
+    if (!game || !screen) return null;
+    return { modal: game.modal_depth > 0 || !game.started, idle: screen.keyQueue.length === 0, face: [game.face[0], game.face[1]] };
+  }, []);
+  const heldRelease = useCallback((name: string) => held.current.release(name, performance.now()), []);
+  const heldReleaseAll = useCallback(() => held.current.releaseAll(), []);
+
   // ---- Tap-to-walk: re-plans one step at a time so NPCs and the horse can't derail it.
   const walkRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelWalk = useCallback(() => {
     if (walkRef.current) clearTimeout(walkRef.current);
     walkRef.current = null;
   }, []);
+
+  const heldPress = useCallback(
+    (name: string, dir: Dir, key: string = name) => {
+      const ctx = heldCtx();
+      if (!ctx) return;
+      cancelWalk();
+      sendKey(held.current.press(name, dir, performance.now(), ctx, key));
+      if (heldTimer.current) return;
+      heldTimer.current = setInterval(() => {
+        const h = held.current;
+        if (!h.active) {
+          if (heldTimer.current) clearInterval(heldTimer.current);
+          heldTimer.current = null;
+          return;
+        }
+        const now = heldCtx();
+        const key = now && h.tick(performance.now(), now);
+        if (key) sendKey(key);
+      }, 16);
+    },
+    [heldCtx, cancelWalk, sendKey],
+  );
 
   const walkTo = useCallback(
     (gx: number, gy: number) => {
@@ -235,47 +277,33 @@ export default function GameScreen() {
   );
 
   // ---- D-pad: one surface; slide the thumb between directions, hold to keep walking.
-  const dpad = useRef<{ pointer: number | null; dir: Dir | null; modal: boolean; timer: ReturnType<typeof setTimeout> | null }>({
+  const dpad = useRef<{ pointer: number | null; dir: Dir | null }>({
     pointer: null,
     dir: null,
-    modal: false,
-    timer: null,
   });
 
   const dpadSet = useCallback(
     (dir: Dir | null) => {
       const d = dpad.current;
       if (dir === d.dir) return;
-      if (d.timer) clearTimeout(d.timer);
-      d.timer = null;
+      if (d.dir) heldRelease(`pad-${d.dir}`);
       d.dir = dir;
       setDpadDir(dir);
       if (!dir) return;
-      cancelWalk();
-      sendKey(dir);
+      // the pad sends the plain direction key; its hold name keeps it apart from a held arrow key
       buzz(8);
-      const tick = () => {
-        const screen = screenRef.current;
-        const game = gameRef.current;
-        if (d.dir !== dir) return;
-        // Don't queue steps the engine hasn't taken yet, and pause if a dialog pops up mid-walk
-        // (a held direction would otherwise skip through its pages).
-        if (screen && game && screen.keyQueue.length === 0 && (game.modal_depth > 0) === d.modal) screen.pushKey(dir);
-        d.timer = setTimeout(tick, REPEAT_MS);
-      };
-      d.timer = setTimeout(tick, REPEAT_DELAY_MS);
+      heldPress(`pad-${dir}`, dir, dir);
     },
-    [buzz, cancelWalk, sendKey],
+    [buzz, heldPress, heldRelease],
   );
 
   const dpadStop = useCallback(() => {
     const d = dpad.current;
-    if (d.timer) clearTimeout(d.timer);
-    d.timer = null;
+    if (d.dir) heldRelease(`pad-${d.dir}`);
     d.dir = null;
     d.pointer = null;
     setDpadDir(null);
-  }, []);
+  }, [heldRelease]);
 
   const dpadAt = (e: React.PointerEvent) => {
     const el = dpadRef.current;
@@ -702,6 +730,7 @@ export default function GameScreen() {
     let lastSig = '';
 
     let shaking = false;
+    let stepFrame = 0;
     const renderEnhanced = () => {
       if (!canvas || !ctx) return;
       // heavy hits nudge the whole canvas for a moment; a CSS transform, so nothing repaints
@@ -717,7 +746,15 @@ export default function GameScreen() {
         prevFrame = null;
         lastSig = '';
       }
-      const frame = computeFrame(screen, screen.reducedMotion ? 0 : performance.now() / 1000);
+      const now = performance.now() / 1000;
+      const frame = computeFrame(screen, screen.reducedMotion ? 0 : now);
+      // a step's slide or bump runs at the display's frame rate, not the 10 fps ambient timer
+      if (!screen.reducedMotion && !stepFrame && stepOffset(screen.ctx?.step, now)) {
+        stepFrame = requestAnimationFrame(() => {
+          stepFrame = 0;
+          renderEnhanced();
+        });
+      }
       // mode changes (detail, palette, CRT) force a full repaint
       const prefix = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:`;
       const sig = `${prefix}${frameSignature(frame)}`;
@@ -814,10 +851,24 @@ export default function GameScreen() {
       }
 
       e.preventDefault();
+      // Walking keys keep the game's own rhythm: the OS key repeat is ignored (held.ts).
+      const dir = WALK_KEYS[name];
+      if (dir) {
+        if (!e.repeat) heldPress(name, dir);
+        return;
+      }
       sendKey(name);
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      const name = KEYMAP[e.key] ?? e.key;
+      if (WALK_KEYS[name]) heldRelease(name);
+    };
+    // A key let go in another window never sends its keyup here.
+    const onBlur = () => heldReleaseAll();
 
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
 
     // Window resizes, phone rotation, browser toolbars sliding away and the touch pad appearing
     // all change the stage size; the observer catches every one of them.
@@ -902,12 +953,16 @@ export default function GameScreen() {
       }
     })();
 
-    const dpadState = dpad.current;
     return () => {
       isMounted = false;
       game.flushAutosave();
       game.running = false;
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      heldReleaseAll();
+      if (heldTimer.current) clearInterval(heldTimer.current);
+      heldTimer.current = null;
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pagehide', flushSave);
       window.removeEventListener('beforeunload', flushSave);
@@ -919,10 +974,9 @@ export default function GameScreen() {
       clearTimeout(resizeTimer);
       clearInterval(animTimer);
       clearInterval(hudTimer);
-      if (dpadState.timer) clearTimeout(dpadState.timer);
       cancelWalk();
     };
-  }, [sendKey, cancelWalk]);
+  }, [sendKey, cancelWalk, heldPress, heldRelease, heldReleaseAll]);
 
   // Leaving the name prompt (by any button) clears the field and drops the keyboard; iOS can
   // leave the page scrolled after its keyboard closes, so snap back.
@@ -1152,7 +1206,6 @@ export default function GameScreen() {
                 e.preventDefault();
                 if (dpad.current.pointer !== null) return;
                 dpad.current.pointer = e.pointerId;
-                dpad.current.modal = (gameRef.current?.modal_depth ?? 0) > 0;
                 try {
                   e.currentTarget.setPointerCapture(e.pointerId);
                 } catch {
