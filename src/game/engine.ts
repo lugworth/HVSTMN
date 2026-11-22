@@ -147,6 +147,11 @@ import {
   CONTEST_WEEKDAY,
   CONTEST_HOURS,
   CONTEST_GOAL,
+  ROW_MAX,
+  ROW_STAMINA_RESERVE,
+  ROW_RESERVES,
+  ROW_STEP_STAMINA,
+  ROW_TOOLS,
   CONTEST_SEASONS,
   FAVORS,
   FAVOR_FRIENDSHIP,
@@ -535,6 +540,9 @@ export class Game {
   first_steps: { till: boolean; sow: boolean; water: boolean } | null = null;
   /** The tool active before the current seed-bag shortcut toggled in. */
   previous_tool: string | null = null;
+  /** A row being worked (task 54), set by the first C press and not saved: the tiles still ahead, each walked onto in turn. */
+  row: { map: string; tool: string; dir: [number, number]; tiles: [number, number][]; stopReason?: string } | null = null;
+  row_reserve: number = ROW_STAMINA_RESERVE;
   levels: Record<string, number> = {};
   tool_exp: Record<string, number> = {};
   cursed_uses: Record<string, number> = {};
@@ -719,7 +727,7 @@ export class Game {
   SAVE_FIELDS = [
     'name', 'farm', 'year', 'season', 'day', 'minutes', 'weather', 'tomorrow', 'gold',
     'stamina', 'max_stamina', 'fatigue', 'power_berries', 'berry_sources', 'has_mystic_berry',
-    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
+    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'row_reserve', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
     'water', 'upgrading', 'bin', 'basket', 'shipped_counts', 'chickens', 'chicken_aff', 'chicken_fest_won',
     'outdoor_hours', 'animals_grazing', 'incubator_days', 'fed', 'eggs', 'dog_aff', 'dog_frisbee_dist',
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
@@ -836,6 +844,8 @@ export class Game {
     this.favorite_seed = null;
     this.first_steps = { till: false, sow: false, water: false };
     this.previous_tool = null;
+    this.row = null;
+    this.row_reserve = ROW_STAMINA_RESERVE;
     this.levels = Object.fromEntries(UPGRADABLE.map((t) => [t, 0]));
     this.tool_exp = Object.fromEntries(UPGRADABLE.map((t) => [t, 0]));
     this.cursed_uses = {};
@@ -1247,6 +1257,7 @@ export class Game {
           (this as any)[k] = cloneSaveValue(d[k]);
         }
       }
+      if (!(ROW_RESERVES as readonly number[]).includes(this.row_reserve)) this.row_reserve = ROW_STAMINA_RESERVE;
       this.inv = sanitizeStringRecordNumber(this.inv);
       // an older save (no checklist saved) is an experienced farm: no first-morning checklist
       const fs = 'first_steps' in d ? d.first_steps : null;
@@ -1452,7 +1463,7 @@ export class Game {
           const prevMap = this.mapname;
           await this.handle(k);
           if (this.started && this.running && !this.to_title) {
-            if (k in DIRS && this.mapname === prevMap) {
+            if ((k in DIRS || k === 'row-repeat') && this.mapname === prevMap) {
               this.markDirty(false);
               this.autosave(false);
             } else {
@@ -1582,7 +1593,15 @@ export class Game {
   }
 
   async handle(k: string): Promise<void> {
-    if (k in DIRS) {
+    // Any key but C drops a planned row; C previews one, or works its next tile (task 54).
+    if (k !== 'c' && k !== 'C' && k !== 'row-repeat') this.row = null;
+    if (k === 'row-repeat') {
+      if (this.row && this.row_current(this.row)) await this.row_step();
+      else this.row = null;
+    } else if (k === 'c' || k === 'C') {
+      if (this.row && this.row_current(this.row)) await this.row_step();
+      else this.row_preview();
+    } else if (k in DIRS) {
       const [dx, dy] = DIRS[k];
       const [map, bx, by] = [this.mapname, this.px, this.py];
       await this.move(dx, dy);
@@ -1774,6 +1793,7 @@ export class Game {
         rightCol: this.scr.accessibleCues ? '0B' : '03',
       },
       { key: 'pace', raw: `Day Pace: ${DAY_PACES[this.pace].label}`, label: 'Day Pace', icon: '◷', iconCol: '0C', right: DAY_PACES[this.pace].label, rightCol: this.pace === 'normal' ? '04' : '0B' },
+      { key: 'rowreserve', raw: `Row Stamina Reserve: ${this.row_reserve}`, label: 'Row Stamina Reserve', icon: '◈', iconCol: '0C', right: `${this.row_reserve}`, rightCol: '0B' },
       ...(this.first_steps
         ? [{ key: 'firststeps', raw: 'Hide First-Morning Checklist', label: 'Hide First-Morning Checklist', icon: '✓', iconCol: '0B', right: 'Hide', rightCol: '04' }]
         : []),
@@ -1876,6 +1896,12 @@ export class Game {
         (i) => [`An in-game hour takes ${Math.round(DAY_PACES[all[i]].secs * 6)} s of real time.`, 'Shop hours, the 5 PM pickup and festivals keep the in-game clock.'],
       );
       if (sel !== null) this.set_pace(all[sel]);
+    } else if (key === 'rowreserve') {
+      const selected = await this.menu('Row Stamina Reserve', ROW_RESERVES.map((n) => `Keep ${n} stamina`), ROW_RESERVES.indexOf(this.row_reserve as typeof ROW_RESERVES[number]), () => ['Row work stops before spending below this limit.']);
+      if (selected !== null && ROW_RESERVES[selected] !== undefined) {
+        this.row_reserve = ROW_RESERVES[selected];
+        this.msg(`Row work keeps ${this.row_reserve} stamina in reserve.`, '0C');
+      }
     } else if (key === 'hires') {
       this.scr.setHires(!this.scr.hires);
       this.msg(`High-res detail: ${this.scr.hires ? 'On' : 'Off'}.`, '0C');
@@ -2330,7 +2356,7 @@ export class Game {
     }
   }
 
-  async use_tool(): Promise<void> {
+  async use_tool(rowTarget?: [number, number]): Promise<void> {
     const t = this.tool;
     if (!this.tool_list().includes(t)) {
       this.tool = 'Hoe';
@@ -2415,7 +2441,7 @@ export class Game {
         this.msg('The ground is frozen solid in Winter.');
       } else {
         let n = 0;
-        for (const [qx, qy] of this.area()) {
+        for (const [qx, qy] of rowTarget ? [rowTarget] : this.area()) {
           const qk = pkey(qx, qy);
           if (this.maps['farm'].tile(qx, qy) === 'field' && !objs[qk] && !this.tilled.has(qk)) {
             this.tilled.add(qk);
@@ -2521,7 +2547,7 @@ export class Game {
       }
       this.water -= 1;
       if (this.mapname === 'farm') {
-        for (const [qx, qy] of this.area()) {
+        for (const [qx, qy] of rowTarget ? [rowTarget] : this.area()) {
           const qk = pkey(qx, qy);
           if (this.tilled.has(qk)) {
             this.wet.add(qk);
@@ -6537,6 +6563,148 @@ export class Game {
     });
   }
 
+  /** What the row tool does on a tile the player walks past (task 54): work it, walk over what is done, or stop. */
+  row_tile(x: number, y: number): 'work' | 'pass' | 'stop' {
+    if (this.mapname !== 'farm' || !this.walkable(this.mapname, x, y) || this.npc_at(x, y)) return 'stop';
+    const key = pkey(x, y);
+    if (key in this.map.doors || key in this.map.warps) return 'stop';
+    if (this.tool === 'Hoe') {
+      if (this.tilled.has(key)) return 'pass';
+      const untilled = this.season !== 3 && this.map.tile(x, y) === 'field' && !(key in this.crops);
+      return untilled ? 'work' : 'stop';
+    }
+    if (this.tool === 'Watering Can') {
+      if (!this.tilled.has(key)) return 'stop';
+      return this.wet.has(key) ? 'pass' : 'work';
+    }
+    return 'stop';
+  }
+
+  /** Predict the same cost and weather penalties as a normal swing, without allowing collapse. */
+  row_cost(stamina: number, fatigue: number): { stamina: number; fatigue: number } | null {
+    const actualCost = ROW_STEP_STAMINA * (this.levels[this.tool] === 5 ? 3 : 1);
+    if (stamina - actualCost < this.row_reserve) return null;
+    const result = calculateStaminaSpend(stamina, fatigue, ROW_STEP_STAMINA, {
+      weather: this.weather, minutes: this.minutes, hasMysticBerry: this.has_mystic_berry,
+      isCursedTool: this.levels[this.tool] === 5,
+    });
+    return result.fainted ? null : result;
+  }
+
+  /** C, first press: plan the row ahead and show it. Nothing is used until the next press. */
+  row_preview(): void {
+    this.row = null;
+    if (this.mapname !== 'farm') {
+      this.msg('Rows are worked on your farm, with the Hoe or the Watering Can.');
+      return;
+    }
+    if (!ROW_TOOLS.includes(this.tool)) {
+      this.msg(`Work a row with the Hoe or the Watering Can, not the ${this.tool}.`);
+      return;
+    }
+    if (!this.tool_list().includes(this.tool) || this.riding_horse) {
+      this.msg('Dismount and equip an available Hoe or Watering Can to work a row.');
+      return;
+    }
+    const [dx, dy] = this.face;
+    const tiles: [number, number][] = [];
+    const kinds: ('work' | 'pass')[] = [];
+    let stopReason: string | undefined;
+    let stamina = this.stamina;
+    let fatigue = this.fatigue;
+    let water = this.tool === 'Watering Can' ? this.water : Infinity;
+    for (let i = 1; i <= ROW_MAX; i++) {
+      const x = this.px + dx * i;
+      const y = this.py + dy * i;
+      const kind = this.row_tile(x, y);
+      if (kind === 'stop') {
+        stopReason = 'The row stops at an obstacle.';
+        break;
+      }
+      if (kind === 'work') {
+        const cost = this.row_cost(stamina, fatigue);
+        if (!cost || water <= 0) {
+          stopReason = water <= 0 ? 'The watering can is empty. Refill it at a pond or stream.' : `The row stops: keep ${this.row_reserve} stamina and avoid fainting.`;
+          break;
+        }
+        stamina = cost.stamina;
+        fatigue = cost.fatigue;
+        water -= 1;
+      }
+      tiles.push([x, y]);
+      kinds.push(kind);
+    }
+    // A row ends on its last tile the tool works; finished ground after that is not worth the walk.
+    while (kinds.length && kinds[kinds.length - 1] === 'pass') {
+      kinds.pop();
+      tiles.pop();
+    }
+    const works = kinds.filter((k) => k === 'work').length;
+    if (!works) {
+      if (this.tool === 'Watering Can' && this.water <= 0) {
+        this.msg('The watering can is empty. Refill it at a pond or stream.', '08');
+      } else if (!this.row_cost(this.stamina, this.fatigue)) {
+        this.msg(`Not enough stamina to work a row: keep ${this.row_reserve} in reserve, and avoid fainting.`, '08');
+      } else {
+        this.msg(this.tool === 'Hoe' ? 'Face a row of untilled field to work it with the Hoe.' : 'Face a row of tilled soil that is not wet yet to water it.');
+      }
+      return;
+    }
+    this.row = { map: this.mapname, tool: this.tool, dir: [dx, dy], tiles, stopReason };
+    const way = dx > 0 ? 'east' : dx < 0 ? 'west' : dy > 0 ? 'south' : 'north';
+    const verb = this.tool === 'Hoe' ? 'till' : 'water';
+    this.msg(`Row: ${works} tile${works === 1 ? '' : 's'} ${way}. Press C again, or hold it, to ${verb} the row.`, '0C');
+  }
+
+  /** Is the planned row still the one in front of the player: same map, tool and facing, and its next tile ahead? */
+  row_current(row: NonNullable<Game['row']>): boolean {
+    const next = row.tiles[0];
+    const [tx, ty] = this.target();
+    return !!next && row.map === this.mapname && row.tool === this.tool && this.tool_list().includes(this.tool) && !this.riding_horse && this.face[0] === row.dir[0] && this.face[1] === row.dir[1] && tx === next[0] && ty === next[1] && !this.typing && this.modal_depth === 0;
+  }
+
+  /** C again: work the tile ahead if the tool acts on it, then step onto it. The row ends at an obstacle, an empty can, or the stamina reserve. */
+  async row_step(): Promise<void> {
+    const row = this.row!;
+    const [dx, dy] = row.dir;
+    const [x, y] = row.tiles[0];
+    const previousMessage = this.msgs.at(-1);
+    const kind = this.row_tile(x, y);
+    if (kind === 'stop') {
+      this.row = null;
+      this.msg('The row stops at an obstacle.', '08');
+      return;
+    }
+    if (kind === 'work') {
+      if (this.tool === 'Watering Can' && this.water <= 0) {
+        this.row = null;
+        this.msg('The watering can is empty. Refill it at a pond or stream.', '08');
+        return;
+      }
+      if (!this.row_cost(this.stamina, this.fatigue)) {
+        this.row = null;
+        this.msg(`The row stops: keep ${this.row_reserve} stamina and avoid fainting.`, '09');
+        return;
+      }
+      const [px, py] = [this.px, this.py];
+      await this.use_tool([x, y]);
+      this.first_steps_update();
+      if (this.mapname !== row.map || this.px !== px || this.py !== py) {
+        this.row = null;
+        return;
+      }
+    }
+    row.tiles.shift();
+    await this.move(dx, dy);
+    if (!row.tiles.length) {
+      this.row = null;
+      // Do not hide a berry, checklist, or other event message with a completion notice.
+      if (this.msgs.at(-1) === previousMessage) this.msg(row.stopReason ?? 'The row is done.', row.stopReason ? '09' : '0B');
+      return;
+    }
+    if (!this.row_current(row)) this.row = null;
+  }
+
   tool_cost(): number {
     const [tx, ty] = this.target();
     const tile = this.map.tile(tx, ty);
@@ -9247,7 +9415,7 @@ export class Game {
       (action.key === 'space' && ['WATER', 'DIG', 'CRACK', 'CAST'].includes(action.label));
     const aoeSet = new Set<string>();
     aoeSet.add(pkey(tx, ty));
-    if (this.mapname === 'farm') {
+    if (this.mapname === 'farm' && !(this.row && this.row_current(this.row))) {
       if (['Hoe', 'Watering Can', 'Sickle'].includes(this.tool)) {
         for (const [qx, qy] of this.area()) {
           aoeSet.add(pkey(qx, qy));
@@ -9260,6 +9428,9 @@ export class Game {
         }
       }
     }
+
+    // A planned row (task 54) lights its tiles like a tool area, until the player moves or switches tools.
+    if (this.row && this.row_current(this.row)) for (const [rx, ry] of this.row.tiles) aoeSet.add(pkey(rx, ry));
 
     const companion = new Set(this.companion_preview(this.tool, tx, ty)?.cells ?? []);
 

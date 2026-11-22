@@ -4264,6 +4264,253 @@ describe('valley postcards (task 46)', () => {
   });
 });
 
+describe('work a row (task 54)', () => {
+  /** A spring farm with an untilled, object-free strip of field at (20..26, 15); the player stands at (20, 15) facing east with the Hoe. */
+  const strip = () => {
+    const g = fresh();
+    g.season = 0;
+    g.day = 3;
+    g.minutes = 9 * 60;
+    for (let x = 20; x <= 27; x++) {
+      const k = `${x},15`;
+      delete g.objs.farm[k];
+      delete g.forage.farm?.[k];
+      g.tilled.delete(k);
+      delete g.crops[k];
+    }
+    g.berry_sources.push('farm_hoe'); // no random berry altering stamina
+    g.warp('farm', 19, 15, [1, 0]);
+    g.npc_pos = {}; // villagers start at random spots; one on the strip would end a row early
+    [g.px, g.py] = [20, 15];
+    g.face = [1, 0];
+    g.tool = 'Hoe';
+    g.stamina = 150;
+    return g;
+  };
+  const rowX = (g: any) => (g.row ? g.row.tiles.map(([x]: [number, number]) => x) : null);
+
+  test('the first press previews up to ROW_MAX tiles and tills nothing; the next presses till and step on', async () => {
+    const g = strip();
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22, 23, 24, 25, 26], 'six tiles ahead, the most one row holds');
+    assert.equal(g.tilled.size, 0, 'a preview uses nothing');
+    assert.equal(g.stamina, 150);
+    assert.match(g.msgs.at(-1)[0], /^Row: 6 tiles east\. Press C again, or hold it, to till the row\./);
+    g.render();
+    const lit = g.scr.tags.flat().filter((t: any) => t && t.hl).map((t: any) => `${t.wx},${t.wy}`);
+    for (let x = 21; x <= 26; x++) assert.ok(lit.includes(`${x},15`), `tile ${x} is lit as part of the row`);
+
+    await g.handle('c');
+    assert.ok(g.tilled.has('21,15'), 'the first press tills the tile ahead');
+    assert.deepEqual([g.px, g.py], [21, 15], 'and steps onto it');
+    assert.equal(g.stamina, 148, 'two stamina for the work');
+
+    for (let i = 0; i < 5; i++) await g.handle('c');
+    assert.deepEqual([...Array(6)].map((_, i) => g.tilled.has(`${21 + i},15`)), [true, true, true, true, true, true]);
+    assert.equal(g.stamina, 138, 'six tiles tilled, two stamina each');
+    assert.equal(g.row, null, 'the row is finished');
+    assert.equal(g.msgs.at(-1)[0], 'The row is done.');
+  });
+
+  test('the row ends at an obstacle, and an upper-case C works the same way', async () => {
+    const g = strip();
+    g.objs.farm['23,15'] = 'stone';
+    await g.handle('C');
+    assert.deepEqual(rowX(g), [21, 22], 'the stone at 23 ends the row');
+    await g.handle('C');
+    await g.handle('C');
+    assert.ok(g.tilled.has('21,15') && g.tilled.has('22,15'));
+    assert.ok(!g.tilled.has('23,15'), 'the stone is left alone');
+    assert.equal(g.row, null, 'the row is finished at the stone');
+  });
+
+  test('stamina caps the row: the reserve is kept, and too little stamina refuses', async () => {
+    const g = strip();
+    g.stamina = 14; // 4 above the reserve: two tiles
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22]);
+    await g.handle('c');
+    await g.handle('c');
+    assert.equal(g.stamina, 10, 'stops with the reserve intact');
+
+    const h = strip();
+    h.stamina = 11; // one stamina above the reserve: not enough for a tile
+    await h.handle('c');
+    assert.equal(h.row, null);
+    assert.match(h.msgs.at(-1)[0], /^Not enough stamina to work a row: keep 10 in reserve/);
+    assert.equal(h.tilled.size, 0);
+  });
+
+  test('a row ends on the last tile the tool works, and finished ground is walked over for free', async () => {
+    const g = strip();
+    g.tilled.add('25,15');
+    g.tilled.add('26,15');
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22, 23, 24], 'the finished tiles at the end are not part of the walk');
+
+    const h = strip();
+    h.tilled.add('21,15'); // already tilled: walk over it without stamina
+    await h.handle('c');
+    assert.deepEqual(rowX(h), [21, 22, 23, 24, 25, 26]);
+    await h.handle('c'); // steps onto the finished tile for free
+    assert.deepEqual([h.px, h.py], [21, 15]);
+    assert.equal(h.stamina, 150);
+    await h.handle('c'); // now tills 22
+    assert.equal(h.stamina, 148);
+  });
+
+  test('any other key drops the plan: the next C previews again instead of working on', async () => {
+    const g = strip();
+    await g.handle('c');
+    await g.handle('space'); // tills the tile ahead by hand
+    assert.equal(g.row, null, 'space ends the plan');
+    const before = g.stamina;
+    await g.handle('c');
+    assert.equal(g.tilled.size, 1, 'the C after that only previews');
+    assert.equal(g.stamina, before);
+    assert.deepEqual(rowX(g), [21, 22, 23, 24, 25, 26], 'the tilled tile is walked over as part of the new row');
+  });
+
+  test('turning or walking away ends the plan before the next press', async () => {
+    const g = strip();
+    await g.handle('c');
+    await g.handle('right'); // walking east moves the player off the planned line
+    assert.deepEqual([g.px, g.py], [21, 15]);
+    await g.handle('c');
+    assert.equal(g.tilled.size, 0, 'the press after a move previews from the new spot');
+    assert.deepEqual(rowX(g), [22, 23, 24, 25, 26, 27]);
+  });
+
+  test('the watering can waters a tilled row, stops when its water runs out, and says so', async () => {
+    const g = strip();
+    g.tool = 'Watering Can';
+    g.water = 2;
+    for (let x = 20; x <= 26; x++) g.tilled.add(`${x},15`);
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22], 'only two pours of water: two tiles');
+    g.water = 0;
+    await g.handle('c');
+    assert.equal(g.row, null);
+    assert.equal(g.msgs.at(-1)[0], 'The watering can is empty. Refill it at a pond or stream.');
+    assert.equal(g.wet.size, 0, 'nothing was watered');
+
+    const h = strip();
+    h.tool = 'Watering Can';
+    h.water = 2;
+    for (let x = 20; x <= 26; x++) h.tilled.add(`${x},15`);
+    await h.handle('c');
+    await h.handle('c');
+    await h.handle('c');
+    assert.ok(h.wet.has('21,15') && h.wet.has('22,15'), 'both tiles are watered');
+    assert.equal(h.water, 0);
+    assert.equal(h.row, null);
+    assert.deepEqual([h.px, h.py], [22, 15], 'the last tile is also stepped onto');
+    assert.match(h.msgs.at(-1)[0], /watering can is empty/i);
+  });
+
+  test('a row only works on the farm, with the Hoe or the Watering Can', async () => {
+    const g = strip();
+    g.tool = 'Sickle';
+    await g.handle('c');
+    assert.equal(g.row, null);
+    assert.equal(g.msgs.at(-1)[0], 'Work a row with the Hoe or the Watering Can, not the Sickle.');
+
+    const h = strip();
+    h.warp('town', 10, 10, [1, 0]);
+    await h.handle('c');
+    assert.equal(h.row, null);
+    assert.equal(h.msgs.at(-1)[0], 'Rows are worked on your farm, with the Hoe or the Watering Can.');
+  });
+
+  test('a power berry message on the last tile is not hidden by row completion', async () => {
+    const g = strip();
+    g.berry_sources = [];
+    g.first_steps = null;
+    g.objs.farm['22,15'] = 'stone';
+    await g.handle('c');
+    await pinned(0, () => g.handle('row-repeat'));
+    assert.equal(g.power_berries, 1);
+    assert.match(g.msgs.at(-1)[0], /Power Berry/);
+    assert.deepEqual([g.px, g.py], [21, 15]);
+  });
+
+  test('upgraded and cursed tools never work beyond the preview or spend past the reserve', async () => {
+    const g = strip();
+    g.levels.Hoe = 5;
+    g.stamina = 22;
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22]);
+    await g.handle('row-repeat');
+    assert.equal(g.stamina, 16);
+    assert.ok(g.tilled.has('21,15'));
+    assert.ok(!g.tilled.has('22,15'), 'the upgraded hoe does not work past its single planned tile');
+    await g.handle('row-repeat');
+    assert.equal(g.stamina, 10);
+    assert.equal(g.row, null);
+    await g.handle('row-repeat');
+    assert.equal(g.row, null, 'a held key cannot start another row');
+  });
+
+  test('a new obstacle stops an active row, and previews do not cross warps', async () => {
+    const g = strip();
+    g.maps.farm.warps['23,15'] = ['town', 1, 1];
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22]);
+    g.objs.farm['21,15'] = 'stone';
+    await g.handle('row-repeat');
+    assert.equal(g.row, null);
+    assert.equal(g.stamina, 150);
+    assert.ok(!g.tilled.has('21,15'));
+  });
+
+  test('upgraded tool preview highlights only the row, not the usual wider area', async () => {
+    const g = strip();
+    g.tool = 'Watering Can';
+    g.levels['Watering Can'] = 7;
+    for (let x = 21; x <= 26; x++) g.tilled.add(`${x},15`);
+    await g.handle('c');
+    g.render();
+    const highlighted = g.scr.tags.flat().filter((t: any) => t && t.hl && t.wx !== undefined).map((t: any) => `${t.wx},${t.wy}`);
+    assert.deepEqual(highlighted.sort(), [21, 22, 23, 24, 25, 26].map((x) => `${x},15`).sort());
+    await g.handle('row-repeat');
+    assert.ok(g.wet.has('21,15'));
+    assert.ok(!g.wet.has('22,15'));
+  });
+
+  test('the Diary chooses the reserve used by the preview', async () => {
+    const g = strip();
+    g.menu = async (title: string, opts: string[]) => title === '▤ Diary'
+      ? opts.findIndex((o) => o.startsWith('Row Stamina Reserve'))
+      : title === 'Row Stamina Reserve' ? 2 : null;
+    await g.pause_menu();
+    assert.equal(g.row_reserve, 50);
+    g.stamina = 54;
+    await g.handle('c');
+    assert.deepEqual(rowX(g), [21, 22]);
+    await g.handle('row-repeat');
+    await g.handle('row-repeat');
+    assert.equal(g.stamina, 50);
+  });
+
+  test('the chosen reserve survives saves and invalid or older saves use the default', () => {
+    const g = strip();
+    g.row_reserve = 50;
+    const data = g.snapshot();
+    const loaded = strip();
+    loaded.applySaveData(data);
+    assert.equal(loaded.row_reserve, 50);
+    data.row_reserve = -5;
+    loaded.applySaveData(data);
+    assert.equal(loaded.row_reserve, 10);
+    delete data.row_reserve;
+    loaded.applySaveData(data);
+    assert.equal(loaded.row_reserve, 10);
+  });
+
+  test('a planned row is not saved', () => {
+    const g = strip();
+    g.row = { map: 'farm', tool: 'Hoe', dir: [1, 0], tiles: [[21, 15]] };
+    assert.ok(!('row' in g.snapshot()));
 describe('museum exhibits that tell a story (task 16)', () => {
   const donate = async (g: any, item: string) => {
     g.inv[item] = 1;

@@ -427,6 +427,13 @@ html, body {
 .touch-ui .t-util-b {
   display: contents;
 }
+/* Eight utilities still need usable touch targets on narrow portrait phones. */
+@media (orientation: portrait) and (max-width: 440px) {
+  .touch-ui .t-util {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
 .touch-ui .t-move {
   grid-area: move;
   align-self: end;

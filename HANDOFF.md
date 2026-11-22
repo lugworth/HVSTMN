@@ -45,6 +45,13 @@
   Villager Notes memory is kept (task 07). `exhibits_done` is saved. The museum book now opens on an
   Exhibits page (`exhibit_page()`) with each story's pieces ticked and, once set out, its lead.
 
+## Work along a row (mechanics task 54)
+
+- On the farm with the Hoe or Watering Can, C (touch: ROW) previews up to six reachable tiles; another press steps through them, or hold to repeat. Completed tiles are crossed without spending resources. A row stops at an obstacle, empty can, or the stamina reserve; upgraded tools affect only the previewed tile per step.
+- Diary → Row Stamina Reserve selects 10, 30, or 50 stamina, saved with the farm; invalid or older saves use 10. The preview itself is transient. Cursed tool cost and weather fatigue are considered, and a row will not cause fainting.
+- Keyboard repeats and touch holds cannot restart a finished row; menus, dialogs, focus loss and other actions interrupt it. See `row-input.test.ts` and the task 54 cases in `engine.test.ts`.
+- Chromium gameplay checks covered Hoe preview and hold with keyboard and emulated touch; a physical device was not tested.
+
 ## Valley postcards (mechanics task 46), 2026-11-19
 
 - Diary → "Take a Postcard": `take_postcard()` calls `capture_scene()`, which renders with `capturing`
