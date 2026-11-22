@@ -1,4 +1,4 @@
-# Handoff: HRVSTMN
+# Handoff: FURROW
 
 ## High-res detail is a setting again, 2026-11-19
 
@@ -12,9 +12,9 @@
 ## Mine side chambers (mechanics task 40), 2026-11-19
 
 - `POCKETS` in `constants.ts`: three sealed-wall patterns, each its own tile in the cave wall:
-  `pocket_seam` (≋ gold: three pieces of the floor's ore, or gems in the Lake Mine, no Junk Ore),
+  `pocket_seam` (≋ gold: three pieces of the floor's ore, or gems in the Mirewater Mine, no Junk Ore),
   `pocket_geode` (◊ cyan: one of the rarest stone the floor can give) and `pocket_moss`
-  (♣ green: an old miner's cache, 2 Black Grass and 40-90G).
+  (♣ green: an old miner's cache, 2 Nightshade and 40-90G).
 - `enter_mine()` calls `place_pocket()`: from B2F up to (not on) B255F, a `POCKET_CHANCE` (30%) roll
   seals one interior wall beside open floor, at least 6 steps from the way in. `pocket` (x, y, kind,
   opened) is saved; `restore_pocket()` puts it back after a load on a mine floor.
@@ -83,22 +83,22 @@
 
 ## Favors from close neighbors (mechanics task 05), 2026-11-19
 
-- `FAVORS` (constants): Rick feeds your chickens (`feed`), Cliff waters up to `FAVOR_WATER_MAX` (12) dry
-  crops (`water`), Mary leaves a note of the day's shop hours (`hours`, shops in `FAVOR_SHOPS`).
+- `FAVORS` (constants): Dennis feeds your chickens (`feed`), Felix waters up to `FAVOR_WATER_MAX` (12) dry
+  crops (`water`), Odessa leaves a note of the day's shop hours (`hours`, shops in `FAVOR_SHOPS`).
 - `Game.favor_available(n)`: friendship >= `FAVOR_FRIENDSHIP` (60), 12-6 PM (`FAVOR_HOURS`), no festival
-  today or tomorrow, nothing already arranged (Cliff: no rain forecast), not offered in the last `FAVOR_GAP` (7) days
+  today or tomorrow, nothing already arranged (Felix: no rain forecast), not offered in the last `FAVOR_GAP` (7) days
   (`favor_offered`, saved), and something to help with (chickens / crops). `talk()` offers it in place of
-  small talk, after gifts, Gray's request and milestone remarks; `offer_favor()` asks Yes/No and books
+  small talk, after gifts, Rowan's request and milestone remarks; `offer_favor()` asks Yes/No and books
   `favor` = { npc, day: tomorrow } (saved, sanitized; stale ones dropped on load).
 - `favor_morning()` (in `new_day()`, after the barn) does it on the day, reports it and keeps a Villager
   Notes memory; nothing to do (empty coop, field already wet) is reported, not remembered, and clears it. Today's
   Plan (`favor_line()`, both `today_lines()` and the `Y` panel): "Favor  Tomorrow: ..." the day before,
-  "Today: ... (done this morning)" or Mary's hours (`favor_hours()`, the whole day, festival/closed
+  "Today: ... (done this morning)" or Odessa's hours (`favor_hours()`, the whole day, festival/closed
   days marked) on the day. The favor is cleared the morning after.
 
 ## Named farm plots (mechanics task 42), 2026-11-19
 
-- Jeff sells **Plot Sign**s (`PLOT_SIGN_PRICE` 50G). Equipped (it joins the tool list while held),
+- Hollis sells **Plot Sign**s (`PLOT_SIGN_PRICE` 50G). Equipped (it joins the tool list while held),
   SPACE on open field/grass (not tilled, no object or crop) asks for a name (`text_input` with a
   16-character limit, `PLOT_NAME_MAX`; the default names the farm area, e.g. "West Field") and stands
   a `plotsign` tile (`⚑`). Up to `PLOT_MAX` (6). `plots` ({ key, name, tile }) is saved; signs are
@@ -116,7 +116,7 @@
 - `Game.sit(id)`: half an hour passes and `SEAT_REST` (15) stamina once a day per seat
   (`seats_rested`, saved). `seat_moment()` is 'sunset' (Sunny, 5-8 PM) or 'rain' (Rain, not
   Typhoon); each seat has a scene for both. Otherwise the bench nudges you to come back then.
-- Friends at sunset (`seat_scene()`): Mary at the Green on Fridays, Cliff at the lookout on Sundays
+- Friends at sunset (`seat_scene()`): Odessa at the Green on Fridays, Felix at the lookout on Sundays
   (not in winter); on the porch, your spouse, or a dog with 50+ affection. A friend gives a line, +3
   friendship once a day and a Villager Notes memory (`seat_friend()`).
 - Test fix in the same PR: the task 12 footbridge test's route check now sets aside overnight forage
@@ -125,8 +125,8 @@
 ## Hives with seasonal honey (mechanics task 22), 2026-11-19
 
 - The farm tree at `HIVE_SPOT` (7, 6) is a wild hive. `Game.hive_blooms()` counts flowers in bloom
-  (Moondrop, Toy Flower, Pink Cat, Magic Red) within `HIVE_RANGE` (8) tiles; `hive_honey()` picks the
-  one with most blooms (ties by name) from `HONEY_FLAVOURS`: Moondrop / Toy Flower / Pink Cat / Magic
+  (Duskbell, Pinwheel Daisy, Rosecap, Emberbloom) within `HIVE_RANGE` (8) tiles; `hive_honey()` picks the
+  one with most blooms (ties by name) from `HONEY_FLAVOURS`: Duskbell / Pinwheel Daisy / Rosecap / Magic
   Red Honey (new items, worth more than plain Honey). No flowers in reach: plain Honey, with a line
   saying flowers nearby would flavour it. After picking, the tree says what tomorrow's honey will be.
 - Each flavour has fans (`HONEY_FLAVOURS[..].fans`) who treat it as a loved gift in `talk()`.
@@ -165,9 +165,9 @@
 
 - `Game.milestone_line(n)` gives a villager's unsaid memory, used by `talk()` in place of small talk
   (heart emote), and records it in `milestones_said` ('who:what' keys, saved) so each is said once:
-  - Zack, after your first shipment, naming what you have shipped most of;
+  - Otto, after your first shipment, naming what you have shipped most of;
   - the Curator, for each museum case you complete (`museum_cases_done()`), one case per chat;
-  - Popuri, Rick, Ann, Mary and Elli, each in their own words, once the Willow Bend footbridge
+  - Juniper, Dennis, Tess, Odessa and Margit, each in their own words, once the Willow Bend footbridge
     (task 12's public works) is built.
 - The lines live in `MILESTONE_LINES` in `constants.ts`.
 
@@ -194,7 +194,7 @@
 
 ## A crab pot off the pier (mechanics task 39), 2026-11-19
 
-- One spot, `TRAP_SPOT` = beach (32, 20): the water just past the end of the Mineral Beach pier,
+- One spot, `TRAP_SPOT` = beach (32, 20): the water just past the end of the Brackenford Beach pier,
   reached from the pier end (32, 19). Face it and press X (`Game.trap_menu()`): "Bait with a <the
   cheapest fish> and lower it" or "Lower it without bait". It can be hauled on any later day
   (`trap_state()`: up / set / ready): baited → 2 Crab (30%: plus a Mackerel); unbaited → a Crab
@@ -212,7 +212,7 @@
   every `COMPOST_SCRAPS` (5) scraps become one **Compost** item ("material").
 - Compost joins the tool list while you hold some; SPACE on tilled farm soil spreads it
   (`spread_compost()`), adding the tile to `composted`. That tile's next harvest (by hand, Basket
-  or Harvest Sprites) gives `COMPOST_BONUS` (1) more, then the dressing is used up; flattening the
+  or Hearthfolk) gives `COMPOST_BONUS` (1) more, then the dressing is used up; flattening the
   soil drops it. Action label SPREAD; Facing "Spread compost · +1 next harvest" / "Already
   composted"; checking a crop says "Composted: +1 at the next picking."
 - The renderer marks dressed soil (`CellTag.compost`): darker loam under the tile and warm `∴`
@@ -249,21 +249,21 @@
 - `plantingForecast(day, grow, regrow)` in `rules.ts`: first harvest `day + grow` (watered daily;
   a crop sown and watered today grows overnight), then every `regrow` days up to day 30; `first`
   is null when it would ripen after the season turns (crops wither then). `Game.crop_forecast()`
-  forecasts from today, or from day 1 of the crop's own season for off-season bags (Won's shop).
-- Shown in Jeff's seed list and Won's shop ("Sown today: ready Spring 19, then every 5d: 3
+  forecasts from today, or from day 1 of the crop's own season for off-season bags (Ferreira's shop).
+- Shown in Hollis's seed list and Ferreira's shop ("Sown today: ready Spring 19, then every 5d: 3
   pickings, the last on Spring 29." / "too late, it needs 9 days and Spring ends on the 30th."),
   the rucksack info for a seed bag, and the Facing row while aiming a bag at tilled soil
   ("Sow cucumber · ready Spr 19, 3 pickings"). No forecast for Grass (cut for fodder).
 
 ## Orders for finished goods (mechanics task 32), 2026-11-18
 
-- `ORDERS` in `constants.ts`: Doug's supper basket (Bread, Pickled Turnip, Dried Herbs; 650G; needs
-  a Kitchen), Doug's cheese board (Bread, 2 Cheese of any grade, Dried Herbs; 1500G; Kitchen + Cheese
-  Maker) and Manna's scarf yarn (2 Yarn of any grade; 1200G; Yarn Maker). An order is only posted
+- `ORDERS` in `constants.ts`: Gideon's supper basket (Bread, Pickled Turnip, Dried Herbs; 650G; needs
+  a Kitchen), Gideon's cheese board (Bread, 2 Cheese of any grade, Dried Herbs; 1500G; Kitchen + Cheese
+  Maker) and Elspeth's scarf yarn (2 Yarn of any grade; 1200G; Yarn Maker). An order is only posted
   when everything in it can be made (`Game.order_possible()`); one at a time, `ORDER_DAYS` (7) to
   fill, then `ORDER_GAP` (2) days before the next. State: `order` ({ id, delivered[], deadline }),
   `order_next`, `order_last`; saved and sanitized (`sanitizeOrder`).
-- It sits first on the Rose Square board ("★ Doug's order: …"). Its page lists each piece as
+- It sits first on the Market Cross board ("★ Gideon's order: …"). Its page lists each piece as
   ✓ handed over, in your rucksack, or missing N, with where it comes from; "Hand over what you have"
   gives the pieces you hold (lowest grade first). The reward, +8 friendship and a Good Neighbor
   count come with the last piece. Today's Plan and the side panel show what is still needed.
@@ -272,16 +272,16 @@
 
 - `PRESERVES` in `constants.ts`: Pickled Turnip (2 Turnip, no utensil), **Dried Herbs** (new: 3
   Medicinal Herb → 50G, no utensil; herbs are spring forage) and Strawberry Jam (3 Strawberry, Pot).
-  All three are made in the Kitchen (Gotz's upgrade), like every recipe.
-- Their use in town: in Fall and Winter (`PRESERVE_SEASONS`) Doug stocks the inn's pantry, so his
+  All three are made in the Kitchen (Ingrid's upgrade), like every recipe.
+- Their use in town: in Fall and Winter (`PRESERVE_SEASONS`) Gideon stocks the inn's pantry, so his
   first pick at the Saturday stall is always a preserve (`marketWants(..., keeps)` in `rules.ts`);
   the second is a staple (eggs in winter). He pays his 1.6x premium, as for any wanted good.
 - The rucksack labels them PRESERVE, and both the rucksack and the kitchen say "Keeps for winter."
-  plus who wants it this week, or that Doug buys preserves in Fall and Winter (`Game.preserve_note()`).
+  plus who wants it this week, or that Gideon buys preserves in Fall and Winter (`Game.preserve_note()`).
 
 ## Walk-up Makers (mechanics task 30), 2026-11-18
 
-- Saibara's Mayonnaise, Cheese and Yarn Makers are now machines on the farm (`maker` tile, `⚙`), at
+- Hilde's Mayonnaise, Cheese and Yarn Makers are now machines on the farm (`maker` tile, `⚙`), at
   `MAKER_SPOTS` in `constants.ts`: Mayonnaise under the coop west of its door (18,6); Cheese (30,6)
   and Yarn (34,6) flank the barn door. `Game.place_makers()` stands them (new game, load, order).
 - Face one and press X: an empty Maker lists every grade it would take from the rucksack
@@ -299,8 +299,8 @@
 
 - One recipe (`SEED_SAVING` in `constants.ts`): **3 Cucumber → 1 bag of Cucumber Seeds**, from the
   rucksack (Cucumber > "Save seeds (3 → 1 bag)"). A preview menu shows the trade before anything is
-  used (the bag's growth, Jeff's 200G price against the 180G the cucumbers would ship for, and what
-  you hold); "Keep the Cucumber" is the highlighted answer and number keys are off. Jeff's shop
+  used (the bag's growth, Hollis's 200G price against the 180G the cucumbers would ship for, and what
+  you hold); "Keep the Cucumber" is the highlighted answer and number keys are off. Hollis's shop
   mentions it under Cucumber Seeds. `Game.seed_recipe()`, `seed_saving_preview()`, `save_seeds()`.
 
 ## Display font, 2026-11-18
@@ -314,27 +314,27 @@
 
 ## Companion planting (mechanics task 17), 2026-11-18
 
-- One pairing (`COMPANION` in `constants.ts`): a **Moondrop Flower in bloom** on any of the eight
+- One pairing (`COMPANION` in `constants.ts`): a **Duskbell Flower in bloom** on any of the eight
   tiles touching a **Cucumber** gives +1 cucumber every picking, by hand, into the Basket (any
-  overflow goes to the rucksack) and through Harvest Sprites (bonuses are settled before the
-  sprites pick anything). Both seeds are on sale from the first spring day (Cucumber at Jeff's,
-  Moondrop at Won's). Strawberry was the first idea, but its seeds are locked until 100 each of
+  overflow goes to the rucksack) and through Hearthfolk (bonuses are settled before the
+  sprites pick anything). Both seeds are on sale from the first spring day (Cucumber at Hollis's,
+  Duskbell at Ferreira's). Strawberry was the first idea, but its seeds are locked until 100 each of
   turnip, potato and cucumber have shipped, so the pairing would have stayed out of reach.
 - Shown when aiming a seed bag: `companion_preview()` marks the tiles in the pairing (`CellTag.
-  companion`, drawn as a small pink ✿ detail) and FACING reads e.g. "Sow cucumber · 3 by Moondrop:
-  2 a picking". Also in the sow message, when checking a vine, and in Jeff's and Won's shops.
+  companion`, drawn as a small pink ✿ detail) and FACING reads e.g. "Sow cucumber · 3 by Duskbell:
+  2 a picking". Also in the sow message, when checking a vine, and in Hollis's and Ferreira's shops.
 
 ## Market regulars (mechanics task 10), 2026-11-18
 
-- Two regulars shop at the Saturday stall from a weekly list (`MARKET_SHOPPERS`): **Doug** comes
+- Two regulars shop at the Saturday stall from a weekly list (`MARKET_SHOPPERS`): **Gideon** comes
   at noon for two pantry staples (eggs, or `PANTRY_STAPLES` crops in season), buys up to 3 of each
-  at 1.6x the shipping price; **Lillia** comes at 3 PM for one unusual flower of the season
+  at 1.6x the shipping price; **Rosalind** comes at 3 PM for one unusual flower of the season
   (`MARKET_FLOWERS`, none in winter) and buys up to 2 at 2x. Each visit is +3 friendship.
 - The lists come from `marketWants(marketDay, ...)` in `rules.ts`, seeded by the market's
   absolute day, so they hold all week and need no save data. `Game.market_next()`,
   `market_wants()`, `market_clue()` and `market_wanted_by()` expose them.
 - Clues: Today's Plan (`Saturday regulars:` / compact `▣ Wants`) all week, the market sign on
-  other days, the stocking menu's info lines, and "Doug wants this" / "Lillia wants this" in the
+  other days, the stocking menu's info lines, and "Gideon wants this" / "Rosalind wants this" in the
   good picker. No clue for a Saturday that is a festival.
 - Their visits are kept in `stall.callers`, apart from the villagers in `stall.seen`. Older saves
   with an open stall and no `callers` still get their regulars.
@@ -363,7 +363,7 @@ here on top of that; the older sections still describe the shared architecture.
   season somewhere, and in-season crops that are planted or in the rucksack. The board shows
   how many you hold and where the item comes from (`request_source`). `prune_requests()` drops
   unfillable requests from older saves on load. Monkfish and Spa Catfish are still items with
-  no way to catch them; Coelacanth only bites on Lake Mine floor 9. None of the three is ever
+  no way to catch them; Coelacanth only bites on Mirewater Mine floor 9. None of the three is ever
   requested.
 - **Black-and-white terrain.** In the mono and duotone palettes `contourTile` grades ground by
   value (`MONO_GROUND`: pale combed sand with its own `sand` contour texture, mid-grey meadow,
@@ -406,7 +406,7 @@ The main-branch reference below retains gameplay architecture and history.
 ## Kickoff prompt
 
 ```
-You're picking up HRVSTMN, an ASCII farming sim (Next.js 15 + TypeScript, HTML canvas):
+You're picking up FURROW, an ASCII farming sim (Next.js 15 + TypeScript, HTML canvas):
 github.com/lugworth/hrvstmn, live at https://hrvstmn.vercel.app (Vercel deploys main).
 
 Read HANDOFF.md fully before changing anything. Enhanced is the only visible visual style;
@@ -445,8 +445,8 @@ Requires Node 22 (verified with v22.23.4, npm 10.9.9). No environment variables 
 ## Current feature set
 
 - Crops, livestock, villagers, festivals, mines, house upgrades, cooking, marriage and children.
-- **Mineral Town Museum**: donate fish, ore, forage and crops; a collection book tracks each wing, and milestones pay gold/items. The Curator lives in the museum and can be talked to like any villager.
-- **Rose Square request board**: timed villager requests for seasonal crops, forage or fish. Deliver from the board for gold and +5 friendship; expired requests are cleared each morning.
+- **Brackenford Museum**: donate fish, ore, forage and crops; a collection book tracks each wing, and milestones pay gold/items. The Curator lives in the museum and can be talked to like any villager.
+- **Market Cross request board**: timed villager requests for seasonal crops, forage or fish. Deliver from the board for gold and +5 friendship; expired requests are cleared each morning.
 - **Achievements & Journal**: 14 derived milestone goals (shipping, fishing, mining, museum, requests, friendship, festivals, upgrades, family, animals, gems) with progress shown from the Diary menu.
 - **Farm Mastery**: five disciplines (farming, foraging, fishing, mining, ranching) earn XP from real actions; ranks run Novice → Adept → Expert → Master → Legend and pay one-time gold/item rewards.
 - Two save slots in `localStorage` (`hrvstmn-save`, `hrvstmn-save-2`), plus **JSON save export/import** from the Diary menu.
@@ -509,7 +509,7 @@ Inside `computeFrame`: style each tagged cell -> Isotope neon-on-black pass -> g
 ## Decisions and constraints
 
 - **Style simplification (#18):** Enhanced is the only style shown; Classic is retained in code and tests; Large and the style switcher were removed. Do not add a URL/localStorage style override back.
-- **No exact Harvest Moon replica.** The project is a tribute with original mechanics; don't extend it toward a faithful copy. Raise content questions with the user rather than rewriting existing tribute content unasked.
+- **Original setting only.** FURROW was a Harvest Moon tribute until the Brackenford rework (docs/originality-rework.md). Don't bring back that game's names, characters, places, items or events, or another game's. Old saves are migrated by `src/game/legacy_names.ts`; add to that table when renaming anything stored in a save.
 - **Next.js pinned to `15.5.28`.** Vercel blocked 15.2.1 for CVE-2025-66478; don't downgrade without checking advisories.
 - **High-res thresholds:** `HIRES_MIN_FONT = 12` for 2x2 texture glyphs; 3x3 needs font >= 14 and font x DPR >= 28, drawn one row per call.
 - **`next.config.ts`** disables build-time type-checking and linting, keeps `reactStrictMode: false` for the canvas loop, and uses `output: "standalone"`.
@@ -557,17 +557,17 @@ git switch main && git pull --ff-only
 
 Newest first.
 
-- Task 12, the Willow Bend footbridge: the dock below the Willow Bend road is what's left of a washed-out footbridge; a sign on the west bank (`FOOTBRIDGE_SIGN`, 31,18, key `footbridge`, text from `footbridge_sign()`) says Gotz could rebuild it. Gotz's menu offers "Village project: Willow Bend footbridge" (`works_menu()`): he names Basil, who wants the far bank for his plant notes, and takes 12 Lumber, 2 Copper and 3 of any one farm crop you carry (`PUBLIC_WORKS` in constants; partial deliveries count, the first crop handed over is the one recorded; `works_offers()`/`works_deliver()`, pure `worksNeeds()`/`worksSummary()`/`absdayLabel()` in rules). The last delivery sets a finish day 2 days out; overnight `works_day()` (after `carpentry_day()` in `new_day`) opens it: the 16 water cells west of the dock planks on rows 18-21 (`footbridge_cells()` in map.ts) become `bridge`, Gotz and Basil gain +5 friendship, a morning line announces it and the sign reads "Rebuilt by Gotz, Basil and <name>, <date>". Today's Plan has a `Bridge` line (what's still needed, then "Gotz and Basil are building the footbridge (done <day>)"). The Valley Map gains the `≡` Willow Bend footbridge landmark only once built (`ValleyLandmark.when`, `valley_landmarks()`). State is one saved field, `public_works` (`worksState()` fills defaults for old saves); `apply_public_works()` re-lays or removes the planks in `new_game()` and `applySaveData()`, since maps are only built in the constructor.
-- Maker improvements: one use processes every quality tier (`makerBatch()`/`MAKER_INPUTS` in rules, `run_maker()` in engine); coop/barn menus preview count and value gained; Today's Plan lists rucksack goods ready to process; Saibara's order menu shows which expansion each Maker needs and exactly what is missing. Fixed a money pump (150G shop Milk → 300G Small Cheese; the Cheese Maker now takes only your cows' milk) and the Good Wool price inversion (400G → 150G, below Large Wool). Maker use deliberately grants no mastery XP (a per-press grant was farmable by processing one item at a time). The result is one short message line (lone tier named, several summarised) so it fits the single desktop message row. Known open economy issue, not yet fixed: shop Flour/Curry Powder (50G) cook into Noodles (250G) and Curry Noodles (400G) with no limit.
+- Task 12, the Willow Bend footbridge: the dock below the Willow Bend road is what's left of a washed-out footbridge; a sign on the west bank (`FOOTBRIDGE_SIGN`, 31,18, key `footbridge`, text from `footbridge_sign()`) says Ingrid could rebuild it. Ingrid's menu offers "Village project: Willow Bend footbridge" (`works_menu()`): he names Silas, who wants the far bank for his plant notes, and takes 12 Lumber, 2 Copper and 3 of any one farm crop you carry (`PUBLIC_WORKS` in constants; partial deliveries count, the first crop handed over is the one recorded; `works_offers()`/`works_deliver()`, pure `worksNeeds()`/`worksSummary()`/`absdayLabel()` in rules). The last delivery sets a finish day 2 days out; overnight `works_day()` (after `carpentry_day()` in `new_day`) opens it: the 16 water cells west of the dock planks on rows 18-21 (`footbridge_cells()` in map.ts) become `bridge`, Ingrid and Silas gain +5 friendship, a morning line announces it and the sign reads "Rebuilt by Ingrid, Silas and <name>, <date>". Today's Plan has a `Bridge` line (what's still needed, then "Ingrid and Silas are building the footbridge (done <day>)"). The Valley Map gains the `≡` Willow Bend footbridge landmark only once built (`ValleyLandmark.when`, `valley_landmarks()`). State is one saved field, `public_works` (`worksState()` fills defaults for old saves); `apply_public_works()` re-lays or removes the planks in `new_game()` and `applySaveData()`, since maps are only built in the constructor.
+- Maker improvements: one use processes every quality tier (`makerBatch()`/`MAKER_INPUTS` in rules, `run_maker()` in engine); coop/barn menus preview count and value gained; Today's Plan lists rucksack goods ready to process; Hilde's order menu shows which expansion each Maker needs and exactly what is missing. Fixed a money pump (150G shop Milk → 300G Small Cheese; the Cheese Maker now takes only your cows' milk) and the Good Wool price inversion (400G → 150G, below Large Wool). Maker use deliberately grants no mastery XP (a per-press grant was farmable by processing one item at a time). The result is one short message line (lone tier named, several summarised) so it fits the single desktop message row. Known open economy issue, not yet fixed: shop Flour/Curry Powder (50G) cook into Noodles (250G) and Curry Noodles (400G) with no limit.
 - #51: Contour Farm rendering and right-side HUD.
-- Task 34, the Cedar Hollow hedge gate: an old field gate in the hedge between Cedar Hollow's clearing (east edge, rows 18-20) and Mineral Beach (west edge, rows 7-9). The woods sign (61,17) only says it is latched from the other side; the beach sign on the hedge (0,6, sign id `hedge_latch`) asks to lift the latch (`hedge_latch()`, menu Yes/No). Yes carves a 3-wide opening with warps both ways through `link()` (`open_shortcut()` / `HEDGE_GATE` in `map.ts`), renames both signs to "Hedge gate — the short way to ...", plays dust/sparkle and a message. Opened shortcuts are saved in `shortcuts` (default `[]`, unknown ids dropped) and re-carved after `applySaveData`; `new_game()` rebuilds the outdoor maps (`build_valley()`, also used by the constructor) when any were open, so new farms and old saves start shut. The Valley Map picks the link up from warps: a woods-beach connector, and a pin from the woods to the pier reads "east exit to Mineral Beach". When two region walks are equally short (common once the gate is open), `pin_route()` takes the one whose exit is nearer the player (`nextRegions()` in rules).
+- Task 34, the Cedar Hollow hedge gate: an old field gate in the hedge between Cedar Hollow's clearing (east edge, rows 18-20) and Brackenford Beach (west edge, rows 7-9). The woods sign (61,17) only says it is latched from the other side; the beach sign on the hedge (0,6, sign id `hedge_latch`) asks to lift the latch (`hedge_latch()`, menu Yes/No). Yes carves a 3-wide opening with warps both ways through `link()` (`open_shortcut()` / `HEDGE_GATE` in `map.ts`), renames both signs to "Hedge gate — the short way to ...", plays dust/sparkle and a message. Opened shortcuts are saved in `shortcuts` (default `[]`, unknown ids dropped) and re-carved after `applySaveData`; `new_game()` rebuilds the outdoor maps (`build_valley()`, also used by the constructor) when any were open, so new farms and old saves start shut. The Valley Map picks the link up from warps: a woods-beach connector, and a pin from the woods to the pier reads "east exit to Brackenford Beach". When two region walks are equally short (common once the gate is open), `pin_route()` takes the one whose exit is nearer the player (`nextRegions()` in rules).
 - Renderer extras: late-season blending (`themeFor(season, day)`: days 28-30 drift up to 60% toward the next season's ground, tree and water colours; the engine passes `ctx.day`), steam over hot springs and baths and embers above lit hearths (`hotSpringSteam()`, motion only, never over UI or people), a shooting star across the title sky every few seconds, the highlighted menu row's `>` drawn as a glowing `▸`, and an optional CRT scanline pass (View > CRT scanlines, saved as `hrvstmn-crt`, off by default; `Screen.setCrt()`/`onCrtChange`). The scanlines cover exactly what each dirty-rect repaint redraws, and glyph glow is reset before them.
 - Farm HUD chrome: the HUD's grey rules became a post-and-rail fence (`═ ╪ ╧`, `src/game/chrome.ts` holds the post rule and season glyphs), the equipped tool sits on a painted sign board (`hud:sign`), GOLD/BIN/HELD rows are a ledger with dot leaders, the season line and compact top bar lead with a season glyph (`❀ ☘ ❦ ❆`, icon `season`), and the newest message gets a `❧` bullet (icon `note`). The engine still writes plain `-`/`|` and tags; `enhanced.ts` swaps glyphs and colours (`FARM_CHROME`, dark end of the orange ramp) and draws fence rails as pixel-aligned lines. The toolbar footer mirrors the colours through `--fence-rail`/`--fence-post`/`--sign-board` in `globals.css` (a test keeps them equal). Classic is unchanged. Tests: `src/game/chrome.test.ts`.
-- Task 33, labeled Valley Map (`G`, or Farm > Valley map in the game menu): the nine outdoor regions drawn as boxes in their real arrangement (`VALLEY_GRID`), joined where they link, with 24 major landmarks as distinct symbols (`VALLEY_LANDMARKS`; each sits on a real door or sign, checked by a test, and every glyph is in the bundled DejaVu subset). Left/Right picks a landmark, Up/Down jumps region, Enter pins or unpins one destination (`map_pin`, saved). While pinned, `pin_route()` points to the next map exit on the shortest region walk (`nextRegion()`), or to the landmark itself on its own map, out of interiors and up the mine ladder. It shows as a pointer line at the top-left of the map view (short form at 50 columns, hidden while the minimap is open), as an arrow and title on the minimap, and in Today's Plan. The legend and Today's Plan always show whether Saibara's Forge is open, or when it next opens, skipping closed days and festivals (`shopStatus()`).
-- Task 04, Gray's two-chapter request: the first time you talk to Gray he asks for 3 Copper from the Spring Mine (`gray_quest` 0 to 1; Today's Plan tracks it). Talking to him with the copper pays 300G and +5 friendship, counts as a finished request, and starts chapter two. Gray reads your watering can (`canUpgradeAdvice()` in rules, from `UPGRADE`, `CAN_CAP` and the tool's real tile area): which upgrade to save for next, and the big later jump (Mystrile). He leaves a note in Today's Plan (`gray_note()`, `gray_note_level`). An upgrade already at Saibara's forge counts (`can_level_soon()`). The chapter closes, with +5 more friendship, when the can reaches the noted level. Cans at Mystrile or beyond get a level-specific closing line instead. Works while married to Gray.
-- Task 09, Saturday stall in Rose Square: a market booth (`stall` tile, `⌂`, `STALL_SPOT` 40,16 on the east side of the square, clear of the beach road). On Saturdays that are not festivals you can stock it before noon (`STALL_STOCK_BY`) with up to three kinds of produce or food (`STALL_CATEGORIES`: crop, forage, fish, animal, food, dish), five of each, through `stall_menu()`; goods leave the rucksack. While open (`stall` in the save: goods, takings, log, who came), each hour one villager who goes out and about stops by (`stall_shopper()`, each once a market, about half as many in rain); `stallVisit()` in rules decides: two of something they love at 1.5x the shipping price (+2 friendship), one they like at 1.25x, a plain good at 1.1x about six times in ten, never something they hate. At 5 PM (`STALL_CLOSE`) `stall_close()` banks the takings, returns unsold goods and shows a closing report with sales and shopper comments; sleeping before then packs it up into the morning report. Today's Plan has a Market line on Saturdays and a reminder on Fridays; the touch action reads STALL; the booth is grey when shut, orange when it can be stocked and green while trading. `stall_last`/`stall_earned` record takings.
-- Task 01, Friday evenings at Doug's Inn: from 6 to 10 PM on Fridays the inn menu offers one scene (`INN_SCENES` in constants: cards with Doug, Gotz and Duke; a recipe swap with Ann, Manna and Lillia; Barley's harvest story with Saibara). Listen (+1 friendship with each person there) or join in (+3, plus a payoff: the card pot of 100G about two Fridays in three via `innCardsWin()`, or a plate of Cookies). Once per Friday (`inn_evening_day`). `innSceneFor()` picks the first scene you have not seen, starting from the week's place in the rotation, so a missed scene comes round again (`inn_scenes_seen`). Today's Plan names the evening on Fridays.
-- #57: the valley rearranged from the user's Figma sketch. New region **Ironwood Grove** (`grove`, west of the farm through a new west gate, `build_grove`) holds the Blacksmith. The Poultry Farm, Yodel Ranch and Winery moved to Cedar Hollow (Ranch Lane), the Sprite hut to Willow Bend, Zack & Won to Lighthouse Point; the Library and Museum share the town's south-east block. Freed town plots became the Town Green (pond), a flower garden and an orchard, and an East Road runs from Rose Square to Willow Bend. Buildings drawn into the prebuilt town are lifted and re-placed with `townBuilding()`/`placeBuilding()` in `map.ts`, so they keep their look; interiors find their exits from door positions, so nothing else needed re-pointing. Villager anchors (Gray, Popuri, May, Duke, Mary) moved with their homes. `prune_forage()` drops saved forage that now lies under a building. The Figma kit was regenerated.
+- Task 33, labeled Valley Map (`G`, or Farm > Valley map in the game menu): the nine outdoor regions drawn as boxes in their real arrangement (`VALLEY_GRID`), joined where they link, with 24 major landmarks as distinct symbols (`VALLEY_LANDMARKS`; each sits on a real door or sign, checked by a test, and every glyph is in the bundled DejaVu subset). Left/Right picks a landmark, Up/Down jumps region, Enter pins or unpins one destination (`map_pin`, saved). While pinned, `pin_route()` points to the next map exit on the shortest region walk (`nextRegion()`), or to the landmark itself on its own map, out of interiors and up the mine ladder. It shows as a pointer line at the top-left of the map view (short form at 50 columns, hidden while the minimap is open), as an arrow and title on the minimap, and in Today's Plan. The legend and Today's Plan always show whether Hilde's Forge is open, or when it next opens, skipping closed days and festivals (`shopStatus()`).
+- Task 04, Rowan's two-chapter request: the first time you talk to Rowan he asks for 3 Copper from the Copperseam Mine (`gray_quest` 0 to 1; Today's Plan tracks it). Talking to him with the copper pays 300G and +5 friendship, counts as a finished request, and starts chapter two. Rowan reads your watering can (`canUpgradeAdvice()` in rules, from `UPGRADE`, `CAN_CAP` and the tool's real tile area): which upgrade to save for next, and the big later jump (Starsteel). He leaves a note in Today's Plan (`gray_note()`, `gray_note_level`). An upgrade already at Hilde's forge counts (`can_level_soon()`). The chapter closes, with +5 more friendship, when the can reaches the noted level. Cans at Starsteel or beyond get a level-specific closing line instead. Works while married to Rowan.
+- Task 09, Saturday stall in Market Cross: a market booth (`stall` tile, `⌂`, `STALL_SPOT` 40,16 on the east side of the square, clear of the beach road). On Saturdays that are not festivals you can stock it before noon (`STALL_STOCK_BY`) with up to three kinds of produce or food (`STALL_CATEGORIES`: crop, forage, fish, animal, food, dish), five of each, through `stall_menu()`; goods leave the rucksack. While open (`stall` in the save: goods, takings, log, who came), each hour one villager who goes out and about stops by (`stall_shopper()`, each once a market, about half as many in rain); `stallVisit()` in rules decides: two of something they love at 1.5x the shipping price (+2 friendship), one they like at 1.25x, a plain good at 1.1x about six times in ten, never something they hate. At 5 PM (`STALL_CLOSE`) `stall_close()` banks the takings, returns unsold goods and shows a closing report with sales and shopper comments; sleeping before then packs it up into the morning report. Today's Plan has a Market line on Saturdays and a reminder on Fridays; the touch action reads STALL; the booth is grey when shut, orange when it can be stocked and green while trading. `stall_last`/`stall_earned` record takings.
+- Task 01, Friday evenings at Gideon's Inn: from 6 to 10 PM on Fridays the inn menu offers one scene (`INN_SCENES` in constants: cards with Gideon, Ingrid and Corin; a recipe swap with Tess, Elspeth and Rosalind; Abel's harvest story with Hilde). Listen (+1 friendship with each person there) or join in (+3, plus a payoff: the card pot of 100G about two Fridays in three via `innCardsWin()`, or a plate of Cookies). Once per Friday (`inn_evening_day`). `innSceneFor()` picks the first scene you have not seen, starting from the week's place in the rotation, so a missed scene comes round again (`inn_scenes_seen`). Today's Plan names the evening on Fridays.
+- #57: the valley rearranged from the user's Figma sketch. New region **Ironwood Grove** (`grove`, west of the farm through a new west gate, `build_grove`) holds the Blacksmith. The Feathercote, Highmeadow Dairy and Winery moved to Cedar Hollow (Ranch Lane), the Hearthfolk hut to Willow Bend, Otto & Ferreira to Lighthouse Point; the Library and Museum share the town's south-east block. Freed town plots became the Town Green (pond), a flower garden and an orchard, and an East Road runs from Market Cross to Willow Bend. Buildings drawn into the prebuilt town are lifted and re-placed with `townBuilding()`/`placeBuilding()` in `map.ts`, so they keep their look; interiors find their exits from door positions, so nothing else needed re-pointing. Villager anchors (Rowan, Juniper, Pip, Corin, Odessa) moved with their homes. `prune_forage()` drops saved forage that now lies under a building. The Figma kit was regenerated.
 - #56: `design/figma-assets/`: a Figma kit exported from the game (layered map SVGs, component sheets, UI as editable text, palette tokens, fonts, map data) with its generator in `_generator/`. Reference material only; the game does not load it, and `design` is excluded from `tsconfig.json`. Rebuild steps are in its README.
 - #55: daily surprises: wriggling dig spots across the valley (Hoe them for coins, ore, seeds, forage or relics), a museum Relics wing, and night surprises (glowmoths, falling stars to crack open, doorstep parcels).
 - #54: toolbar and game menu: the desktop footer follows the Contour reference (two groups plus `[F10] MENU`) as an accessible toolbar; a new game menu (Game/Farm/Tools/View/Help, direct tool choice, Save, Export) pauses the clock while open and replaces the phone ••• sheet (touch MENU; the Esc pad button now reads DIARY).
@@ -575,7 +575,7 @@ Newest first.
 - #49: renderer QA fixes: lamp pools only ever brighten (never darker than the dusk sky around them), seven distinct tool-tier swing colours that survive the hit flash, sickle cuts blink each weed then scatter leaves, stronger screen shake (2px light, 4px heavy), brighter terrain edges, title-screen prompt punctuation stays plain, lone tide pools get no foam box; lighting accumulated per light over its bounding box plus cached tone/grey lookups cut town-at-night frame build ~20%.
 - #48: region looks: Skyline Ridge rock faces (lit brow, strata, dithered base, thin snow caps in winter), Willow Bend downstream current, Cedar Hollow under-canopy gloom with sun shafts, Lighthouse Point sweeping beam at night/storms and glinting tide pools; lamp flicker respects reduced motion.
 - #47: region layout fixes from visual QA: `sealUnreachable()` closes off unreachable pockets in the four outer regions (no forage/branches out of reach), the town's east exit joins the road, signs moved off trails, the sea runs off the map edge at the beach and Lighthouse Point.
-- #46: outer-region content: per-region seasonal forage pools (14 new forage items), river and sea catch tables with rare catches (Elder Sturgeon, Storm Marlin), landmarks (ridge lookout, lighthouse keeper's log, Mossy Pond offering, stone skipping); tide pools and the woods pond no longer count as Goddess Pond.
+- #46: outer-region content: per-region seasonal forage pools (14 new forage items), river and sea catch tables with rare catches (Elder Sturgeon, Storm Marlin), landmarks (ridge lookout, lighthouse keeper's log, Mossy Pond offering, stone skipping); tide pools and the woods pond no longer count as Wellkeeper Pond.
 - #45: mobile support: compact phone layout (`src/game/compact.ts`, `draw_status`, wrapped text, `p` panel overlay), `chooseGrid()` font/grid sizing (`src/game/viewport.ts`), slide D-pad with hold-to-repeat, tap-to-walk, touch text entry, safe-area viewport.
 - #43: eight project subagents in `.claude/agents/` (renderer-artist, gameplay-engineer, test-guardian, visual-qa, mobile-ux, pr-shepherd, web-researcher, handoff-keeper).
 - #42: shape-matched terrain edges (`edgeGlyph()`: 6 staggered sampling circles, geometric glyph vectors, contrast curve, nearest match) and two-tone cells (`OutCell.detail`, drawn small top-right; used for blossom/fruit on trees).
@@ -592,8 +592,8 @@ Newest first.
 - #30 `3ac19bd`: action feedback queue (dust, sparkle, splash, coin); composed sprite portion was reverted in #32.
 - #28 `fba5983`: Farm Mastery; five disciplines, XP from real actions, one-time rank rewards, Diary page.
 - #26 `98ee873`: Achievements & Journal; 14 derived milestones with progress, Diary menu page, persisted request completion count.
-- #24 `ae42356`: Rose Square request board; timed villager requests, delivery rewards, overnight expiry, Today's Plan integration.
-- #23 `501b38e`: Mineral Town Museum; donate fish/ore/forage/crops, collection book, milestone rewards, Curator NPC.
+- #24 `ae42356`: Market Cross request board; timed villager requests, delivery rewards, overnight expiry, Today's Plan integration.
+- #23 `501b38e`: Brackenford Museum; donate fish/ore/forage/crops, collection book, milestone rewards, Curator NPC.
 - #22: graded water depth, drifting ripples, lapping foam, summer lily pads, soft ground mottling, map edges fading into the margin, sign apostrophes kept, background runs batched, dead Large-tile code removed.
 - #21 `ca1b177`: sourced gameplay/graphics roadmap in `docs/feature-research.md`.
 - #20 `6d032da`: high-res ground detail toggle in the desktop toolbar and Diary menu (`hrvstmn-hires`).

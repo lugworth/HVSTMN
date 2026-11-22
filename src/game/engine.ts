@@ -1,4 +1,4 @@
-// Harvest Moon: Friends of Mineral Town — Complete ASCII Engine
+// FURROW — a farming tale in ASCII: the complete engine
 
 import { Screen, CellTag, FxExtra, FxKind, BoxStyle, EmoteKind, PaletteMode } from './screen';
 import { COMPACT_MIN_COLS, MIN_ROWS, isCompact, fitMessages, fitText, reflowPages, wrapLine, wrapLines } from './compact';
@@ -155,6 +155,7 @@ import {
   FAVOR_SHOPS,
 } from './constants';
 import type { ValleyLandmark, DayPace } from './constants';
+import { migrateLegacySave } from './legacy_names';
 import type { CatchOdds, MakerStep } from './rules';
 import {
   CoordSet,
@@ -192,7 +193,7 @@ import {
   plantingForecast,
   rollSpringMineDrop,
   rollLakeMineDrop,
-  CURSED_TOOL_FLOORS,
+  FEY_TOOL_FLOORS,
   GODDESS_JEWEL_FLOORS,
   KAPPA_JEWEL_FLOORS,
   checkSecretCropUnlock,
@@ -464,7 +465,7 @@ export const MASTERY_LABELS: Record<MasteryDiscipline, string> = {
 };
 export const MASTERY_REWARD_ITEMS: Record<MasteryDiscipline, string> = {
   farming: 'Turnip Seeds',
-  foraging: 'Black Grass',
+  foraging: 'Nightshade',
   fishing: 'Large Fish',
   mining: 'Copper',
   ranching: 'Chicken Feed',
@@ -508,8 +509,8 @@ export class Game {
   /** Set while the game menu is open: the clock, crops and villagers wait. */
   paused: boolean = false;
 
-  name: string = 'Pete';
-  farm: string = 'Moon';
+  name: string = 'Ash';
+  farm: string = 'Bramble';
   year: number = 1;
   season: number = 0;
   day: number = 1;
@@ -682,7 +683,7 @@ export class Game {
   skip_best: number = 0;
   lighthouse_log: number = 0;
   lighthouse_day: number = -1;
-  /** Friday evenings at Doug's Inn: scene ids seen so far, and the absday you last attended. */
+  /** Friday evenings at Gideon's Inn: scene ids seen so far, and the absday you last attended. */
   inn_scenes_seen: string[] = [];
   inn_evening_day: number = -1;
   /** Saturday stall (task 09): today's goods, takings and callers while it is open, else null. */
@@ -691,9 +692,9 @@ export class Game {
   stall_last: [number, number] = [-1, 0];
   stall_earned: number = 0;
 
-  /** Gray's two-chapter request: 0 not asked, 1 copper wanted, 2 note left, 3 finished. */
+  /** Rowan's two-chapter request: 0 not asked, 1 copper wanted, 2 note left, 3 finished. */
   gray_quest: number = 0;
-  /** The watering-can level Gray's note points at (chapter two ends when the can reaches it). */
+  /** The watering-can level Rowan's note points at (chapter two ends when the can reaches it). */
   gray_note_level: number = 0;
   /** Task 33: the Valley Map landmark you pinned (a VALLEY_LANDMARKS id), or null. */
   map_pin: string | null = null;
@@ -1060,7 +1061,7 @@ export class Game {
     this.max_stamina = getMaxStamina(this.power_berries);
     this.stamina = this.max_stamina;
     this.fatigue = 0;
-    this.msg(`You ate a Power Berry! Max Stamina +10 (${this.max_stamina})!`, '0A');
+    this.msg(`You ate a Heartseed! Max Stamina +10 (${this.max_stamina})!`, '0A');
     return true;
   }
 
@@ -1215,7 +1216,7 @@ export class Game {
     try {
       const d = JSON.parse(await file.text());
       if (!isValidSavePayload(d)) {
-        throw new Error('That does not look like an HRVSTMN save file.');
+        throw new Error('That does not look like an FURROW save file.');
       }
       this.applySaveData(d);
       this.save(1);
@@ -1226,10 +1227,11 @@ export class Game {
   }
 
   applySaveData(d: Record<string, any>): void {
+    d = migrateLegacySave(d);
     this._hydrating = true;
     try {
-      const farmer = typeof d.name === 'string' && d.name.trim() ? d.name : 'Pete';
-      const farmName = typeof d.farm === 'string' && d.farm.trim() ? d.farm : 'Moon';
+      const farmer = typeof d.name === 'string' && d.name.trim() ? d.name : 'Ash';
+      const farmName = typeof d.farm === 'string' && d.farm.trim() ? d.farm : 'Bramble';
       this._init_new_game(farmer, farmName);
       for (const k of this.SAVE_FIELDS) {
         if (k in d && d[k] !== undefined) {
@@ -1416,14 +1418,14 @@ export class Game {
             this.update_npcs();
             this.msg(`Resumed ${this.farm} Farm (${this.date_str()}).`, '0B');
           } catch {
-            this.new_game('Pete', 'Moon');
+            this.new_game('Ash', 'Bramble');
             this.autosave(true);
-            this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+            this.msg('Welcome to Brackenford! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
           }
         } else {
-          this.new_game('Pete', 'Moon');
+          this.new_game('Ash', 'Bramble');
           this.autosave(true);
-          this.msg('Welcome to Mineral Town! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
+          this.msg('Welcome to Brackenford! Use Arrows/WASD to move, SPACE to use tool, X to act.', '0B');
         }
         this.render();
         this.scr.flush();
@@ -1501,20 +1503,20 @@ export class Game {
     this.markDirty(false);
     if (this.stall) await this.stall_tick(before);
 
-    // Equipped Gem of the Goddess / Gem of the Kappa passive regeneration
-    if (this.held === 'Gem of the Goddess' || this.inv['Gem of the Goddess']) {
+    // Equipped Gem of the Wellkeeper / Gem of the Reed Heron passive regeneration
+    if (this.held === 'Gem of the Wellkeeper' || this.inv['Gem of the Wellkeeper']) {
       this.stamina = Math.min(this.max_stamina, this.stamina + 2);
     }
-    if (this.held === 'Gem of the Kappa' || this.inv['Gem of the Kappa']) {
+    if (this.held === 'Gem of the Reed Heron' || this.inv['Gem of the Reed Heron']) {
       this.fatigue = Math.max(0, this.fatigue - 2);
     }
 
-    // 5:00 PM (17:00) Zack shipping pickup
+    // 5:00 PM (17:00) Otto shipping pickup
     if (before < 17 * 60 && this.minutes >= 17 * 60 && !this.zack_paid_today) {
       this.zack_paid_today = true;
       const earned = this.process_zack_pickup();
       if (earned > 0) {
-        this.msg(`5:00 PM: Zack picked up your shipment! +${earned}G.`, '09');
+        this.msg(`5:00 PM: Otto picked up your shipment! +${earned}G.`, '09');
       }
     }
 
@@ -1557,9 +1559,9 @@ export class Game {
     } else if (k.length === 1 && '123456'.includes(k)) {
       const t = TOOLS[Number(k) - 1];
       if (this.levels[this.tool] === 5 && this.tool !== t) {
-        this.msg(`Your ${this.tool} is CURSED and cannot be unequipped! Visit Carter at Church.`, '08');
+        this.msg(`Your ${this.tool} is FEY and cannot be unequipped! Visit Lucan at Church.`, '08');
       } else if (this.upgrading && this.upgrading[0] === t) {
-        this.msg(`Saibara is still working on your ${t}.`, '08');
+        this.msg(`Hilde is still working on your ${t}.`, '08');
       } else {
         this.tool = t;
       }
@@ -1575,10 +1577,10 @@ export class Game {
     } else if (k === 'b') {
       this.ring_grazing_bell();
     } else if (k === 't') {
-      if (this.inv['Teleport Stone']) {
+      if (this.inv['Waystone']) {
         await this.use_teleport_stone();
       } else {
-        this.msg('Unearth the Teleport Stone on Floor 255 of the Spring Mine to warp anywhere!');
+        this.msg('Unearth the Waystone on Floor 255 of the Copperseam Mine to warp anywhere!');
       }
     } else if (k === 'y' || k === 'Y') {
       await this.today_panel();
@@ -1730,8 +1732,8 @@ export class Game {
       { key: 'export', raw: 'Export Save File', label: 'Export Save File', icon: '↗', iconCol: '04', right: 'JSON', rightCol: '03' },
       { key: 'import', raw: 'Import Save File', label: 'Import Save File', icon: '↙', iconCol: '04', right: 'JSON', rightCol: '03' },
     ];
-    if (this.inv['Teleport Stone']) {
-      entries.push({ key: 'warp', raw: 'Use Teleport Stone', label: 'Use Teleport Stone', icon: '✧', iconCol: '0E', right: 'Warp', rightCol: '0E' });
+    if (this.inv['Waystone']) {
+      entries.push({ key: 'warp', raw: 'Use Waystone', label: 'Use Waystone', icon: '✧', iconCol: '0E', right: 'Warp', rightCol: '0E' });
     }
     entries.push(
       { key: 'help', raw: 'Help (?)', label: 'Help & Controls', icon: '?', iconCol: '0C', right: '[?]', rightCol: '0C', hotkey: '?' },
@@ -1845,19 +1847,19 @@ export class Game {
     const dests: [string, string, number, number][] = [
       ['Farmhouse', 'house', 7, 5],
       ['Farm Field', 'farm', 14, 10],
-      ['Rose Square (Town)', 'town', 36, 14],
-      ['Mineral Beach Pier', 'beach', 32, 10],
-      ["Mother's Hill Hot Spring", 'mountain', 8, 14],
-      ['Goddess Pond & Spring Mine', 'mountain', 50, 6],
-      ['Lake Mine Island (Mother\'s Hill Lake)', 'mountain', 14, 6],
+      ['Market Cross (Town)', 'town', 36, 14],
+      ['Brackenford Beach Pier', 'beach', 32, 10],
+      ["Beacon Hill Hot Spring", 'mountain', 8, 14],
+      ['Wellkeeper Pond & Copperseam Mine', 'mountain', 50, 6],
+      ['Mirewater Mine Island (Beacon Hill Lake)', 'mountain', 14, 6],
       ['Cedar Hollow Clearing', 'woods', 44, 19],
       ['Skyline Ridge Lookout', 'ridge', 32, 3],
       ['Willow Bend Bridge', 'river', 30, 12],
       ['Lighthouse Point', 'point', 40, 12],
-      ["Ironwood Grove (Saibara's Forge)", 'grove', 22, 18],
+      ["Ironwood Grove (Hilde's Forge)", 'grove', 22, 18],
     ];
     const sel = await this.menu(
-      'Teleport Stone — Warp Where?',
+      'Waystone — Warp Where?',
       dests.map((d) => d[0])
     );
     if (sel !== null) {
@@ -1902,7 +1904,7 @@ export class Game {
     const m = this.maps[mapname];
     if (!m || !m.inside(x, y)) return false;
     const t = m.tile(x, y);
-    // In Winter, Mother's Hill Lake water forms a frozen ice bridge from the south shore to the Lake Mine island!
+    // In Winter, Beacon Hill Lake water forms a frozen ice bridge from the south shore to the Mirewater Mine island!
     if (mapname === 'mountain' && this.season === 3 && t === 'water' && x >= 13 && x <= 17 && y >= 7 && y <= 14) {
       return true;
     }
@@ -1927,8 +1929,8 @@ export class Game {
     if (!d || !d.out || n === this.married) {
       return false;
     }
-    // Kai is mainly around in Summer unless married or high hearts
-    if (n === 'Kai' && this.season !== 1 && (this.friend['Kai'] || 0) < 60) {
+    // Nico is mainly around in Summer unless married or high hearts
+    if (n === 'Nico' && this.season !== 1 && (this.friend['Nico'] || 0) < 60) {
       return false;
     }
     if (this.weather !== 'Sunny' && !d.rain) {
@@ -2038,7 +2040,7 @@ export class Game {
     this.py = ny;
     this.steps += 1;
     if (this.steps === 1000 || this.steps === 10000) {
-      this.msg(`Pedometer milestone: ${this.steps} steps! The Harvest Goddess applauds your diligence!`, '0C');
+      this.msg(`Pedometer milestone: ${this.steps} steps! The Wellkeeper applauds your diligence!`, '0C');
     }
     await this.fest_check();
     if (key in m.warps) {
@@ -2103,7 +2105,7 @@ export class Game {
     if (maxF >= 10 || this.goddess_gifts >= 30) {
       const floors = [1, 10, 29, 50, 100, 200, 255].filter((f) => f === 1 || f <= maxF + 20 || this.goddess_gifts >= 30);
       const sel = await this.menu(
-        `${mineType === 'lake' ? 'Lake Mine' : 'Spring Mine'} Elevator`,
+        `${mineType === 'lake' ? 'Mirewater Mine' : 'Copperseam Mine'} Elevator`,
         floors.map((f) => `Floor B${f}F`)
       );
       if (sel !== null) {
@@ -2152,7 +2154,7 @@ export class Game {
 
   cycle_tool(d: number): void {
     if (this.levels[this.tool] === 5) {
-      this.msg(`Your ${this.tool} is CURSED and stuck to your hand! Visit Carter at the Church.`, '08');
+      this.msg(`Your ${this.tool} is FEY and stuck to your hand! Visit Lucan at the Church.`, '08');
       return;
     }
     const tl = this.tool_list();
@@ -2197,7 +2199,7 @@ export class Game {
     const next = this.first_steps_rows().find((r) => !r.done);
     if (!next) {
       this.first_steps = null;
-      this.msg('✓ First morning done! Water them daily; turnips are ready in 4 days. Zack ships the bin at 5 PM.', '0B');
+      this.msg('✓ First morning done! Water them daily; turnips are ready in 4 days. Otto ships the bin at 5 PM.', '0B');
       return;
     }
     const did = { till: 'Tilled the soil', sow: 'Sowed your first seeds', water: 'Watered them' }[newly[newly.length - 1]];
@@ -2253,7 +2255,7 @@ export class Game {
       this.cursed_uses[t] = (this.cursed_uses[t] || 0) + 1;
       if (this.cursed_uses[t] >= 25) {
         this.levels[t] = 6;
-        this.msg(`A divine light lifts the curse! Your Cursed ${t} is now a BLESSED ${t}!`, '0B');
+        this.msg(`A divine light lifts the curse! Your Fey ${t} is now a HALLOWED ${t}!`, '0B');
       }
     }
   }
@@ -2373,7 +2375,7 @@ export class Game {
               this.wet.add(qk);
             }
             n += 1;
-            // 2% chance to unearth the Farm Field Power Berry!
+            // 2% chance to unearth the Farm Field Heartseed!
             if (!this.berry_sources.includes('farm_hoe') && py_rng().random() < 0.03) {
               this.give_power_berry('farm_hoe');
             }
@@ -2498,16 +2500,16 @@ export class Game {
     }
     const f = this.mine_floor;
     this.mastery_add('mining');
-    // Check if Lake Mine floor has a Cursed Tool
-    if (this.mine_type === 'lake' && CURSED_TOOL_FLOORS[f]) {
-      const cTool = CURSED_TOOL_FLOORS[f];
+    // Check if Mirewater Mine floor has a Fey Tool
+    if (this.mine_type === 'lake' && FEY_TOOL_FLOORS[f]) {
+      const cTool = FEY_TOOL_FLOORS[f];
       if ((this.levels[cTool] || 0) === 4 && py_rng().random() < 0.35) {
         this.levels[cTool] = 5;
-        this.msg(`Unearthed the CURSED ${cTool.toUpperCase()}! Bring it to Carter at the Church to bless!`, '0E');
+        this.msg(`Unearthed the FEY ${cTool.toUpperCase()}! Bring it to Lucan at the Church to bless!`, '0E');
         return;
       }
     }
-    // Check Power Berries in mines
+    // Check Heartseeds in mines
     if (this.mine_type === 'spring' && f === 100 && !this.berry_sources.includes('spring_100')) {
       this.give_power_berry('spring_100');
       return;
@@ -2516,30 +2518,30 @@ export class Game {
       this.give_power_berry('lake_19');
       return;
     }
-    // Check Spring Mine Floor 255 Teleport Stone
-    if (this.mine_type === 'spring' && f === 255 && !this.inv['Teleport Stone']) {
-      this.give('Teleport Stone', 1);
-      this.msg('Unearthed the legendary TELEPORT STONE on Floor 255!', '0C');
+    // Check Copperseam Mine Floor 255 Waystone
+    if (this.mine_type === 'spring' && f === 255 && !this.inv['Waystone']) {
+      this.give('Waystone', 1);
+      this.msg('Unearthed the legendary WAYSTONE on Floor 255!', '0C');
       return;
     }
-    // Check Goddess / Kappa Jewels
+    // Check Wellkeeper / Reed Heron Jewels
     if (this.mine_type === 'spring' && (GODDESS_JEWEL_FLOORS as readonly number[]).includes(f) && this.goddess_jewels < 9 && py_rng().random() < 0.4) {
       this.goddess_jewels += 1;
       if (this.goddess_jewels >= 9) {
-        this.give('Gem of the Goddess', 1);
-        this.msg('All 9 Goddess Jewels united into the GEM OF THE GODDESS!', '0C');
+        this.give('Gem of the Wellkeeper', 1);
+        this.msg('All 9 Wellkeeper Jewels united into the GEM OF THE WELLKEEPER!', '0C');
       } else {
-        this.msg(`Found a Goddess Jewel! (${this.goddess_jewels}/9)`, '0C');
+        this.msg(`Found a Wellkeeper Jewel! (${this.goddess_jewels}/9)`, '0C');
       }
       return;
     }
     if (this.mine_type === 'lake' && (KAPPA_JEWEL_FLOORS as readonly number[]).includes(f) && this.kappa_jewels < 9 && py_rng().random() < 0.4) {
       this.kappa_jewels += 1;
       if (this.kappa_jewels >= 9) {
-        this.give('Gem of the Kappa', 1);
-        this.msg('All 9 Kappa Jewels united into the GEM OF THE KAPPA!', '0B');
+        this.give('Gem of the Reed Heron', 1);
+        this.msg('All 9 Reed Heron Jewels united into the GEM OF THE REED HERON!', '0B');
       } else {
-        this.msg(`Found a Kappa Jewel! (${this.kappa_jewels}/9)`, '0B');
+        this.msg(`Found a Reed Heron Jewel! (${this.kappa_jewels}/9)`, '0B');
       }
       return;
     }
@@ -2548,8 +2550,8 @@ export class Game {
       m.set(tx, ty, 'down');
       this.msg('Your Hoe uncovered a hidden staircase down (>)', '0A');
     } else if (r < 0.48) {
-      this.give('Black Grass', 1);
-      this.msg('Dug up Black Grass! (+15 Stamina if eaten)', '0B');
+      this.give('Nightshade', 1);
+      this.msg('Dug up Nightshade! (+15 Stamina if eaten)', '0B');
     } else if (r < 0.65) {
       const coins = py_rng().randint(10, 50);
       this.gold += coins;
@@ -2644,7 +2646,7 @@ export class Game {
       const it = lake ? rollLakeMineDrop(f, 0) : rollSpringMineDrop(f, false, 0);
       if (it) items[it] = 1;
     } else {
-      items['Black Grass'] = 2;
+      items['Nightshade'] = 2;
       gold = rng.randint(40, 90);
     }
     return { items, gold };
@@ -2699,7 +2701,7 @@ export class Game {
     const regrow = d[3] ? `, regrows every ${d[3]}d` : '';
     return [
       `Gives ${r.bags} bag of ${bag}: sows 3x3, ${d[2]} days to grow${regrow}.`,
-      `Jeff sells the bag for ${d[1] * r.bags}G; ${r.need} ${crop} would ship for ${ITEMS[crop][0] * r.need}G.`,
+      `Hollis sells the bag for ${d[1] * r.bags}G; ${r.need} ${crop} would ship for ${ITEMS[crop][0] * r.need}G.`,
       `You have ${this.inv[crop] || 0} ${crop} and ${this.inv[bag] || 0} ${bag}. Sow in ${d[0]}.`,
     ];
   }
@@ -2842,7 +2844,7 @@ export class Game {
       }
       const bait = this.trap_bait();
       const info = [
-        "  Kai's old crab pot hangs off the end of the pier.",
+        "  Nico's old crab pot hangs off the end of the pier.",
         '  Set it now and haul it on your next trip (tomorrow or later).',
         '  A fish for bait draws crabs: 2 Crab, sometimes a Mackerel too.',
         '  Unbaited it is a gamble: a Crab, a Small Fish, or seaweed.',
@@ -2919,7 +2921,7 @@ export class Game {
     return ring;
   }
 
-  /** Extra harvest for the crop on this tile: a Cucumber with a Moondrop Flower in bloom beside it. */
+  /** Extra harvest for the crop on this tile: a Cucumber with a Duskbell Flower in bloom beside it. */
   companion_bonus(pKey: string): number {
     const c = this.crops[pKey];
     if (!c || c[0] !== COMPANION.crop) return 0;
@@ -2941,7 +2943,7 @@ export class Game {
 
   /**
    * What a seed bag aimed at (tx, ty) would do for the pairing: the tiles to mark and a line for
-   * FACING. Cucumber seeds: the tiles they would land on that touch a Moondrop. Moondrop seeds:
+   * FACING. Cucumber seeds: the tiles they would land on that touch a Duskbell. Duskbell seeds:
    * the Cucumber vines the new flowers would touch. Null for any other bag, or no pairing.
    */
   companion_preview(tool: string, tx: number, ty: number): { cells: string[]; text: string } | null {
@@ -3086,7 +3088,7 @@ export class Game {
     if (this.mapname === 'mine' && this.mine_type === 'lake' && this.mine_floor === 9) return 'Coelacanth';
     const odds = valleyCatchOdds({ map: this.mapname, season: this.season, rodLvl });
     const caught = rollCatch(odds, py_rng().random());
-    // the beach's special catch (first in its odds) brings a Power Berry with it in winter
+    // the beach's special catch (first in its odds) brings a Heartseed with it in winter
     if (this.mapname === 'beach' && rodLvl >= 4 && caught === odds[0][0] && this.season === 3 && !this.berry_sources.includes('ocean_fish')) {
       this.give_power_berry('ocean_fish');
     }
@@ -3175,7 +3177,7 @@ export class Game {
       return;
     }
 
-    // Hot Spring on Mother's Hill (either standing in or facing 'spring')
+    // Hot Spring on Beacon Hill (either standing in or facing 'spring')
     if (tile === 'spring' || m.tile(this.px, this.py) === 'spring') {
       if (this.held === 'Egg') {
         this.take('Egg', 1);
@@ -3186,52 +3188,52 @@ export class Game {
       this.stamina = Math.min(this.max_stamina, this.stamina + 80);
       this.fatigue = Math.max(0, this.fatigue - 40);
       await this.advance(60);
-      await this.say('Ahh... you soak in the Mother\'s Hill Hot Spring for an hour. (+80 Stamina, -40 Fatigue!)', 'Hot Spring');
+      await this.say('Ahh... you soak in the Beacon Hill Hot Spring for an hour. (+80 Stamina, -40 Fatigue!)', 'Hot Spring');
       return;
     }
 
-    // Cedar Hollow's mossy pond and Lighthouse Point's tide pools are not the Goddess Pond
+    // Cedar Hollow's mossy pond and Lighthouse Point's tide pools are not the Wellkeeper Pond
     if (tile === 'pond' && this.mapname !== 'mountain') {
       if (this.mapname === 'woods') await this.hollow_offering();
       else await this.say(TIDE_POOL_TEXT, 'Tide Pool');
       return;
     }
 
-    // Goddess Pond Offering
+    // Wellkeeper Pond Offering
     if (tile === 'pond') {
       if (!this.held) {
-        await this.say('The Goddess Pond shimmers. Hold an item from your Rucksack (i) and press X to make an offering!', 'Goddess Pond');
+        await this.say('The Wellkeeper Pond shimmers. Hold an item from your Rucksack (i) and press X to make an offering!', 'Wellkeeper Pond');
         return;
       }
       const item = this.held;
-      if (item === 'Blue Feather') {
-        await this.propose('Harvest Goddess');
+      if (item === 'Promise Ribbon') {
+        await this.propose('Wellkeeper');
         return;
       }
       this.take(item, 1);
       this.goddess_gifts += 1;
-      this.friend['Harvest Goddess'] = clamp((this.friend['Harvest Goddess'] || 0) + 5, 0, 100);
-      await this.say(`Tadaaa! Thank you for the ${item}! (Total offerings: ${this.goddess_gifts})`, 'Harvest Goddess');
+      this.friend['Wellkeeper'] = clamp((this.friend['Wellkeeper'] || 0) + 5, 0, 100);
+      await this.say(`Tadaaa! Thank you for the ${item}! (Total offerings: ${this.goddess_gifts})`, 'Wellkeeper');
       if (this.goddess_gifts === 10) {
         this.give_power_berry('goddess_10');
-        await this.say('For 10 offerings, please accept this Power Berry!', 'Harvest Goddess');
+        await this.say('For 10 offerings, please accept this Heartseed!', 'Wellkeeper');
       } else if (this.goddess_gifts === 20) {
-        this.give('White Grass', 1);
-        await this.say('For 20 offerings, here is a sacred White Grass and the Mine Elevator blessing!', 'Harvest Goddess');
+        this.give('Frostwort', 1);
+        await this.say('For 20 offerings, here is a sacred Frostwort and the Mine Elevator blessing!', 'Wellkeeper');
       }
       return;
     }
 
-    // Mother's Hill Lake Cucumber Offering to Kappa
+    // Beacon Hill Lake Cucumber Offering to Reed Heron
     if (this.mapname === 'mountain' && tile === 'water' && this.held === 'Cucumber') {
       this.take('Cucumber', 1);
       this.kappa_gifts += 1;
       if (this.kappa_gifts >= 10 && !this.has_mystic_berry) {
         this.has_mystic_berry = true;
-        await this.say('...You brought 10 Cucumbers. Eat this Mystic Blue Berry. Rain and snow will never tire you again.', 'Kappa');
-        this.msg("Obtained Kappa's Mystic Blue Berry! Zero fatigue from rain/snow!", '0C');
+        await this.say('...You brought 10 Cucumbers. Eat this Mystic Blue Berry. Rain and snow will never tire you again.', 'Reed Heron');
+        this.msg("Obtained Reed Heron's Mystic Blue Berry! Zero fatigue from rain/snow!", '0C');
       } else {
-        await this.say(`...Kappa emerges from the lake, munches your Cucumber, and vanishes. (${this.kappa_gifts}/10 for Mystic Berry)`, 'Kappa');
+        await this.say(`...Reed Heron emerges from the lake, munches your Cucumber, and vanishes. (${this.kappa_gifts}/10 for Mystic Berry)`, 'Reed Heron');
       }
       return;
     }
@@ -3404,7 +3406,7 @@ export class Game {
 
   // ---------------------------------------------------------------- outer-region landmarks
 
-  /** Task 34: the latch of the old hedge gate, on the Mineral Beach side. Lifting it opens the way to Cedar Hollow for good. */
+  /** Task 34: the latch of the old hedge gate, on the Brackenford Beach side. Lifting it opens the way to Cedar Hollow for good. */
   async hedge_latch(): Promise<void> {
     // short lines, so the compact layout (44 columns of text at 50) wraps nothing mid-sentence
     const info = ['An old field gate in the hedge.', 'Its latch is on this side, stiff with salt.', 'Beyond it, the woods.'];
@@ -3515,7 +3517,7 @@ export class Game {
       this.msg('Woof! Your dog wags its tail happily! (+Affection)', '0B');
     } else if (sel === 1) {
       if (!this.inv['Dog Ball']) {
-        await this.say('Buy a Dog Ball from Won at Zack\'s Beach House to play fetch!', 'Doghouse');
+        await this.say('Buy a Dog Ball from Ferreira at Otto\'s Beach House to play fetch!', 'Doghouse');
       } else {
         this.dog_aff = Math.min(100, this.dog_aff + 5);
         this.fx_add('emote', 21, 6, 1.0, { emote: 'heart' });
@@ -3523,7 +3525,7 @@ export class Game {
       }
     } else if (sel === 2) {
       if (!this.inv['Frisbee']) {
-        await this.say('Buy a Frisbee from Won at Zack\'s Beach House to train for Beach Day (Summer 1)!', 'Doghouse');
+        await this.say('Buy a Frisbee from Ferreira at Otto\'s Beach House to train for Beach Day (Summer 1)!', 'Doghouse');
       } else {
         const gain = py_rng().randint(2, 6);
         this.dog_frisbee_dist = Math.min(95, this.dog_frisbee_dist + gain);
@@ -3554,7 +3556,7 @@ export class Game {
       this.msg('Neigh! Your horse nuzzles your shoulder.', '0B');
     } else if (sel === 1) {
       if (!this.inv['Brush']) {
-        await this.say('Buy a Brush from Saibara or Barley to groom your horse.', 'Stable');
+        await this.say('Buy a Brush from Hilde or Abel to groom your horse.', 'Stable');
       } else {
         this.horse_aff = Math.min(100, this.horse_aff + 5);
         this.fx_add('emote', 25, 6, 1.0, { emote: 'heart' });
@@ -3585,7 +3587,7 @@ export class Game {
   async trash_can_menu(): Promise<void> {
     const trashItems = ['Boot', 'Empty Can', 'Fish Bones'].filter((i) => (this.inv[i] || 0) > 0);
     if (!trashItems.length) {
-      await this.say('Rose Square Trash Can: Dispose of fished-up Boots and Empty Cans here so you never litter!', 'Trash Can');
+      await this.say('Market Cross Trash Can: Dispose of fished-up Boots and Empty Cans here so you never litter!', 'Trash Can');
       return;
     }
     for (const item of trashItems) {
@@ -3602,26 +3604,26 @@ export class Game {
     }
     const sel = await this.menu('Farmhouse Television — Choose Channel', [
       'Ch 1 (Left): Weather Forecast',
-      'Ch 2 (Up): Mineral Town News & Calendar',
+      'Ch 2 (Up): Brackenford News & Calendar',
       'Ch 3 (Right): Variety, Cooking Show (Tue) & TV Shopping (Sat)',
       'Ch 4 (Down): Life on the Farm Guide',
       'Turn Off',
     ]);
     if (sel === 0) {
       await this.say(
-        `Tomorrow's weather forecast for Mineral Town: ${this.tomorrow}! Plan your watering and animals accordingly.${this.flush_coming() ? " And after today's rain, look for mushrooms in Cedar Hollow tomorrow morning." : ''}`,
+        `Tomorrow's weather forecast for Brackenford: ${this.tomorrow}! Plan your watering and animals accordingly.${this.flush_coming() ? " And after today's rain, look for mushrooms in Cedar Hollow tomorrow morning." : ''}`,
         'Weather Channel',
       );
     } else if (sel === 1) {
-      await this.say(`Mineral Town News:${this.fest_news() || ' All is peaceful in Mineral Town today.'}`, 'News Channel');
+      await this.say(`Brackenford News:${this.fest_news() || ' All is peaceful in Brackenford today.'}`, 'News Channel');
     } else if (sel === 2) {
       if (this.season === 0 && this.day <= 5) {
         const win = py_rng().random() < 0.7;
         if (win) {
           this.give('Relaxation Tea Leaves', 1);
-          await this.say('Harvest Goddess New Year High-Low Gameshow! You guessed right and won Relaxation Tea Leaves!', 'TV Gameshow');
+          await this.say('Wellkeeper New Year High-Low Gameshow! You guessed right and won Relaxation Tea Leaves!', 'TV Gameshow');
         } else {
-          await this.say('Harvest Goddess New Year High-Low Gameshow! So close—try again tomorrow!', 'TV Gameshow');
+          await this.say('Wellkeeper New Year High-Low Gameshow! So close—try again tomorrow!', 'TV Gameshow');
         }
         return;
       }
@@ -3632,7 +3634,7 @@ export class Game {
       } else if (this.weekday === 5) {
         // Saturday: TV Shopping Network
         const nextItem = TV_SHOPPING_ITEMS.find(([name]) => {
-          if (name === 'Power Berry') return !this.berry_sources.includes('tv_shopping');
+          if (name === 'Heartseed') return !this.berry_sources.includes('tv_shopping');
           return !this.inv[name] && !this.house_flags.includes(name);
         });
         if (!nextItem) {
@@ -3640,13 +3642,13 @@ export class Game {
         } else {
           this.tv_watched_saturday = nextItem[0];
           await this.say(
-            `Welcome to SATURDAY TV SHOPPING! Today's special is the ${nextItem[0]} for just ${nextItem[1]}G! (${nextItem[2]}) Use the Telephone at Doug's Inn to order!`,
+            `Welcome to SATURDAY TV SHOPPING! Today's special is the ${nextItem[0]} for just ${nextItem[1]}G! (${nextItem[2]}) Use the Telephone at Gideon's Inn to order!`,
             'TV Shopping'
           );
         }
       } else {
         const show = py_rng().choice([
-          'Star Lillia: Space Princess',
+          'Star Rosalind: Space Princess',
           'Mechabot Ultror',
           'The Samurai Farmer Chronicles',
           'Fairy & Me: Episode 14',
@@ -3660,11 +3662,11 @@ export class Game {
 
   async inn_phone_menu(): Promise<void> {
     if (this.tv_order) {
-      await this.say(`Zack is already delivering your ${this.tv_order[0]} soon!`, 'Inn Telephone');
+      await this.say(`Otto is already delivering your ${this.tv_order[0]} soon!`, 'Inn Telephone');
       return;
     }
     const nextItem = TV_SHOPPING_ITEMS.find(([name]) => {
-      if (name === 'Power Berry') return !this.berry_sources.includes('tv_shopping');
+      if (name === 'Heartseed') return !this.berry_sources.includes('tv_shopping');
       return !this.inv[name] && !this.house_flags.includes(name);
     });
     if (!nextItem) {
@@ -3679,7 +3681,7 @@ export class Game {
       }
       this.gold -= price + 10;
       this.tv_order = [itemName, this.absday() + 2];
-      await this.say(`Thank you for ordering the ${itemName}! Zack will deliver it to your farmhouse in 2 days!`, 'TV Shopping');
+      await this.say(`Thank you for ordering the ${itemName}! Otto will deliver it to your farmhouse in 2 days!`, 'TV Shopping');
     }
   }
 
@@ -3704,7 +3706,7 @@ export class Game {
           this.heart_events_seen.push(key);
           this.friend[n] = clamp(aff + 5, 0, 100);
           await this.say(events[idx], `${n} — Heart Event`);
-          if (n === 'Karen' && idx === 0) {
+          if (n === 'Priya' && idx === 0) {
             this.give('Grass Seeds', 1);
           }
           break;
@@ -3743,7 +3745,7 @@ export class Game {
     };
     if (this.held) {
       const item = this.held;
-      if (item === 'Blue Feather') {
+      if (item === 'Promise Ribbon') {
         await this.propose(n);
         return;
       }
@@ -3781,7 +3783,7 @@ export class Game {
       return;
     }
 
-    if (n === 'Gray' && (await this.gray_quest_talk())) {
+    if (n === 'Rowan' && (await this.gray_quest_talk())) {
       if (!this.talked.has(n)) {
         this.talked.add(n);
         this.friend[n] = clamp((this.friend[n] || 0) + 2, 0, 100);
@@ -3893,7 +3895,7 @@ export class Game {
     this.remember(fv.npc, f.memory, `favor:${fv.npc}:${fv.day}`);
   }
 
-  /** Today's hours for each shop on Mary's note, for the whole day (not just from now). */
+  /** Today's hours for each shop on Odessa's note, for the whole day (not just from now). */
   favor_hours(): string[] {
     const fest = this.fest_on();
     return FAVOR_SHOPS.map((bid) => {
@@ -3907,7 +3909,7 @@ export class Game {
     });
   }
 
-  /** The Today's Plan line for an arranged favor, or null. Mary's note adds the hours on the day. */
+  /** The Today's Plan line for an arranged favor, or null. Odessa's note adds the hours on the day. */
   favor_line(): { text: string; hours: string[] } | null {
     const fv = this.favor;
     if (!fv) return null;
@@ -4171,7 +4173,7 @@ export class Game {
     return { item: HONEY_FLAVOURS[best[0]].item, flower: best[0], blooms: best[1] };
   }
 
-  /** "Tomorrow's honey will taste of Moondrop." or how to get a flavour. */
+  /** "Tomorrow's honey will taste of Duskbell." or how to get a flavour. */
   hive_note(): string {
     const h = this.hive_honey();
     return h.flower
@@ -4292,7 +4294,7 @@ export class Game {
     return { rows, fg };
   }
 
-  /** "Rose Square · Spring 3, Year 1 · 6:20 PM" */
+  /** "Market Cross · Spring 3, Year 1 · 6:20 PM" */
   postcard_caption(p: Postcard): string {
     return `${p.place} · ${absdayLabel(p.day)} · ${fmt_time(p.minutes).trim()}`;
   }
@@ -4442,9 +4444,9 @@ export class Game {
   /** Something this villager has not yet said about what you've done, with its key; or null. */
   milestone_line(n: string): { key: string; line: string } | null {
     const said = (k: string) => this.milestones_said.includes(k);
-    if (n === 'Zack' && this.shipped_total > 0 && !said('Zack:first_shipment')) {
+    if (n === 'Otto' && this.shipped_total > 0 && !said('Otto:first_shipment')) {
       const top = Object.entries(this.shipped_counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? 'Turnips';
-      return { key: 'Zack:first_shipment', line: MILESTONE_LINES.first_shipment.replace('{item}', top) };
+      return { key: 'Otto:first_shipment', line: MILESTONE_LINES.first_shipment.replace('{item}', top) };
     }
     if (n === 'Curator') {
       const done = this.museum_cases_done().find((c) => !said(`Curator:case:${c}`));
@@ -4455,40 +4457,40 @@ export class Game {
     return null;
   }
 
-  /** Gray's watering-can advice from the current can level, or null once it is past Saibara's ore upgrades. */
+  /** Rowan's watering-can advice from the current can level, or null once it is past Hilde's ore upgrades. */
   gray_advice() {
     return canUpgradeAdvice(this.can_level_soon(), UPGRADE, CAN_CAP);
   }
 
-  /** The watering can's level, counting an upgrade already paid for at Saibara's forge. */
+  /** The watering can's level, counting an upgrade already paid for at Hilde's forge. */
   can_level_soon(): number {
     const lvl = this.levels['Watering Can'] || 0;
     return this.upgrading?.[0] === 'Watering Can' ? lvl + 1 : lvl;
   }
 
-  /** The one-line next step Gray's note gives (Today's Plan and his reminder). */
+  /** The one-line next step Rowan's note gives (Today's Plan and his reminder). */
   gray_note(): string {
     const lvl = this.levels['Watering Can'] || 0;
-    if (lvl >= this.gray_note_level) return 'Your can is ready; tell Gray how it went.';
-    if (this.can_level_soon() >= this.gray_note_level) return 'Saibara has your can; collect it, then tell Gray.';
+    if (lvl >= this.gray_note_level) return 'Your can is ready; tell Rowan how it went.';
+    if (this.can_level_soon() >= this.gray_note_level) return 'Hilde has your can; collect it, then tell Rowan.';
     const soon = this.can_level_soon();
     const [cost, ore] = UPGRADE[soon + 1] || [0, ''];
-    return `Take Saibara ${cost}G + 1 ${ore} for a ${LEVELS[soon + 1]} can.`;
+    return `Take Hilde ${cost}G + 1 ${ore} for a ${LEVELS[soon + 1]} can.`;
   }
 
-  /** What Gray says when Saibara's ore upgrades have nothing more for the can (Mystrile and up). */
+  /** What Rowan says when Hilde's ore upgrades have nothing more for the can (Starsteel and up). */
   gray_past_ore_line(lvl: number): string {
-    if (lvl >= 7) return "A Mythic can? There's nothing left to forge. I just wanted to see it.";
+    if (lvl >= 7) return "A Heirloom can? There's nothing left to forge. I just wanted to see it.";
     if (lvl === 6) {
       const [cost, ore] = UPGRADE[7];
-      return `Blessed, huh. The only step left is Mythic: ${cost.toLocaleString('en-US')}G and a ${ore} from the deep Spring Mine.`;
+      return `Hallowed, huh. The only step left is Heirloom: ${cost.toLocaleString('en-US')}G and a ${ore} from the deep Copperseam Mine.`;
     }
-    if (lvl === 5) return 'That cursed can needs Carter at the church before anyone forges it again.';
-    return "Mystrile's the last thing Saibara forges from ore. Past that, people talk about cursed tools in the Lake Mine.";
+    if (lvl === 5) return 'That fey can needs Lucan at the church before anyone forges it again.';
+    return "Starsteel's the last thing Hilde forges from ore. Past that, people talk about fey tools in the Mirewater Mine.";
   }
 
   /**
-   * Task 04. Chapter one: Gray asks for Spring Mine copper. Chapter two: after delivery he
+   * Task 04. Chapter one: Rowan asks for Copperseam Mine copper. Chapter two: after delivery he
    * explains which watering-can upgrade is worth saving for and leaves a note; it closes when
    * the can reaches that level. Returns false when the quest has nothing to say this time.
    */
@@ -4497,61 +4499,61 @@ export class Game {
     if (this.gray_quest === 0) {
       this.gray_quest = 1;
       await this.say(
-        `Got a minute? Saibara has me practising on scrap, and I'm out of copper. Bring me ${GRAY_COPPER_QTY} Copper from the Spring Mine and I'll make it worth your while.`,
-        'Gray'
+        `Got a minute? Hilde has me practising on scrap, and I'm out of copper. Bring me ${GRAY_COPPER_QTY} Copper from the Copperseam Mine and I'll make it worth your while.`,
+        'Rowan'
       );
       return true;
     }
     if (this.gray_quest === 1) {
       if (have < GRAY_COPPER_QTY) {
-        if (this.talked.has('Gray')) return false;
-        await this.say(`Still need ${GRAY_COPPER_QTY} Copper from the Spring Mine. You've got ${have}.`, 'Gray');
+        if (this.talked.has('Rowan')) return false;
+        await this.say(`Still need ${GRAY_COPPER_QTY} Copper from the Copperseam Mine. You've got ${have}.`, 'Rowan');
         return true;
       }
       this.take('Copper', GRAY_COPPER_QTY);
       this.gold += GRAY_COPPER_REWARD;
-      this.friend['Gray'] = clamp((this.friend['Gray'] || 0) + GRAY_QUEST_FRIEND, 0, 100);
+      this.friend['Rowan'] = clamp((this.friend['Rowan'] || 0) + GRAY_QUEST_FRIEND, 0, 100);
       this.requests_done += 1;
       this.fx_add('coin', this.px, this.py, 0.8);
       this.fx_add('text', this.px, this.py, 1.1, { text: `+${GRAY_COPPER_REWARD}G` });
-      await this.say(`That's good copper. Here's ${GRAY_COPPER_REWARD}G. Let me show you something about that watering can of yours.`, 'Gray');
+      await this.say(`That's good copper. Here's ${GRAY_COPPER_REWARD}G. Let me show you something about that watering can of yours.`, 'Rowan');
       const a = this.gray_advice();
       if (!a) {
         this.gray_quest = 3;
-        await this.say(this.gray_past_ore_line(this.can_level_soon()), 'Gray');
+        await this.say(this.gray_past_ore_line(this.can_level_soon()), 'Rowan');
         return true;
       }
       const { now, next, big } = a;
       await this.say(
-        `${this.upgrading?.[0] === 'Watering Can' ? "Once Saibara's done, it" : 'Right now it'} holds ${now.cap} and waters ${now.tiles} tile${now.tiles === 1 ? '' : 's'} a pour. ${LEVELS[next.level]} is the one to save for: ${next.cost}G + 1 ${next.ore}, and it holds ${next.cap} and waters ${next.tiles}.`,
-        'Gray'
+        `${this.upgrading?.[0] === 'Watering Can' ? "Once Hilde's done, it" : 'Right now it'} holds ${now.cap} and waters ${now.tiles} tile${now.tiles === 1 ? '' : 's'} a pour. ${LEVELS[next.level]} is the one to save for: ${next.cost}G + 1 ${next.ore}, and it holds ${next.cap} and waters ${next.tiles}.`,
+        'Rowan'
       );
       if (big) {
         await this.say(
           big.level > next.level + 1
             ? `After that, skip worrying until ${LEVELS[big.level]}: that's the big jump, ${big.tiles} tiles a pour. Everything between is a small step.`
             : `After that, ${LEVELS[big.level]} is the big jump: ${big.tiles} tiles a pour.`,
-          'Gray'
+          'Rowan'
         );
       }
       this.gray_quest = 2;
       this.gray_note_level = next.level;
-      await this.say(`I wrote it down for you. "${this.gray_note()}" — Gray`, 'Note');
-      this.msg("Gray's note was added to Today's Plan.", '0C');
+      await this.say(`I wrote it down for you. "${this.gray_note()}" — Rowan`, 'Note');
+      this.msg("Rowan's note was added to Today's Plan.", '0C');
       return true;
     }
     if (this.gray_quest === 2) {
       if ((this.levels['Watering Can'] || 0) >= this.gray_note_level) {
         this.gray_quest = 3;
-        this.friend['Gray'] = clamp((this.friend['Gray'] || 0) + GRAY_QUEST_FRIEND, 0, 100);
+        this.friend['Rowan'] = clamp((this.friend['Rowan'] || 0) + GRAY_QUEST_FRIEND, 0, 100);
         await this.say(
-          `There it is, a ${LEVELS[this.levels['Watering Can'] || 0]} can. Feels lighter on the wrist than you'd think, right? Saibara even nodded at my copper. Thanks for that.`,
-          'Gray'
+          `There it is, a ${LEVELS[this.levels['Watering Can'] || 0]} can. Feels lighter on the wrist than you'd think, right? Hilde even nodded at my copper. Thanks for that.`,
+          'Rowan'
         );
         return true;
       }
-      if (this.talked.has('Gray')) return false;
-      await this.say(`Remember my note: ${this.gray_note()}`, 'Gray');
+      if (this.talked.has('Rowan')) return false;
+      await this.say(`Remember my note: ${this.gray_note()}`, 'Rowan');
       return true;
     }
     return false;
@@ -4560,19 +4562,19 @@ export class Game {
   async propose(n: string): Promise<void> {
     const d = NPCS[n];
     if (!d?.bach) {
-      await this.say('What a beautiful Blue Feather! You should give it to someone special.', n);
+      await this.say('What a beautiful Promise Ribbon! You should give it to someone special.', n);
     } else if (this.married) {
       await this.say("You're already married! Go home to your family.", n);
     } else if (!this.house_flags.includes('Big Bed')) {
-      await this.say('A Blue Feather...? I care for you too, but your house needs a Big Bed before we can wed!', n);
+      await this.say('A Promise Ribbon...? I care for you too, but your house needs a Big Bed before we can wed!', n);
     } else if ((this.friend[n] || 0) < 90) {
-      await this.say("A Blue Feather...? I'm sorry. My heart isn't at Red yet—let's grow closer first.", n);
+      await this.say("A Promise Ribbon...? I'm sorry. My heart isn't at Red yet—let's grow closer first.", n);
     } else {
-      this.take('Blue Feather');
-      await this.say('A Blue Feather...! Is this... a proposal? YES! Of course, yes!', n);
+      this.take('Promise Ribbon');
+      await this.say('A Promise Ribbon...! Is this... a proposal? YES! Of course, yes!', n);
       await this.say('A week later, the whole town gathers at the Church.', null);
-      await this.say(`Pastor Carter: Do you, ${this.name}, take ${n} to be your spouse?`, null);
-      await this.say(`You say 'I do.' The bells of Mineral Town ring out for ${this.name} and ${n}!`, null);
+      await this.say(`Brother Lucan: Do you, ${this.name}, take ${n} to be your spouse?`, null);
+      await this.say(`You say 'I do.' The bells of Brackenford ring out for ${this.name} and ${n}!`, null);
       this.married = n;
       this.marriage_day = this.absday();
       delete this.npc_pos[n];
@@ -4617,7 +4619,7 @@ export class Game {
       if (q) {
         this.take(item, q);
         this.bin[item] = (this.bin[item] || 0) + q;
-        this.msg(`Shipped ${q} ${item}. Zack collects at 5:00 PM.`, '09');
+        this.msg(`Shipped ${q} ${item}. Otto collects at 5:00 PM.`, '09');
       }
     }
   }
@@ -4644,7 +4646,7 @@ export class Game {
                 kind: 'spans',
                 spans: [{ text: 'Your rucksack is empty.', fg: '07', bold: true }],
               },
-              ...wrapLine('Forage herbs & berries, harvest crops, or visit Jeff\'s Supermarket in town to stock up.', cw).map(
+              ...wrapLine('Forage herbs & berries, harvest crops, or visit Hollis\'s Supermarket in town to stock up.', cw).map(
                 (ln): HudPageLine => ({ kind: 'spans', spans: [{ text: ln, fg: '04' }] }),
               ),
             ],
@@ -4723,7 +4725,7 @@ export class Game {
       if (item !== 'Basket' && this.inv['Basket'] && ITEMS[item]?.[0] > 0 && basketTotal < BASKET_CAPACITY) {
         sub.push(`Put in Basket (${basketTotal}/${BASKET_CAPACITY})`);
       }
-      if (item === 'Teleport Stone') {
+      if (item === 'Waystone') {
         sub.push('Teleport');
       }
       const recipe = this.seed_recipe(item);
@@ -4746,7 +4748,7 @@ export class Game {
         this.take(item);
         const gain = ITEMS[item][1];
         this.stamina = clamp(this.stamina + gain, 0, this.max_stamina);
-        if (item.includes('Turbojolt') || item === 'Elli Leaves' || item === 'Relaxation Tea' || item === 'White Grass') {
+        if (item.includes('Brisk Tonic') || item === 'Margit Leaves' || item === 'Relaxation Tea' || item === 'Frostwort') {
           this.fatigue = Math.max(0, this.fatigue - 35);
         }
         this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina)`, '0B');
@@ -4803,14 +4805,14 @@ export class Game {
       const act = opts[sel];
       if (act === 'Fill feed boxes') {
         if (!this.chickens) {
-          await this.say('The coop is empty. Lillia sells chickens at the Poultry Farm.', null);
+          await this.say('The coop is empty. Rosalind sells chickens at the Feathercote.', null);
           continue;
         }
         const n = Math.min(this.chickens - this.fed, this.inv['Chicken Feed'] || 0);
         if (this.fed >= this.chickens) {
           await this.say('Every feed box is already full.', null);
         } else if (!n) {
-          await this.say("You're out of Chicken Feed. Buy it at the Poultry Farm or grind Corn in the Mill!", null);
+          await this.say("You're out of Chicken Feed. Buy it at the Feathercote or grind Corn in the Mill!", null);
         } else {
           this.take('Chicken Feed', n);
           this.fed += n;
@@ -5076,7 +5078,7 @@ export class Game {
 
   async barn_feed(): Promise<void> {
     if (!this.animals.length) {
-      await this.say('The barn is empty. Barley sells cows and sheep at Yodel Ranch.', null);
+      await this.say('The barn is empty. Abel sells cows and sheep at Highmeadow Dairy.', null);
       return;
     }
     const hungry = this.animals.filter((a) => !a.fed);
@@ -5086,7 +5088,7 @@ export class Game {
     }
     const n = Math.min(hungry.length, this.inv['Fodder'] || 0);
     if (!n) {
-      await this.say("You're out of Fodder. Buy it at Yodel Ranch or cut pasture Grass with your Sickle!", null);
+      await this.say("You're out of Fodder. Buy it at Highmeadow Dairy or cut pasture Grass with your Sickle!", null);
       return;
     }
     this.take('Fodder', n);
@@ -5169,11 +5171,11 @@ export class Game {
   async buy_animal(kind: string): Promise<void> {
     const [label, price] = ANIMALS[kind];
     if (this.animals.length >= this.barn_cap()) {
-      await this.say('Your barn is full!', 'Barley');
+      await this.say('Your barn is full!', 'Abel');
       return;
     }
     if (this.gold < price) {
-      await this.say(`A ${label.toLowerCase()} is ${price}G. Come back when you've saved up.`, 'Barley');
+      await this.say(`A ${label.toLowerCase()} is ${price}G. Come back when you've saved up.`, 'Abel');
       return;
     }
     if (!(await this.confirm(`Buy a ${label.toLowerCase()} for ${price}G?`))) return;
@@ -5194,14 +5196,14 @@ export class Game {
       wonFestival: false,
       pregnantDays: 0,
     });
-    await this.say(`${name} will be waiting in your barn. Fill the fodder box every day!`, 'Barley');
+    await this.say(`${name} will be waiting in your barn. Fill the fodder box every day!`, 'Abel');
   }
 
   async buy_barn_tool(item: string, price: number): Promise<void> {
     if (this.inv[item]) {
-      await this.say(`You already have a ${item}.`, 'Barley');
+      await this.say(`You already have a ${item}.`, 'Abel');
     } else if (this.gold < price) {
-      await this.say(`The ${item} is ${price}G.`, 'Barley');
+      await this.say(`The ${item} is ${price}G.`, 'Abel');
     } else if (await this.confirm(`Buy a ${item} for ${price}G?`)) {
       this.gold -= price;
       this.give(item);
@@ -5262,9 +5264,9 @@ export class Game {
           const jobTxt = job.days > 0 ? `${job.task} (${job.days}d)` : 'idle';
           return `${s.name} (${s.colorName}) [${'#'.repeat(hearts)}${'.'.repeat(10 - hearts)}] — ${jobTxt}`;
         }),
-        'Leave Sprite Hut',
+        'Leave Hearthfolk Hut',
       ];
-      const sel = await this.menu('Harvest Sprite Hut (Willow Bend)', opts);
+      const sel = await this.menu('Hearthfolk Hut (Willow Bend)', opts);
       if (sel === null || sel === SPRITES.length) return;
       const sp = SPRITES[sel];
       await this.sprite_interact(sp);
@@ -5281,7 +5283,7 @@ export class Game {
         `Give Held Item (${this.held || 'none'})`,
         'Give Flour from Rucksack (+8 Affection)',
         'Hire for Farm Work (Requires 3+ Hearts)',
-        'Play Sprite Mini-Game (+Skill & Affection)',
+        'Play Hearthfolk Mini-Game (+Skill & Affection)',
         'Back',
       ];
       const sel = await this.menu(`${sName} (${sp.colorName} Sprite) — Skill: ${job.skill}%`, opts);
@@ -5304,7 +5306,7 @@ export class Game {
         }
       } else if (sel === 2) {
         if (!this.inv['Flour']) {
-          await this.say('Buy Flour at Jeff\'s Supermarket (50G) to gift the Harvest Sprites!', sName);
+          await this.say('Buy Flour at Hollis\'s Supermarket (50G) to gift the Hearthfolk!', sName);
         } else {
           this.take('Flour', 1);
           this.sprite_aff[sName] = Math.min(100, aff + 10);
@@ -5342,25 +5344,25 @@ export class Game {
 
   async kai_shack_menu(): Promise<void> {
     if (this.season !== 1) {
-      await this.say("Kai's Seaside Lodge is closed until Summer.", null);
+      await this.say("Nico's Seaside Lodge is closed until Summer.", null);
       return;
     }
-    const sel = await this.menu(`Kai's Seaside Lodge   ${this.gold}G`, [
+    const sel = await this.menu(`Nico's Seaside Lodge   ${this.gold}G`, [
       'Eat Roasted Corn (150G, +35 Stamina)',
-      'Eat Kai\'s Baked Pineapple (300G, +70 Stamina)',
-      'Talk to Kai',
+      'Eat Nico\'s Baked Pineapple (300G, +70 Stamina)',
+      'Talk to Nico',
       'Leave',
     ]);
     if (sel === 0 && this.gold >= 150) {
       this.gold -= 150;
       this.stamina = Math.min(this.max_stamina, this.stamina + 35);
-      await this.say('Hot off the grill! (+35 Stamina)', 'Kai');
+      await this.say('Hot off the grill! (+35 Stamina)', 'Nico');
     } else if (sel === 1 && this.gold >= 300) {
       this.gold -= 300;
       this.stamina = Math.min(this.max_stamina, this.stamina + 70);
-      await this.say('Sweet tropical pineapple! (+70 Stamina)', 'Kai');
+      await this.say('Sweet tropical pineapple! (+70 Stamina)', 'Nico');
     } else if (sel === 2) {
-      await this.talk('Kai');
+      await this.talk('Nico');
     }
   }
 
@@ -5539,13 +5541,13 @@ export class Game {
         [`Buy Plot Sign (${PLOT_SIGN_PRICE}G)`, () => this.buy('Plot Sign', PLOT_SIGN_PRICE, PLOT_MAX)],
         ['Buy Chocolate (100G)', () => this.buy('Chocolate', 100)],
         ['Buy Basket (5000G)', () => this.buy('Basket', 5000, 1)],
-        ['Buy Blue Feather (1000G)', () => this.buy('Blue Feather', 1000, 1)],
+        ['Buy Promise Ribbon (1000G)', () => this.buy('Promise Ribbon', 1000, 1)],
         ['Buy Kitchen Utensils', () => this.buy_kitchen_goods()],
       ];
     }
     if (bid === 'zack') {
       return [
-        ["Won's Rare Seeds & Exotic Goods", () => this.won_shop()],
+        ["Ferreira's Rare Seeds & Exotic Goods", () => this.won_shop()],
       ];
     }
     if (bid === 'winery') {
@@ -5573,9 +5575,9 @@ export class Game {
     }
     if (bid === 'blacksmith') {
       return [
-        ['Upgrade a Tool (Copper -> Mythic)', () => this.upgrade_tool()],
-        ['Order Maker Machine (20,000G + Adamantite)', () => this.order_maker()],
-        ['Forge Orichalc Jewelry (1000G + Orichalc)', () => this.forge_jewelry()],
+        ['Upgrade a Tool (Copper -> Heirloom)', () => this.upgrade_tool()],
+        ['Order Maker Machine (20,000G + Deepiron)', () => this.order_maker()],
+        ['Forge Sunbrass Jewelry (1000G + Sunbrass)', () => this.forge_jewelry()],
       ];
     }
     if (bid === 'inn') {
@@ -5584,17 +5586,17 @@ export class Game {
         ...(scene && this.inn_evening_day !== this.absday()
           ? ([[`Friday evening: ${scene.title}`, () => this.inn_evening()]] as [string, () => Promise<void>][])
           : []),
-        ['Eat Doug\'s Lunch (300G, +50 Stamina)', () => this.inn_lunch()],
+        ['Eat Gideon\'s Lunch (300G, +50 Stamina)', () => this.inn_lunch()],
         ['Use Inn Telephone (Order Saturday TV Shopping)', () => this.inn_phone_menu()],
       ];
     }
     if (bid === 'clinic') {
       return [
         ['Get a Medical Checkup (10G)', () => this.checkup()],
-        ['Buy Bodigizer (500G, +100 Stamina)', () => this.buy('Bodigizer', 500)],
-        ['Buy Bodigizer XL (1000G, +150 Stamina)', () => this.buy('Bodigizer XL', 1000)],
-        ['Buy Turbojolt (1000G, -50 Fatigue)', () => this.buy('Turbojolt', 1000)],
-        ['Buy Turbojolt XL (2000G, -100 Fatigue)', () => this.buy('Turbojolt XL', 2000)],
+        ['Buy Mending Tonic (500G, +100 Stamina)', () => this.buy('Mending Tonic', 500)],
+        ['Buy Mending Tonic XL (1000G, +150 Stamina)', () => this.buy('Mending Tonic XL', 1000)],
+        ['Buy Brisk Tonic (1000G, -50 Fatigue)', () => this.buy('Brisk Tonic', 1000)],
+        ['Buy Brisk Tonic XL (2000G, -100 Fatigue)', () => this.buy('Brisk Tonic XL', 2000)],
       ];
     }
     if (bid === 'library') {
@@ -5609,7 +5611,7 @@ export class Game {
     if (bid === 'church') {
       return [
         ['Pray at the Altar', () => this.pray()],
-        ['Enter Confession Booth (Bless Cursed Tools / Confess)', () => this.confession_booth()],
+        ['Enter Confession Booth (Bless Fey Tools / Confess)', () => this.confession_booth()],
       ];
     }
     if (bid === 'mayor') {
@@ -5638,10 +5640,10 @@ export class Game {
       ['Cabbage Seeds', 500, 99],
       ['Pineapple Seeds', 1000, 99],
       ['Green Pepper Seeds', 150, 99],
-      ['Moondrop Flower Seeds', 300, 99],
-      ['Toy Flower Seeds', 400, 99],
-      ['Pink Cat Flower Seeds', 300, 99],
-      ['Magic Red Flower Seeds', 600, 99],
+      ['Duskbell Flower Seeds', 300, 99],
+      ['Pinwheel Daisy Seeds', 400, 99],
+      ['Rosecap Flower Seeds', 300, 99],
+      ['Emberbloom Flower Seeds', 600, 99],
       ['Dog Ball', 100, 1],
       ['Frisbee', 5000, 1],
       ['Record Player', 2000, 1],
@@ -5649,7 +5651,7 @@ export class Game {
       ['Jewel of Truth (50,000G)', 50000, 1],
     ];
     const sel = await this.menu(
-      `Won's Exotic Shop   ${this.gold}G`,
+      `Ferreira's Exotic Shop   ${this.gold}G`,
       items.map(([name, p]) => `${name} (${p}G)`),
       0,
       (s) => {
@@ -5666,7 +5668,7 @@ export class Game {
     const [name, price, lim] = items[sel];
     if (name.startsWith('Jewel of Truth')) {
       if (this.gold < price) {
-        await this.say('Hehehe! Come back when you have 50,000G!', 'Won');
+        await this.say('Hehehe! Come back when you have 50,000G!', 'Ferreira');
       } else {
         this.gold -= price;
         this.give_truth_jewel('won_shop');
@@ -5683,98 +5685,98 @@ export class Game {
       ['Yarn Maker', 'Barn Expansion', 'Load wool at the machine; yarn is ready 6 hours later.'],
     ];
     const sel = await this.menu(
-      'Saibara — Order Maker (20,000G + 1 Adamantite)',
+      'Hilde — Order Maker (20,000G + 1 Deepiron)',
       makers.map(([m, req]) =>
         this.makers.includes(m)
           ? `${m} (Built)`
           : `${m} ${this.house_flags.includes(req) ? '(ready to order)' : `(needs ${req})`}`
       ),
       0,
-      [`  Gold: ${this.gold}G   Adamantite: ${this.inv['Adamantite'] || 0}`]
+      [`  Gold: ${this.gold}G   Deepiron: ${this.inv['Deepiron'] || 0}`]
     );
     if (sel === null) return;
     const [mName, req, desc] = makers[sel];
     if (this.makers.includes(mName)) {
-      await this.say(`You already have a ${mName}.`, 'Saibara');
+      await this.say(`You already have a ${mName}.`, 'Hilde');
     } else if (!this.house_flags.includes(req)) {
-      await this.say(`Have Gotz build the ${req} first so there's room for the ${mName}!`, 'Saibara');
-    } else if (this.gold < 20000 || (this.inv['Adamantite'] || 0) < 1) {
+      await this.say(`Have Ingrid build the ${req} first so there's room for the ${mName}!`, 'Hilde');
+    } else if (this.gold < 20000 || (this.inv['Deepiron'] || 0) < 1) {
       const missing = [
         this.gold < 20000 ? `${20000 - this.gold}G more` : '',
-        (this.inv['Adamantite'] || 0) < 1 ? '1 Adamantite from the Spring Mine (Floor 10+)' : '',
+        (this.inv['Deepiron'] || 0) < 1 ? '1 Deepiron from the Copperseam Mine (Floor 10+)' : '',
       ].filter(Boolean);
-      await this.say(`It costs 20,000G and 1 Adamantite. You still need ${missing.join(' and ')}.`, 'Saibara');
+      await this.say(`It costs 20,000G and 1 Deepiron. You still need ${missing.join(' and ')}.`, 'Hilde');
     } else {
       this.gold -= 20000;
-      this.take('Adamantite', 1);
+      this.take('Deepiron', 1);
       this.makers.push(mName);
       this.place_makers();
-      await this.say(`Done! I set the ${mName} up outside your ${MAKER_SPOTS[mName].by}. (${desc})`, 'Saibara');
+      await this.say(`Done! I set the ${mName} up outside your ${MAKER_SPOTS[mName].by}. (${desc})`, 'Hilde');
     }
   }
 
   async forge_jewelry(): Promise<void> {
     const pieces = ['Necklace', 'Earrings', 'Bracelet', 'Brooch'];
     const sel = await this.menu(
-      'Saibara — Forge Orichalc Jewelry (1000G + 1 Orichalc)',
-      pieces.map((p) => `${p} (1000G + 1 Orichalc)`)
+      'Hilde — Forge Sunbrass Jewelry (1000G + 1 Sunbrass)',
+      pieces.map((p) => `${p} (1000G + 1 Sunbrass)`)
     );
     if (sel === null) return;
     const piece = pieces[sel];
-    if (this.gold < 1000 || (this.inv['Orichalc'] || 0) < 1) {
-      await this.say('Bring me 1000G and 1 Orichalc from the Spring Mine (Floor 10+).', 'Saibara');
+    if (this.gold < 1000 || (this.inv['Sunbrass'] || 0) < 1) {
+      await this.say('Bring me 1000G and 1 Sunbrass from the Copperseam Mine (Floor 10+).', 'Hilde');
     } else {
       this.gold -= 1000;
-      this.take('Orichalc', 1);
+      this.take('Sunbrass', 1);
       this.give(piece, 1);
-      this.msg(`Saibara forged a ${piece}! Bachelorettes love jewelry!`, '0A');
+      this.msg(`Hilde forged a ${piece}! Bachelorettes love jewelry!`, '0A');
     }
   }
 
   async confession_booth(): Promise<void> {
     const opts = [
-      'Remove Equipped Cursed Tool (1000G)',
-      'Bless Cursed Hoe or Watering Can (1000G)',
+      'Remove Equipped Fey Tool (1000G)',
+      'Bless Fey Hoe or Watering Can (1000G)',
       'Confess: Forgive me for littering / neglecting animals',
-      'Confess: I want to marry the Harvest Goddess',
+      'Confess: I want to marry the Wellkeeper',
       'Leave Booth',
     ];
     const sel = await this.menu('Church Confession Booth', opts);
     if (sel === null || sel === 4) return;
     if (sel === 0) {
       if (this.levels[this.tool] !== 5) {
-        await this.say('You do not currently have a Cursed Tool stuck to your hand.', 'Carter');
+        await this.say('You do not currently have a Fey Tool stuck to your hand.', 'Lucan');
       } else if (this.gold < 1000) {
-        await this.say('A 1000G donation is required to lift the binding curse.', 'Carter');
+        await this.say('A 1000G donation is required to lift the binding curse.', 'Lucan');
       } else {
         this.gold -= 1000;
         this.tool = 'Hoe';
-        await this.say('May the Goddess cleanse this curse! You can freely switch tools again.', 'Carter');
+        await this.say('May the Wellkeeper cleanse this curse! You can freely switch tools again.', 'Lucan');
       }
     } else if (sel === 1) {
       const cursedTarget = ['Hoe', 'Watering Can'].find((t) => this.levels[t] === 5);
       if (!cursedTarget) {
-        await this.say('You have no Cursed Hoe or Cursed Watering Can needing blessing. (Sickle/Hammer bless after 10 days; Rod/Axe after 25 uses!)', 'Carter');
+        await this.say('You have no Fey Hoe or Fey Watering Can needing blessing. (Sickle/Hammer bless after 10 days; Rod/Axe after 25 uses!)', 'Lucan');
       } else if (this.gold < 1000) {
-        await this.say('Blessing requires a 1000G offering.', 'Carter');
+        await this.say('Blessing requires a 1000G offering.', 'Lucan');
       } else {
         this.gold -= 1000;
         this.cursed_blesses[cursedTarget] = (this.cursed_blesses[cursedTarget] || 0) + 5;
         if (this.cursed_blesses[cursedTarget] >= 10) {
           this.levels[cursedTarget] = 6;
-          await this.say(`The curse is gone forever! Your ${cursedTarget} is now a BLESSED ${cursedTarget}!`, 'Carter');
+          await this.say(`The curse is gone forever! Your ${cursedTarget} is now a HALLOWED ${cursedTarget}!`, 'Lucan');
         } else {
-          await this.say(`I have prayed over your ${cursedTarget} (${this.cursed_blesses[cursedTarget]}/10 blessings). Bless it once more to complete the ritual!`, 'Carter');
+          await this.say(`I have prayed over your ${cursedTarget} (${this.cursed_blesses[cursedTarget]}/10 blessings). Bless it once more to complete the ritual!`, 'Lucan');
         }
       }
     } else if (sel === 2) {
       for (const n of Object.keys(this.friend)) {
         this.friend[n] = clamp(this.friend[n] + 2, 0, 100);
       }
-      await this.say('The Harvest Goddess forgives you. (+2 Villager Friendship!)', 'Carter');
+      await this.say('The Wellkeeper forgives you. (+2 Villager Friendship!)', 'Lucan');
     } else if (sel === 3) {
-      this.friend['Harvest Goddess'] = clamp((this.friend['Harvest Goddess'] || 0) + 10, 0, 100);
-      await this.say('You have my blessing! Present the Blue Feather at the Goddess Pond when her heart is Red!', 'Carter');
+      this.friend['Wellkeeper'] = clamp((this.friend['Wellkeeper'] || 0) + 10, 0, 100);
+      await this.say('You have my blessing! Present the Promise Ribbon at the Wellkeeper Pond when her heart is Red!', 'Lucan');
     }
   }
 
@@ -5797,7 +5799,7 @@ export class Game {
       .filter(([c, d]) => (d[0] === this.season_name || d[0] === 'All') && !WON_EXCLUSIVE_CROPS.has(c))
       .map(([c]) => c);
     if (!crops.length) {
-      await this.say('Nothing grows outdoors in Winter, dear. Come back in Spring!', 'Jeff');
+      await this.say('Nothing grows outdoors in Winter, dear. Come back in Spring!', 'Hollis');
       return;
     }
     const opts = crops.map((c) => {
@@ -5819,18 +5821,18 @@ export class Game {
       if (gate.progressText) {
         lines.push(`  Unlock Gate: ${gate.progressText}`);
       } else {
-        lines.push('  Rare exotic & flower seeds are also sold by Won at Mineral Beach!');
+        lines.push('  Rare exotic & flower seeds are also sold by Ferreira at Brackenford Beach!');
       }
       return lines;
     };
-    const sel = await this.menu(`Jeff's Supermarket Seeds   ${this.gold}G`, opts, 0, info);
+    const sel = await this.menu(`Hollis's Supermarket Seeds   ${this.gold}G`, opts, 0, info);
     if (sel !== null) {
       const c = crops[sel];
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
       if (!gate.unlocked) {
         await this.say(
           `We will stock ${c} Seeds as soon as you ship 100 of each seasonal crop! (${gate.progressText})`,
-          'Jeff'
+          'Hollis'
         );
         return;
       }
@@ -5840,19 +5842,19 @@ export class Game {
 
   async buy_chicken(): Promise<void> {
     if (this.chickens >= this.coop_cap()) {
-      await this.say('Your coop is full!', 'Lillia');
+      await this.say('Your coop is full!', 'Rosalind');
     } else if (this.gold < 1500) {
-      await this.say("A chicken is 1500G. Come back when you've saved up.", 'Lillia');
+      await this.say("A chicken is 1500G. Come back when you've saved up.", 'Rosalind');
     } else if (await this.confirm('Buy a chicken for 1500G?')) {
       this.gold -= 1500;
       this.chickens += 1;
-      await this.say('Rick will bring it to your coop. Remember to fill its feed box!', 'Lillia');
+      await this.say('Dennis will bring it to your coop. Remember to fill its feed box!', 'Rosalind');
     }
   }
 
   async upgrade_tool(): Promise<void> {
     if (this.upgrading) {
-      await this.say(`I'm still working on your ${this.upgrading[0]}. Hmph. Patience.`, 'Saibara');
+      await this.say(`I'm still working on your ${this.upgrading[0]}. Hmph. Patience.`, 'Hilde');
       return;
     }
     const opts: string[] = [];
@@ -5860,40 +5862,40 @@ export class Game {
       const lvl = this.levels[t] || 0;
       const exp = this.tool_exp[t] || 0;
       if (lvl >= 7) {
-        opts.push(`${t} (Mythic — MAXED)`);
+        opts.push(`${t} (Heirloom — MAXED)`);
       } else if (lvl === 6) {
-        opts.push(`${t} (Blessed) -> Mythic (50,000G + 1 Mythic Stone)`);
+        opts.push(`${t} (Hallowed) -> Heirloom (50,000G + 1 Heirloom Stone)`);
       } else if (lvl === 5) {
-        opts.push(`${t} (Cursed — Bless at Church first)`);
+        opts.push(`${t} (Fey — Bless at Church first)`);
       } else if (lvl === 4) {
-        opts.push(`${t} (Mystrile — Find Cursed in Lake Mine)`);
+        opts.push(`${t} (Starsteel — Find Fey in Mirewater Mine)`);
       } else {
         const [cost, ore] = UPGRADE[lvl + 1];
         opts.push(`${t} -> ${LEVELS[lvl + 1]} (${cost}G + 1 ${ore}, Exp: ${exp}%)`);
       }
     }
-    const sel = await this.menu('Saibara — Upgrade Which Tool?', opts);
+    const sel = await this.menu('Hilde — Upgrade Which Tool?', opts);
     if (sel === null) return;
     const t = UPGRADABLE[sel];
     const lvl = this.levels[t] || 0;
     if (lvl === 6) {
-      if (this.gold < 50000 || (this.inv['Mythic Stone'] || 0) < 1) {
-        await this.say('To forge a Mythic tool I need 50,000G and 1 Mythic Stone from the Spring Mine!', 'Saibara');
+      if (this.gold < 50000 || (this.inv['Heirloom Stone'] || 0) < 1) {
+        await this.say('To forge a Heirloom tool I need 50,000G and 1 Heirloom Stone from the Copperseam Mine!', 'Hilde');
         return;
       }
       this.gold -= 50000;
-      this.take('Mythic Stone', 1);
+      this.take('Heirloom Stone', 1);
       this.levels[t] = 7;
-      await this.say(`Behold my masterwork! Your ${t} is now a MYTHIC ${t}!`, 'Saibara');
+      await this.say(`Behold my masterwork! Your ${t} is now an HEIRLOOM ${t}!`, 'Hilde');
       return;
     }
     if (lvl >= 4) {
-      await this.say('To go beyond Mystrile, unearth the Cursed Tools in the Winter Lake Mine and have Carter bless them!', 'Saibara');
+      await this.say('To go beyond Starsteel, unearth the Fey Tools in the Winter Mirewater Mine and have Lucan bless them!', 'Hilde');
       return;
     }
     const [cost, ore] = UPGRADE[lvl + 1];
     if (this.gold < cost || (this.inv[ore] || 0) < 1) {
-      await this.say(`I need ${cost}G and ${ore} ore from the Spring Mine on Mother's Hill.`, 'Saibara');
+      await this.say(`I need ${cost}G and ${ore} ore from the Copperseam Mine on Beacon Hill.`, 'Hilde');
       return;
     }
     this.gold -= cost;
@@ -5902,7 +5904,7 @@ export class Game {
     if (this.tool === t) {
       this.tool = TOOLS.find((other) => other !== t) || 'Sickle';
     }
-    await this.say(`Leave your ${t} with me. It'll be ready tomorrow morning. Hmph.`, 'Saibara');
+    await this.say(`Leave your ${t} with me. It'll be ready tomorrow morning. Hmph.`, 'Hilde');
   }
 
   /** True during the Friday-evening window at the inn. */
@@ -5942,25 +5944,25 @@ export class Game {
     if (id === 'cards') {
       if (innCardsWin(this.absday())) {
         this.gold += INN_CARDS_POT;
-        await this.say(`A full house! You take the pot. (+${INN_CARDS_POT}G)`, 'Gotz');
+        await this.say(`A full house! You take the pot. (+${INN_CARDS_POT}G)`, 'Ingrid');
       } else {
-        await this.say('Doug lays down four aces and grins. Better luck next Friday.', 'Doug');
+        await this.say('Gideon lays down four aces and grins. Better luck next Friday.', 'Gideon');
       }
     } else if (id === 'recipes') {
       this.give('Cookies', 1);
-      this.msg('Ann gave you a plate of Cookies.', '0B');
+      this.msg('Tess gave you a plate of Cookies.', '0B');
     }
   }
 
   async inn_lunch(): Promise<void> {
     if (this.gold < 300) {
-      await this.say('Lunch is 300G, friend.', 'Doug');
+      await this.say('Lunch is 300G, friend.', 'Gideon');
       return;
     }
     this.gold -= 300;
     this.stamina = Math.min(this.max_stamina, this.stamina + 50);
     this.fatigue = Math.max(0, this.fatigue - 15);
-    await this.say("Here you go — Doug's special! (+50 Stamina, -15 Fatigue)", 'Doug');
+    await this.say("Here you go — Gideon's special! (+50 Stamina, -15 Fatigue)", 'Gideon');
   }
 
   async checkup(): Promise<void> {
@@ -5972,8 +5974,8 @@ export class Game {
         ? "You're in peak physical condition!"
         : f < 60
           ? "You're a bit fatigued. Don't overwork in the rain."
-          : "You're dangerously exhausted! Take a Turbojolt or soak in the Hot Spring!";
-    await this.say(`Strength: ${s}/${this.max_stamina} | Fatigue: ${f}/100. ${verdict}`, 'Doctor');
+          : "You're dangerously exhausted! Take a Brisk Tonic or soak in the Hot Spring!";
+    await this.say(`Strength: ${s}/${this.max_stamina} | Fatigue: ${f}/100. ${verdict}`, 'Dr. Sayer');
   }
 
   async pray(): Promise<void> {
@@ -5988,9 +5990,9 @@ export class Game {
   }
 
   async farm_report(): Promise<void> {
-    const sel = await this.menu(`Mayor Thomas   (Your Medals: ${this.medals})`, [
+    const sel = await this.menu(`Mayor Ambrose   (Your Medals: ${this.medals})`, [
       'View Farm & Villager Report',
-      'Exchange 900 Medals for Power Berry',
+      'Exchange 900 Medals for Heartseed',
       'Exchange 1000 Medals for Jewel of Truth',
       'Back',
     ]);
@@ -5998,19 +6000,19 @@ export class Game {
       await this.ranch_summary();
     } else if (sel === 1) {
       if (this.medals < 900) {
-        await this.say(`You have ${this.medals} medals. Win more at the Spring & Fall Horse Races!`, 'Thomas');
+        await this.say(`You have ${this.medals} medals. Win more at the Spring & Fall Horse Races!`, 'Ambrose');
       } else if (this.give_power_berry('medals_900')) {
         this.medals -= 900;
       } else {
-        await this.say('You already claimed the Medal Power Berry!', 'Thomas');
+        await this.say('You already claimed the Medal Heartseed!', 'Ambrose');
       }
     } else if (sel === 2) {
       if (this.medals < 1000) {
-        await this.say(`You need 1000 medals (you have ${this.medals}).`, 'Thomas');
+        await this.say(`You need 1000 medals (you have ${this.medals}).`, 'Ambrose');
       } else if (this.give_truth_jewel('medals_1000')) {
         this.medals -= 1000;
       } else {
-        await this.say('You already claimed this Jewel of Truth!', 'Thomas');
+        await this.say('You already claimed this Jewel of Truth!', 'Ambrose');
       }
     }
   }
@@ -6040,10 +6042,10 @@ export class Game {
     const mm = until % 60;
     const ship =
       this.zack_paid_today
-        ? 'Zack already collected today’s shipment.'
+        ? 'Otto already collected today’s shipment.'
         : now >= cutoff
-          ? 'Zack has gone home; shipments roll over to tomorrow.'
-          : `Zack collects at 5:00 PM (${hh}h ${mm.toString().padStart(2, '0')}m from now).`;
+          ? 'Otto has gone home; shipments roll over to tomorrow.'
+          : `Otto collects at 5:00 PM (${hh}h ${mm.toString().padStart(2, '0')}m from now).`;
 
     lines.push(`  ${this.date_str()} — ${this.weather}`);
     lines.push(`  Tomorrow: ${this.tomorrow}`);
@@ -6104,7 +6106,7 @@ export class Game {
       lines.push(`  Order  ${ordT.npc}: ${andList(this.order_still_needed())} (${days}d)`);
     }
     if (this.gray_quest === 1) {
-      lines.push(`  Gray   wants ${GRAY_COPPER_QTY} × Copper from the Spring Mine (have ${this.inv['Copper'] || 0})`);
+      lines.push(`  Rowan   wants ${GRAY_COPPER_QTY} × Copper from the Copperseam Mine (have ${this.inv['Copper'] || 0})`);
     } else if (this.gray_quest === 2) {
       lines.push(`  Note   ${this.gray_note()}`);
     }
@@ -6126,7 +6128,7 @@ export class Game {
     const bdayTomorrow = this.birthdays(1);
     if (bdayTomorrow.length) lines.push(`  Birthday tomorrow: ${bdayTomorrow.join(', ')}`);
     const fest = this.fest_on();
-    if (fest) lines.push(`  Festival: ${fest[0]} at Rose Square (${fmt_hour(fest[1])}–${fmt_hour(fest[2])})`);
+    if (fest) lines.push(`  Festival: ${fest[0]} at Market Cross (${fmt_hour(fest[1])}–${fmt_hour(fest[2])})`);
     const festTomorrow = this.fest_on(1);
     if (festTomorrow) lines.push(`  Tomorrow’s festival: ${festTomorrow[0]}`);
     if (!bdays.length && !bdayTomorrow.length && !fest && !festTomorrow) lines.push('  No birthdays or festivals today.');
@@ -6134,7 +6136,7 @@ export class Game {
       const [o, c] = INN_EVENING_HOURS;
       lines.push(
         this.inn_evening_day === this.absday()
-          ? '  Inn: you spent this Friday evening at Doug\'s.'
+          ? '  Inn: you spent this Friday evening at Gideon\'s.'
           : `  Inn ${fmt_hour(o)}–${fmt_hour(c)}: ${this.inn_scene().title}`
       );
     }
@@ -6144,7 +6146,7 @@ export class Game {
         st === 'open'
           ? `  Market: your stall is open until ${fmt_hour(STALL_CLOSE)} (${this.stall!.gold}G so far).`
           : st === 'ready'
-            ? `  Market: stock your stall in Rose Square before ${fmt_hour(STALL_STOCK_BY)} (up to ${STALL_SLOTS} goods).`
+            ? `  Market: stock your stall in Market Cross before ${fmt_hour(STALL_STOCK_BY)} (up to ${STALL_SLOTS} goods).`
             : st === 'done'
               ? `  Market: you took ${this.stall_last[1]}G at your stall today.`
               : this.fest_on()
@@ -6152,7 +6154,7 @@ export class Game {
                 : '  Market: too late to set up your stall today.',
       );
     } else if ((this.weekday + 1) % 7 === STALL_DAY && !this.fest_on(1)) {
-      lines.push('  Tomorrow: Saturday market in Rose Square. Set aside up to three goods to sell.');
+      lines.push('  Tomorrow: Saturday market in Market Cross. Set aside up to three goods to sell.');
     }
     const marketClue = this.weekday !== STALL_DAY || ['ready', 'open'].includes(this.stall_state()) ? this.market_clue() : null;
     if (marketClue) lines.push(`  Saturday regulars: ${marketClue}`);
@@ -6178,9 +6180,9 @@ export class Game {
     const hh = Math.floor(until / 60);
     const mm = until % 60;
     const shipNote = this.zack_paid_today
-      ? 'Zack collected today’s shipment.'
+      ? 'Otto collected today’s shipment.'
       : now >= cutoff
-        ? 'Zack went home; rolls to tomorrow.'
+        ? 'Otto went home; rolls to tomorrow.'
         : `Pickup at 5:00 PM (${hh}h ${mm.toString().padStart(2, '0')}m)`;
     const dry = this.crop_water_count();
     const hungry = this.animal_feed_count();
@@ -6300,7 +6302,7 @@ export class Game {
       const pinned = this.reminders.find((r) => r.day - this.absday() <= 1);
       if (pinned) all.push(...wrapLabeled('★ Pinned', '0C', `${this.day_from_now(pinned.day) === 'today' ? 'Today' : 'Tomorrow'}: ${pinned.text}`, '05'));
       if (this.gray_quest === 1) {
-        all.push(...wrapLabeled('◆ Gray  ', '0C', `Wants ${GRAY_COPPER_QTY}×Copper (have ${this.inv['Copper'] || 0})`, '05'));
+        all.push(...wrapLabeled('◆ Rowan  ', '0C', `Wants ${GRAY_COPPER_QTY}×Copper (have ${this.inv['Copper'] || 0})`, '05'));
       } else if (this.gray_quest === 2) {
         all.push(...wrapLabeled('◆ Forge ', '0C', this.gray_note(), '05'));
       }
@@ -6326,7 +6328,7 @@ export class Game {
       if (this.weekday === INN_EVENING_DAY) {
         const [o, c] = INN_EVENING_HOURS;
         const txt = this.inn_evening_day === this.absday()
-          ? "Spent Friday evening at Doug's Inn."
+          ? "Spent Friday evening at Gideon's Inn."
           : `${fmt_hour(o)}–${fmt_hour(c)}: ${this.inn_scene().title}`;
         all.push(...wrapLabeled('♪ Inn   ', '09', txt, '05'));
       }
@@ -6341,7 +6343,7 @@ export class Game {
               : this.fest_on() ? 'No stall today (festival).' : 'Too late to set up stall.';
         all.push(...wrapLabeled('▣ Stall ', '09', stTxt, '05'));
       } else if ((this.weekday + 1) % 7 === STALL_DAY && !this.fest_on(1)) {
-        all.push(...wrapLabeled('▣ Next  ', '04', 'Saturday market in Rose Square.', '04'));
+        all.push(...wrapLabeled('▣ Next  ', '04', 'Saturday market in Market Cross.', '04'));
       }
       const wantClue = this.weekday !== STALL_DAY || ['ready', 'open'].includes(this.stall_state()) ? this.market_clue() : null;
       if (wantClue) all.push(...wrapLabeled('▣ Wants ', '09', wantClue, '05'));
@@ -6413,7 +6415,7 @@ export class Game {
             kind: 'ledger',
             prefix: '♥',
             prefixCol: '0A',
-            label: 'Mineral Town Directory',
+            label: 'Brackenford Directory',
             labelCol: '07',
             labelBold: true,
             value: 'Sorted by ♥',
@@ -6950,22 +6952,22 @@ export class Game {
     const expired = this.requests.filter((r) => r.deadline < today);
     this.requests = this.requests.filter((r) => r.deadline >= today);
     if (expired.length) {
-      report.push(`${expired.length} request${expired.length === 1 ? '' : 's'} expired at the Rose Square board.`);
+      report.push(`${expired.length} request${expired.length === 1 ? '' : 's'} expired at the Market Cross board.`);
     }
     if (this.requests.length < 3) {
       const added = this.request_refresh(3);
-      if (added) report.push(`${added} new request${added === 1 ? '' : 's'} appeared at the Rose Square board.`);
+      if (added) report.push(`${added} new request${added === 1 ? '' : 's'} appeared at the Market Cross board.`);
     }
     const t = this.order_template();
     if (t && this.order!.deadline < today) {
-      report.push(`${t.npc}'s order for ${t.title} lapsed at the Rose Square board.`);
+      report.push(`${t.npc}'s order for ${t.title} lapsed at the Market Cross board.`);
       this.order = null;
       this.order_next = today + ORDER_GAP;
     }
     const posted = this.order_refresh();
     if (posted) {
       const nt = this.order_template()!;
-      report.push(`${nt.npc} posted an order at the Rose Square board: ${nt.title}.`);
+      report.push(`${nt.npc} posted an order at the Market Cross board: ${nt.title}.`);
     }
   }
 
@@ -7014,7 +7016,7 @@ export class Game {
     return marketWants(day, season, PANTRY_STAPLES, (i) => CROPS[i]?.[0] === SEASONS[season], MARKET_FLOWERS, MARKET_SHOPPERS.pantry.wants, keeps);
   }
 
-  /** "Doug wants Potato and Egg; Lillia wants a Toy Flower." Null when that Saturday is a festival. */
+  /** "Gideon wants Potato and Egg; Rosalind wants a Pinwheel Daisy." Null when that Saturday is a festival. */
   market_clue(day: number = this.market_next()): string | null {
     if (this.fest_on(day - this.absday())) return null;
     const w = this.market_wants(day);
@@ -7024,7 +7026,7 @@ export class Game {
   }
 
   /**
-   * The line that tells a preserve apart (task 31): who wants it at the coming market, or when Doug
+   * The line that tells a preserve apart (task 31): who wants it at the coming market, or when Gideon
    * starts asking for preserves. Null for anything that isn't a preserve.
    */
   preserve_note(item: string): string | null {
@@ -7049,7 +7051,7 @@ export class Game {
     const who = MARKET_SHOPPERS[kind];
     const w = this.market_wants(st.day);
     const list = kind === 'pantry' ? w.pantry : w.flower ? [w.flower] : [];
-    if (!list.length) return; // no flowers in winter, so Lillia stays home
+    if (!list.length) return; // no flowers in winter, so Rosalind stays home
     (st.callers ||= []).push(who.name);
     const buys = marketVisit(st.goods, list, (item) => ITEMS[item]?.[0] || 0, who.markup, who.each);
     if (!buys.length) {
@@ -7239,7 +7241,7 @@ export class Game {
     this.order_refresh();
     const ot = this.order_template();
     if (!this.requests.length && !ot) {
-      await this.say('The request board is empty today. Check again tomorrow morning.', 'Rose Square');
+      await this.say('The request board is empty today. Check again tomorrow morning.', 'Market Cross');
       return;
     }
     const orderLabel = ot
@@ -7266,7 +7268,7 @@ export class Game {
         this.request_source(r.item) ?? 'Not to be found in the valley today.',
       ];
     };
-    const sel = await this.menu('Rose Square Request Board', [...labels, 'Leave'], 0, info);
+    const sel = await this.menu('Market Cross Request Board', [...labels, 'Leave'], 0, info);
     if (sel === null || sel >= labels.length) return;
     if (off && sel === 0) {
       await this.order_menu();
@@ -7276,7 +7278,7 @@ export class Game {
     const result = this.request_deliver(sel - off);
     if (result === null) return;
     if (result.startsWith('You need')) {
-      await this.say(result, 'Rose Square');
+      await this.say(result, 'Market Cross');
       return;
     }
     await this.say(result, request.npc);
@@ -7287,14 +7289,14 @@ export class Game {
     const maxFriend = Math.max(0, ...Object.values(this.friend));
     const gems = this.goddess_jewels + this.kappa_jewels + this.truth_jewels;
     return [
-      { name: 'First Shipment', desc: 'Ship your first item to Zack', done: this.shipped_total > 0, progress: `${this.shipped_total}G shipped` },
+      { name: 'First Shipment', desc: 'Ship your first item to Otto', done: this.shipped_total > 0, progress: `${this.shipped_total}G shipped` },
       { name: 'Market Regular', desc: 'Ship 10,000G worth of goods', done: this.shipped_total >= 10000, progress: `${Math.min(10000, this.shipped_total)}/10000G` },
       { name: 'Angler', desc: 'Catch 10 fish', done: fish >= 10, progress: `${Math.min(10, fish)}/10 fish` },
-      { name: 'Mine Explorer', desc: 'Reach floor 25 of the Spring Mine', done: this.max_spring_floor >= 25, progress: `floor ${Math.min(25, this.max_spring_floor)}/25` },
-      { name: 'Deep Earth', desc: 'Reach floor 100 of the Spring Mine', done: this.max_spring_floor >= 100, progress: `floor ${Math.min(100, this.max_spring_floor)}/100` },
+      { name: 'Mine Explorer', desc: 'Reach floor 25 of the Copperseam Mine', done: this.max_spring_floor >= 25, progress: `floor ${Math.min(25, this.max_spring_floor)}/25` },
+      { name: 'Deep Earth', desc: 'Reach floor 100 of the Copperseam Mine', done: this.max_spring_floor >= 100, progress: `floor ${Math.min(100, this.max_spring_floor)}/100` },
       { name: 'Museum Patron', desc: 'Donate 10 items to the museum', done: this.museum.length >= 10, progress: `${Math.min(10, this.museum.length)}/10 donated` },
       { name: 'Complete Collection', desc: 'Complete the museum collection', done: this.museum.length >= this.museum_total(), progress: `${this.museum.length}/${this.museum_total()} donated` },
-      { name: 'Good Neighbor', desc: 'Complete 5 Rose Square requests', done: this.requests_done >= 5, progress: `${Math.min(5, this.requests_done)}/5 requests` },
+      { name: 'Good Neighbor', desc: 'Complete 5 Market Cross requests', done: this.requests_done >= 5, progress: `${Math.min(5, this.requests_done)}/5 requests` },
       { name: 'Beloved', desc: 'Reach 80 friendship with a villager', done: maxFriend >= 80, progress: `${maxFriend}/80 hearts` },
       { name: 'Festival Star', desc: 'Win 3 festivals', done: this.fest_wins.length >= 3, progress: `${Math.min(3, this.fest_wins.length)}/3 wins` },
       { name: 'Homestead', desc: 'Complete 3 house or farm upgrades', done: this.house_flags.length >= 3, progress: `${Math.min(3, this.house_flags.length)}/3 upgrades` },
@@ -7383,7 +7385,7 @@ export class Game {
         : degPts >= 2000
           ? 'Veteran Ranch Master'
           : degPts >= 800
-            ? 'Skilled Mineral Farmer'
+            ? 'Skilled Brackenford Farmer'
             : 'Apprentice Farmer';
 
     const toolLines = UPGRADABLE.map(
@@ -7401,14 +7403,14 @@ export class Game {
 
     const lines = [
       `  Rank: ${rankTitle} (${Math.floor(degPts)} pts)   Steps: ${this.steps}`,
-      `  Strength: ${this.stamina}/${this.max_stamina}   Fatigue: ${this.fatigue}/100   Power Berries: ${this.power_berries}/10 ${this.has_mystic_berry ? '+ Mystic Berry' : ''}`,
+      `  Strength: ${this.stamina}/${this.max_stamina}   Fatigue: ${this.fatigue}/100   Heartseeds: ${this.power_berries}/10 ${this.has_mystic_berry ? '+ Mystic Berry' : ''}`,
       `  Gold: ${this.gold}G   Total Shipped: ${this.shipped_total}G   Medals: ${this.medals}`,
-      `  Jewels — Goddess: ${this.goddess_jewels}/9 | Kappa: ${this.kappa_jewels}/9 | Truth: ${this.truth_jewels}/9`,
+      `  Jewels — Wellkeeper: ${this.goddess_jewels}/9 | Reed Heron: ${this.kappa_jewels}/9 | Truth: ${this.truth_jewels}/9`,
       `  Mines — Spring B${this.max_spring_floor}F | Lake B${this.max_lake_floor}F | Fish Caught: ${Object.keys(this.fish_caught).length} types`,
       `  Spouse: ${this.married || 'Unmarried'}   Child: ${this.child_name || '-'}   Heart Events: ${this.heart_events_seen.length}`,
       '  --- Tools ---',
       ...toolLines,
-      '  --- Harvest Sprites ---',
+      '  --- Hearthfolk ---',
       ...spriteLines,
       '  --- Top Relationships ---',
       ...bestFriends,
@@ -7451,7 +7453,7 @@ export class Game {
       }
       this.npc_pos = {};
       if (!this.fest_attended) {
-        this.msg(`The ${f[0]} has begun in Rose Square!`, '0A');
+        this.msg(`The ${f[0]} has begun in Market Cross!`, '0A');
       }
     } else if (!f && saved !== null) {
       for (const [n, w] of Object.entries(saved)) {
@@ -7481,13 +7483,13 @@ export class Game {
       await this.fest_run(f);
     } else {
       this.fest_declined = true;
-      this.msg("Talk to Mayor Thomas when you're ready to join in.");
+      this.msg("Talk to Mayor Ambrose when you're ready to join in.");
     }
   }
 
   async fest_talk(n: string): Promise<boolean> {
     const f = this.fest_active();
-    if (n !== 'Thomas' || !f || this.held || this.fest_attended) {
+    if (n !== 'Ambrose' || !f || this.held || this.fest_attended) {
       return false;
     }
     if (await this.confirm(`Join the ${f[0]}?`)) {
@@ -7501,7 +7503,7 @@ export class Game {
     const [name, , end, kind] = f;
     this.fest_attended = true;
     this.keepsake('first_festival', `${name} program`, `The printed program from the ${name}: your first festival in the valley.`);
-    await this.say(`Welcome, everyone, to the ${name}! Ho ho!`, 'Thomas');
+    await this.say(`Welcome, everyone, to the ${name}! Ho ho!`, 'Ambrose');
     const fn = (this as any)[`fest_ev_${kind}`];
     if (typeof fn === 'function') {
       await fn.call(this);
@@ -7517,7 +7519,7 @@ export class Game {
     this.fest_declined = false;
     const f = this.fest_on();
     if (f) {
-      report.push(`Today is the ${f[0]}! Head to Rose Square between ${fmt_hour(f[1])} and ${fmt_hour(f[2])}.`);
+      report.push(`Today is the ${f[0]}! Head to Market Cross between ${fmt_hour(f[1])} and ${fmt_hour(f[2])}.`);
     }
     const t = this.fest_on(1);
     if (t) {
@@ -7533,7 +7535,7 @@ export class Game {
     if (!f || bid === 'church' || bid === 'sprites') {
       return false;
     }
-    await this.say(`A sign on the door: 'Closed today for the ${f[0]}. See you in Rose Square!'`, null);
+    await this.say(`A sign on the door: 'Closed today for the ${f[0]}. See you in Market Cross!'`, null);
     return true;
   }
 
@@ -7541,7 +7543,7 @@ export class Game {
     const parts: string[] = [];
     const f = this.fest_on();
     if (f) {
-      parts.push(`Today: ${f[0]} in Rose Square, ${fmt_hour(f[1])}-${fmt_hour(f[2])}.`);
+      parts.push(`Today: ${f[0]} in Market Cross, ${fmt_hour(f[1])}-${fmt_hour(f[2])}.`);
     }
     const t = this.fest_on(1);
     if (t) {
@@ -7702,7 +7704,7 @@ export class Game {
   }
 
   async fest_ev_newyear(): Promise<void> {
-    await this.say("Let's welcome the new year together! Doug made rice cakes (mochi) for everyone!", 'Thomas');
+    await this.say("Let's welcome the new year together! Gideon made rice cakes (mochi) for everyone!", 'Ambrose');
     this.stamina = this.max_stamina;
     this.fatigue = 0;
     this.give('Rice', 3);
@@ -7713,18 +7715,18 @@ export class Game {
   }
 
   async fest_ev_goddess(): Promise<void> {
-    await this.say('Every spring the young women of town dance to thank the Harvest Goddess.', 'Thomas');
+    await this.say('Every spring the young women of town dance to thank the Wellkeeper.', 'Ambrose');
     const n = await this.fest_pick('Who do you dance with / cheer for?', this.fest_bachs());
     if (n) {
       this.fest_bond(n, 8);
-      await this.say(`You share the Spring Goddess Dance with ${n}!`, null);
+      await this.say(`You share the Spring Wellkeeper Dance with ${n}!`, null);
     }
     this.give('Strawberry Seeds');
-    await this.say("A warm breeze carries the Goddess's blessing. You receive Strawberry Seeds!", null);
+    await this.say("A warm breeze carries the Wellkeeper's blessing. You receive Strawberry Seeds!", null);
   }
 
   async fest_ev_spring_thanks(): Promise<void> {
-    await this.say('Spring Thanksgiving! Give homemade Cookies or Chocolate to someone special!', 'Thomas');
+    await this.say('Spring Thanksgiving! Give homemade Cookies or Chocolate to someone special!', 'Ambrose');
     const n = await this.fest_pick('Give a Thanksgiving treat to...', this.fest_bachs());
     if (n) {
       this.fest_bond(n, 10);
@@ -7733,37 +7735,37 @@ export class Game {
   }
 
   async fest_ev_horserace(): Promise<void> {
-    await this.say('Welcome to the Mineral Town Horse Races! Bet on horses for Medals or race your own steed!', 'Thomas');
+    await this.say('Welcome to the Brackenford Horse Races! Bet on horses for Medals or race your own steed!', 'Ambrose');
     const sel = await this.menu('Horse Race Options', [
-      'Race Your Own Horse (Win a Power Berry + 200 Medals!)',
+      'Race Your Own Horse (Win a Heartseed + 200 Medals!)',
       'Bet 100G on Favorite (Win 150 Medals)',
       'Bet 500G on Longshot (Win 600 Medals)',
     ]);
     if (sel === 0) {
       const rival = py_rng().randint(14, 24);
-      const score = await this.fest_mash(4.5, rival, 'Mineral Town Derby');
+      const score = await this.fest_mash(4.5, rival, 'Brackenford Derby');
       if (score >= rival) {
         this.medals += 200;
         this.fest_win('Horse Race');
         this.give_power_berry('horse_race');
-        await this.say(`Your horse thunders across the finish line in 1st place! (+200 Medals & Power Berry!)`, 'Thomas');
+        await this.say(`Your horse thunders across the finish line in 1st place! (+200 Medals & Heartseed!)`, 'Ambrose');
       } else {
         this.medals += 30;
-        await this.say(`A close race! You take 2nd place and earn 30 Medals. (${score} vs ${rival})`, 'Thomas');
+        await this.say(`A close race! You take 2nd place and earn 30 Medals. (${score} vs ${rival})`, 'Ambrose');
       }
     } else if (sel === 1 && this.gold >= 100) {
       this.gold -= 100;
       this.medals += 150;
-      await this.say('Your horse won! You collect +150 Medals!', 'Thomas');
+      await this.say('Your horse won! You collect +150 Medals!', 'Ambrose');
     } else if (sel === 2 && this.gold >= 500) {
       this.gold -= 500;
       this.medals += 600;
-      await this.say('What an upset! The longshot wins! You collect +600 Medals!', 'Thomas');
+      await this.say('What an upset! The longshot wins! You collect +600 Medals!', 'Ambrose');
     }
   }
 
   async fest_ev_cooking(): Promise<void> {
-    await this.say('Welcome to the Cooking Festival! The renowned Gourmet will judge your finest dish!', 'Thomas');
+    await this.say('Welcome to the Cooking Festival! The renowned Gourmet will judge your finest dish!', 'Ambrose');
     const dishes = Object.keys(this.inv).filter((i) => ITEMS[i]?.[2] === 'dish' && i !== 'Failed Dish');
     if (!dishes.length) {
       await this.say('You have no cooked dishes in your rucksack to enter. Next year, cook something in your Kitchen!', 'Gourmet');
@@ -7780,29 +7782,29 @@ export class Game {
       for (const n of Object.keys(NPCS)) this.fest_bond(n, 5);
       await this.say(`Gourmet: 'MAGNIFICENT! The aroma of ${this.name}'s ${dish} is divine! First prize!' (+1000G)`, 'Gourmet');
     } else {
-      await this.say(`Gourmet: 'Hmm, a decent ${dish}, though Ann's entry edges it out today!'`, 'Gourmet');
+      await this.say(`Gourmet: 'Hmm, a decent ${dish}, though Tess's entry edges it out today!'`, 'Gourmet');
     }
   }
 
   async fest_ev_beach(): Promise<void> {
-    await this.say('Beach Day & the Dog Frisbee Contest! Let us see how far your dog can catch the Frisbee!', 'Thomas');
+    await this.say('Beach Day & the Dog Frisbee Contest! Let us see how far your dog can catch the Frisbee!', 'Ambrose');
     if (!this.inv['Frisbee']) {
-      await this.say('You need a Frisbee (sold by Won at Zack\'s Beach House) to compete!', 'Thomas');
+      await this.say('You need a Frisbee (sold by Ferreira at Otto\'s Beach House) to compete!', 'Ambrose');
       return;
     }
     const throwDist = this.dog_frisbee_dist + py_rng().randint(10, 35);
     if (throwDist >= 45) {
       this.fest_win('Beach Frisbee');
       this.give_power_berry('beach_frisbee');
-      await this.say(`Incredible! Your dog leaps and catches the Frisbee at ${throwDist}m! First Prize: Power Berry!`, 'Thomas');
+      await this.say(`Incredible! Your dog leaps and catches the Frisbee at ${throwDist}m! First Prize: Heartseed!`, 'Ambrose');
     } else {
       this.dog_frisbee_dist += 10;
-      await this.say(`Your dog catches it at ${throwDist}m! Practice at your Doghouse to beat the 45m record!`, 'Thomas');
+      await this.say(`Your dog catches it at ${throwDist}m! Practice at your Doghouse to beat the 45m record!`, 'Ambrose');
     }
   }
 
   async fest_ev_cowfest(): Promise<void> {
-    await this.say('The Cow Festival! Barley and I will judge the healthiest, happiest cow in Mineral Town!', 'Thomas');
+    await this.say('The Cow Festival! Abel and I will judge the healthiest, happiest cow in Brackenford!', 'Ambrose');
     const cows = this.animals.filter((a) => a.kind === 'cow');
     if (!cows.length) {
       await this.say('You have no cows to enter this year.', null);
@@ -7813,15 +7815,15 @@ export class Game {
       bestCow.wonFestival = true;
       bestCow.aff = 100;
       this.fest_win('Cow Festival');
-      await this.say(`First Prize goes to ${bestCow.name}! ${bestCow.name} will now produce GOLDEN MILK (and P/X Milk with outdoor grazing)!`, 'Thomas');
+      await this.say(`First Prize goes to ${bestCow.name}! ${bestCow.name} will now produce GOLDEN MILK (and P/X Milk with outdoor grazing)!`, 'Ambrose');
     } else {
       bestCow.aff = Math.min(100, bestCow.aff + 15);
-      await this.say(`${bestCow.name} takes 2nd place! Brush and talk to her daily to win next year!`, 'Barley');
+      await this.say(`${bestCow.name} takes 2nd place! Brush and talk to her daily to win next year!`, 'Abel');
     }
   }
 
   async fest_ev_sheepfest(): Promise<void> {
-    await this.say('The Sheep Festival! Let us judge the fluffiest wool in Mineral Town!', 'Thomas');
+    await this.say('The Sheep Festival! Let us judge the fluffiest wool in Brackenford!', 'Ambrose');
     const sheep = this.animals.filter((a) => a.kind === 'sheep');
     if (!sheep.length) {
       await this.say('You have no sheep to enter this year.', null);
@@ -7832,15 +7834,15 @@ export class Game {
       bestSheep.wonFestival = true;
       bestSheep.aff = 100;
       this.fest_win('Sheep Festival');
-      await this.say(`First Prize goes to ${bestSheep.name}! ${bestSheep.name} will now produce GOLDEN WOOL (and P/X Wool with grazing)!`, 'Thomas');
+      await this.say(`First Prize goes to ${bestSheep.name}! ${bestSheep.name} will now produce GOLDEN WOOL (and P/X Wool with grazing)!`, 'Ambrose');
     } else {
       bestSheep.aff = Math.min(100, bestSheep.aff + 15);
-      await this.say(`${bestSheep.name} takes runner-up honors!`, 'Barley');
+      await this.say(`${bestSheep.name} takes runner-up honors!`, 'Abel');
     }
   }
 
   async fest_ev_music(): Promise<void> {
-    await this.say('Everyone gathers at the Church for the Autumn Music Festival!', 'Carter');
+    await this.say('Everyone gathers at the Church for the Autumn Music Festival!', 'Lucan');
     const n = await this.fest_pick('Perform alongside...', this.fest_bachs());
     if (n) {
       this.fest_bond(n, 8);
@@ -7849,32 +7851,32 @@ export class Game {
   }
 
   async fest_ev_pumpkin(): Promise<void> {
-    await this.say('Happy Pumpkin Festival! May and Stu knock on your door hoping for sweet treats!', 'May');
+    await this.say('Happy Pumpkin Festival! Pip and Toby knock on your door hoping for sweet treats!', 'Pip');
     if (this.inv['Chocolate'] || this.inv['Cake'] || this.inv['Cookies']) {
-      this.fest_bond('May', 8);
-      this.fest_bond('Popuri', 5);
-      await this.say('Yay! Thank you for the sweets!', 'May');
+      this.fest_bond('Pip', 8);
+      this.fest_bond('Juniper', 5);
+      await this.say('Yay! Thank you for the sweets!', 'Pip');
     } else {
       this.give('Chocolate', 2);
-      await this.say('Chef the Harvest Sprite shares Chocolate with you and the kids!', null);
+      await this.say('Crumb of the Hearthfolk shares Chocolate with you and the kids!', null);
     }
   }
 
   async fest_ev_winter_req(): Promise<void> {
-    await this.say("Ho ho! It's my annual Winter Request! Can you share a gift from your rucksack?", 'Thomas');
+    await this.say("Ho ho! It's my annual Winter Request! Can you share a gift from your rucksack?", 'Ambrose');
     const items = Object.keys(this.inv);
     if (items.length > 0) {
       this.give('Golden Lumber', 1);
       this.gold += 500;
-      await this.say('Splendid! As promised, here is a piece of GOLDEN LUMBER and 500G! Ho ho!', 'Thomas');
+      await this.say('Splendid! As promised, here is a piece of GOLDEN LUMBER and 500G! Ho ho!', 'Ambrose');
     } else {
-      await this.say('Ah, your rucksack is empty! Next year, keep a crop or forage item handy!', 'Thomas');
+      await this.say('Ah, your rucksack is empty! Next year, keep a crop or forage item handy!', 'Ambrose');
     }
   }
 
   async fest_ev_stocking(): Promise<void> {
-    await this.say('On Starry Night Eve, Mayor Thomas sneaks down the chimney while you sleep...', null);
-    const gift = py_rng().choice(['Diamond', 'Pink Diamond', 'Alexandrite', 'Mythic Stone']);
+    await this.say('On Lantern Night Eve, Mayor Ambrose sneaks down the chimney while you sleep...', null);
+    const gift = py_rng().choice(['Diamond', 'Pink Diamond', 'Alexandrite', 'Heirloom Stone']);
     this.give(gift, 1);
     await this.say(`You check your Stocking on Winter 25 morning and find a ${gift}!`, null);
   }
@@ -7914,33 +7916,33 @@ export class Game {
   }
 
   async fest_ev_sumo(): Promise<void> {
-    await this.say("Chicken Sumo! Each farmer's hen tries to push the other out of the ring!", 'Thomas');
+    await this.say("Hen Show! Each farmer's hen tries to push the other out of the ring!", 'Ambrose');
     if (!this.chickens) {
-      await this.say("You don't have a chicken to enter, so you watch Rick's hen win again.", null);
+      await this.say("You don't have a chicken to enter, so you watch Dennis's hen win again.", null);
       return;
     }
     const rival = py_rng().randint(14, 24);
-    await this.say('Cheer your hen on by pressing LEFT/RIGHT or SPACE rapidly!', 'Rick');
-    const score = await this.fest_mash(4.5, rival, 'Chicken Sumo');
+    await this.say('Cheer your hen on by pressing LEFT/RIGHT or SPACE rapidly!', 'Dennis');
+    const score = await this.fest_mash(4.5, rival, 'Hen Show');
     if (score >= rival) {
       this.gold += 500;
       this.chicken_fest_won = true;
       this.chicken_aff = 100;
       this.give('Chicken Feed', 10);
-      this.fest_win('Chicken Sumo');
-      this.fest_bond('Rick', 4);
+      this.fest_win('Hen Show');
+      this.fest_bond('Dennis', 4);
       await this.say(
-        `Your hen shoves Rick's hen clean out of the ring! Your hens now lay GOLDEN EGGS! (+500G)`,
-        'Thomas'
+        `Your hen shoves Dennis's hen clean out of the ring! Your hens now lay GOLDEN EGGS! (+500G)`,
+        'Ambrose'
       );
     } else {
-      this.fest_bond('Rick', 1);
-      await this.say(`Rick's hen holds the ring. Better luck next year! (${score} vs ${rival})`, 'Rick');
+      this.fest_bond('Dennis', 1);
+      await this.say(`Dennis's hen holds the ring. Better luck next year! (${score} vs ${rival})`, 'Dennis');
     }
   }
 
   async fest_ev_egghunt(): Promise<void> {
-    await this.say('Eggs are hidden in nine flower bushes around the square. You get three peeks. Find two or more to win!', 'Thomas');
+    await this.say('Eggs are hidden in nine flower bushes around the square. You get three peeks. Find two or more to win!', 'Ambrose');
     const eggs = new Set(py_rng().sample(py_range(9), 3));
     const opened = new Set<number>();
     let cur = 4;
@@ -7977,10 +7979,10 @@ export class Game {
     if (found >= 2) {
       this.gold += 300;
       this.fest_win('Egg Hunt');
-      await this.say(`You found ${found} eggs! First prize: 300G — and you keep the eggs!`, 'Thomas');
+      await this.say(`You found ${found} eggs! First prize: 300G — and you keep the eggs!`, 'Ambrose');
     } else {
-      this.fest_bond('May', 2);
-      await this.say(`You found ${found} egg${found !== 1 ? 's' : ''}. May found the most and wins this year!`, 'Thomas');
+      this.fest_bond('Pip', 2);
+      await this.say(`You found ${found} egg${found !== 1 ? 's' : ''}. Pip found the most and wins this year!`, 'Ambrose');
     }
   }
 
@@ -8006,21 +8008,21 @@ export class Game {
   async fest_ev_fireworks(): Promise<void> {
     await this.fest_companion(
       'Watch the fireworks with...',
-      'BOOM! Fireworks bloom over Mineral Beach in red, blue and pink.',
+      'BOOM! Fireworks bloom over Brackenford Beach in red, blue and pink.',
       "Wow... they're beautiful. I'm glad I'm watching them with you."
     );
   }
 
   async fest_ev_moon(): Promise<void> {
     await this.fest_companion(
-      'View the full moon on Mother\'s Hill with...',
-      "The full autumn moon rises over Mother's Hill, round and bright.",
+      'View the full moon on Beacon Hill with...',
+      "The full autumn moon rises over Beacon Hill, round and bright.",
       'The moon is so pretty tonight. ...So is the company.'
     );
   }
 
   async fest_ev_harvest(): Promise<void> {
-    await this.say('Everyone adds an ingredient to the giant pot! Then we all share the Harvest Stew!', 'Thomas');
+    await this.say('Everyone adds an ingredient to the giant pot! Then we all share the Harvest Stew!', 'Ambrose');
     const items = py_sorted(Object.keys(this.inv)).filter((i) =>
       ['crop', 'forage', 'fish', 'animal', 'dish'].includes(ITEMS[i]?.[2])
     );
@@ -8042,7 +8044,7 @@ export class Game {
   }
 
   async fest_ev_thanks(): Promise<void> {
-    await this.say("Winter Thanksgiving! People who care about you bring homemade treats!", 'Thomas');
+    await this.say("Winter Thanksgiving! People who care about you bring homemade treats!", 'Ambrose');
     const givers = this.fest_bachs().filter((n) => (this.friend[n] || 0) >= 25 || n === this.married);
     for (const n of givers) {
       const treat = (this.friend[n] || 0) >= 50 ? 'Chocolate Cake' : 'Chocolate';
@@ -8056,14 +8058,14 @@ export class Game {
 
   async fest_ev_starry(): Promise<void> {
     await this.fest_companion(
-      'Spend Starry Night dinner with...',
+      'Spend Lantern Night dinner with...',
       'Snow falls softly outside as candles glow around the dinner table.',
-      "They say a wish made on Starry Night always comes true. I already know what I'll wish for."
+      "They say a wish made on Lantern Night always comes true. I already know what I'll wish for."
     );
   }
 
   async fest_ev_nye(): Promise<void> {
-    await this.say(`Another year in Mineral Town comes to an end! Let's eat buckwheat noodles, ${this.name}!`, 'Thomas');
+    await this.say(`Another year in Brackenford comes to an end! Let's eat buckwheat noodles, ${this.name}!`, 'Ambrose');
     this.stamina = this.max_stamina;
     this.fatigue = 0;
     this.give('Flour', 5);
@@ -8073,7 +8075,7 @@ export class Game {
     await this.show_lines(`Year ${this.year} in Review`, [
       `  Gold: ${this.gold}G`,
       `  Total shipped: ${this.shipped_total}G`,
-      `  Power Berries: ${this.power_berries}/10`,
+      `  Heartseeds: ${this.power_berries}/10`,
       `  Chickens: ${this.chickens}   Barn Animals: ${this.animals.length}`,
       `  Spouse: ${this.married || '-'}   Child: ${this.child_name || '-'}`,
       `  Festival prizes: ${this.fest_wins.join(', ') || 'none yet'}`,
@@ -8084,7 +8086,7 @@ export class Game {
     if (this.passing_out) return;
     this.passing_out = true;
     await this.say(text, null);
-    await this.say('Doctor: You pushed yourself until you collapsed! Elli and I brought you home. Please take care of your Fatigue!', 'Doctor');
+    await this.say('Dr. Sayer: You pushed yourself until you collapsed! Margit and I brought you home. Please take care of your Fatigue!', 'Dr. Sayer');
     await this.new_day('passout');
     this.passing_out = false;
   }
@@ -8132,9 +8134,9 @@ export class Game {
         job.task = 'none';
       }
     }
-    if (watered > 0) report.push(`Harvest Sprites watered your tilled field!`);
-    if (harvested > 0) report.push(`Harvest Sprites harvested ${harvested} ripe crop(s) into the Shipping Bin!`);
-    if (animalsCared > 0) report.push(`Harvest Sprites fed and brushed your livestock!`);
+    if (watered > 0) report.push(`Hearthfolk watered your tilled field!`);
+    if (harvested > 0) report.push(`Hearthfolk harvested ${harvested} ripe crop(s) into the Shipping Bin!`);
+    if (animalsCared > 0) report.push(`Hearthfolk fed and brushed your livestock!`);
   }
 
   async new_day(reason: string): Promise<void> {
@@ -8144,7 +8146,7 @@ export class Game {
     // Collect any remaining items in shipping bin
     const total = this.process_zack_pickup();
     if (total > 0) {
-      report.push(`Zack settled your remaining shipment: +${total}G.`);
+      report.push(`Otto settled your remaining shipment: +${total}G.`);
     }
     this.zack_paid_today = false;
     this.honey_picked = false;
@@ -8182,12 +8184,12 @@ export class Game {
       this.crops = surviving;
     }
 
-    // Cursed Sickle / Hammer 10-day blessing progression
+    // Fey Sickle / Hammer 10-day blessing progression
     if (this.levels[this.tool] === 5 && (this.tool === 'Sickle' || this.tool === 'Hammer')) {
       this.cursed_days[this.tool] = (this.cursed_days[this.tool] || 0) + 1;
       if (this.cursed_days[this.tool] >= 10) {
         this.levels[this.tool] = 6;
-        report.push(`Miracle! Carrying the Cursed ${this.tool} for 10 days turned it into a BLESSED ${this.tool}!`);
+        report.push(`Miracle! Carrying the Fey ${this.tool} for 10 days turned it into a HALLOWED ${this.tool}!`);
       }
     }
 
@@ -8204,7 +8206,7 @@ export class Game {
     }
     this.tomorrow = this.roll_weather(ns, nd);
 
-    // Run hired Harvest Sprites
+    // Run hired Hearthfolk
     this.run_sprites_work(report);
 
     if (this.weather === 'Rain' || this.weather === 'Typhoon') {
@@ -8214,7 +8216,7 @@ export class Game {
       report.push("It's raining — your fields are watered.");
     }
     if (this.weather === 'Typhoon' || this.weather === 'Blizzard') {
-      report.push(`A fierce ${this.weather} sweeps through Mineral Town! Stay safe!`);
+      report.push(`A fierce ${this.weather} sweeps through Brackenford! Stay safe!`);
     }
     if (reason === 'sleep') this.night_surprise(report);
 
@@ -8243,7 +8245,7 @@ export class Game {
       if (t === 'Watering Can') {
         this.water = CAN_CAP[this.levels[t]];
       }
-      report.push(`Saibara finished your ${LEVELS[this.levels[t]]} ${t}!`);
+      report.push(`Hilde finished your ${LEVELS[this.levels[t]]} ${t}!`);
       this.upgrading = null;
     }
 
@@ -8251,12 +8253,12 @@ export class Game {
     if (this.tv_order && this.absday() >= this.tv_order[1]) {
       const item = this.tv_order[0];
       this.tv_order = null;
-      if (item === 'Power Berry') {
+      if (item === 'Heartseed') {
         this.give_power_berry('tv_shopping');
-        report.push('Zack delivered your TV Shopping Power Berry!');
+        report.push('Otto delivered your TV Shopping Heartseed!');
       } else {
         this.give(item, 1);
-        report.push(`Zack delivered your ${item} from TV Shopping!`);
+        report.push(`Otto delivered your ${item} from TV Shopping!`);
       }
     }
 
@@ -8270,7 +8272,7 @@ export class Game {
       report.push(`Joyous news! ${this.married} and you welcomed a healthy baby into your family!`);
     }
 
-    // Rose Square request board
+    // Market Cross request board
     this.request_day(report);
     this.reminder_day(report);
     this.compost_day(report);
@@ -8346,7 +8348,7 @@ export class Game {
 
   /** Today's forage list for a map: an outer region's own pool, or the valley-wide seasonal list. */
   forage_pool(mapKey: string): string[] {
-    return REGION_FORAGE[mapKey]?.[this.season_name] || FORAGE[this.season_name] || ['Blue Grass'];
+    return REGION_FORAGE[mapKey]?.[this.season_name] || FORAGE[this.season_name] || ['Bluewort'];
   }
 
   spawn_forage(): void {
@@ -8687,7 +8689,7 @@ export class Game {
       }
       return ['"', '0B', bg, false];
     }
-    // Frozen Lake ice in Winter around Lake Mine island
+    // Frozen Lake ice in Winter around Mirewater Mine island
     if (name === 'mountain' && this.season === 3 && t === 'water' && x >= 13 && x <= 17 && y >= 7 && y <= 14) {
       return ['=', '0C', '01', false];
     }
@@ -8893,7 +8895,7 @@ export class Game {
     };
 
     const titleH = compact ? 1 : 2;
-    label(y, 'HRVSTMN', compact ? 1 : 1.45, w, titleH);
+    label(y, 'FURROW', compact ? 1 : 1.45, w, titleH);
     line(y + titleH, `${this.name} of ${this.farm} Farm`, '04');
     rail(y + titleH + 1);
     y += titleH + 1 + gap;
@@ -9327,7 +9329,7 @@ export class Game {
     return links;
   }
 
-  /** Saibara's Forge today: open now, or when it next opens (festivals close it too). */
+  /** Hilde's Forge today: open now, or when it next opens (festivals close it too). */
   forge_status(): { open: boolean; text: string } {
     return this.shop_status('blacksmith');
   }
@@ -9381,7 +9383,7 @@ export class Game {
     if (this.mapname === 'mine') {
       let up: [number, number] | null = null;
       for (let y = 0; y < m.h && !up; y++) for (let x = 0; x < m.w && !up; x++) if (m.tile(x, y) === 'up') up = [x, y];
-      return towards(up, "Mother's Hill", up ? "climb out to Mother's Hill" : 'find your way out first', 'climb out');
+      return towards(up, "Beacon Hill", up ? "climb out to Beacon Hill" : 'find your way out first', 'climb out');
     }
     if (!OUTDOOR_MAPS.includes(this.mapname)) {
       const out = nearestWarp((d) => OUTDOOR_MAPS.includes(d));
@@ -9914,7 +9916,7 @@ export class Game {
       s.put(x0, 2 + i, LOGO[i], cols[i], '00', true);
       for (let j = 0; j < LOGO[i].length; j++) if (LOGO[i][j] !== ' ') s.tag(x0 + j, 2 + i, { t: 'ui', k: 'logo' });
     }
-    const sub = fitText(W, '~ Harvest Moon: Friends of Mineral Town (Complete ASCII Edition) ~', '~ Harvest Moon: Friends of Mineral Town ~');
+    const sub = fitText(W, '~ a farming tale in ASCII ~', '~ a farming tale ~');
     s.put(Math.max(0, Math.floor((W - sub.length) / 2)), 8, sub, '04');
     const scene_y = 10;
     const hillsFull = '   T   T  .-^-.   T   [Hot Spring]   T   .-^-.   T   ';
@@ -9982,7 +9984,7 @@ export class Game {
       title = `▣ ${who}`;
       tcol = '0C';
       boxStyle = { kind: 'tv', accent: '0C' };
-    } else if (who && /(Goddess|Festival|Heart Event|Rival Event)/i.test(who)) {
+    } else if (who && /(Wellkeeper|Festival|Heart Event|Rival Event)/i.test(who)) {
       title = `✦ ${who}`;
       tcol = '0B';
       boxStyle = { kind: 'fest', accent: '0B' };
@@ -10441,7 +10443,7 @@ export class Game {
         if (opts[sIdx] === 'New Game') {
           return hasAny
             ? ['Start a new farm (Auto-Save will update once you begin).']
-            : ['Start your new life in Mineral Town.'];
+            : ['Start your new life in Brackenford.'];
         }
         if (opts[sIdx] === 'Manage Saves') {
           return ['Inspect or remove saved farms stored in localStorage.'];
@@ -10473,8 +10475,8 @@ export class Game {
       if (hasAny && !(await this.confirm('Start a New Game?'))) {
         continue;
       }
-      const name = await this.text_input("What's your name?", 'Pete');
-      const farm = await this.text_input('Name your farm:', 'Moon');
+      const name = await this.text_input("What's your name?", 'Ash');
+      const farm = await this.text_input('Name your farm:', 'Bramble');
       this.new_game(name, farm);
       await this.intro();
       this.autosave(true);
@@ -10483,14 +10485,14 @@ export class Game {
   }
 
   async intro(): Promise<void> {
-    const t = 'Thomas';
-    await this.say(`Ho ho! You must be ${this.name}! Welcome to Mineral Town! I'm Mayor Thomas.`, t);
+    const t = 'Ambrose';
+    await this.say(`Ho ho! You must be ${this.name}! Welcome to Brackenford! I'm Mayor Ambrose.`, t);
     await this.say(
-      `Your grandfather left you this farm. Clear the field, till soil with your Hoe, sow seeds, and water them daily. Zack picks up your shipping bin ($) at 5:00 PM sharp!`,
+      `Your grandfather left you this farm. Clear the field, till soil with your Hoe, sow seeds, and water them daily. Otto picks up your shipping bin ($) at 5:00 PM sharp!`,
       t
     );
     await this.say(
-      `Visit the 7 Harvest Sprites at Willow Bend, soak in the Hot Spring on Mother's Hill, explore the 255-floor Spring & Lake Mines, and press M anytime for your Ranch Summary!`,
+      `Visit the 7 Hearthfolk at Willow Bend, soak in the Hot Spring on Beacon Hill, explore the 255-floor Spring & Lake Mines, and press M anytime for your Ranch Summary!`,
       t
     );
   }
@@ -10524,7 +10526,7 @@ export class Game {
       this.max_stamina += 20;
     }
     this.rebuild_house();
-    return [`Gotz finished building your ${name}! ${EXPANSIONS[name]?.[3] || ''}`];
+    return [`Ingrid finished building your ${name}! ${EXPANSIONS[name]?.[3] || ''}`];
   }
 
   // ---------------------------------------------------------------- task 12: the Willow Bend footbridge
@@ -10545,17 +10547,17 @@ export class Game {
   works_line(): string | null {
     const w = this.public_works;
     if (w.built) return null;
-    if (w.done_day !== null) return `Gotz and Basil are building the footbridge (done ${absdayLabel(w.done_day, false)})`;
-    return `Gotz needs ${worksSummary(this.works_rows(), true)}`;
+    if (w.done_day !== null) return `Ingrid and Silas are building the footbridge (done ${absdayLabel(w.done_day, false)})`;
+    return `Ingrid needs ${worksSummary(this.works_rows(), true)}`;
   }
 
   footbridge_sign(): string {
     const w = this.public_works;
     if (w.built && w.done_day !== null) {
-      return `Willow Bend footbridge — Rebuilt by Gotz, Basil and ${this.name}, ${absdayLabel(w.done_day)}.`;
+      return `Willow Bend footbridge — Rebuilt by Ingrid, Silas and ${this.name}, ${absdayLabel(w.done_day)}.`;
     }
-    const base = 'Footbridge (washed out) — The spring flood took the planks. Gotz could rebuild it with help from the valley; ask at his workshop on Mother\'s Hill.';
-    return w.done_day === null ? base : `${base} Gotz and Basil are at work: it opens ${absdayLabel(w.done_day, false)}.`;
+    const base = 'Footbridge (washed out) — The spring flood took the planks. Ingrid could rebuild it with help from the valley; ask at her workshop on Beacon Hill.';
+    return w.done_day === null ? base : `${base} Ingrid and Silas are at work: it opens ${absdayLabel(w.done_day, false)}.`;
   }
 
   /** What the rucksack can put toward the project: [item, how many it would hand over]. */
@@ -10582,17 +10584,17 @@ export class Game {
     return offer[1];
   }
 
-  /** Gotz's village project: what's needed, what's in, and hand over what you carry. */
+  /** Ingrid's village project: what's needed, what's in, and hand over what you carry. */
   async works_menu(): Promise<void> {
     const w = this.public_works;
     if (w.done_day !== null) {
-      await this.say(`Basil and I are out at Willow Bend every morning. It'll be open ${absdayLabel(w.done_day, false)}.`, 'Gotz');
+      await this.say(`Silas and I are out at Willow Bend every morning. It'll be open ${absdayLabel(w.done_day, false)}.`, 'Ingrid');
       return;
     }
     if (!Object.keys(w.delivered).length) {
       await this.say(
-        `The footbridge below the Willow Bend dock washed out in the spring flood. Basil keeps asking after it: his plant notes stop at the river, and the best of the far bank is on the other side. I'll rebuild it if the valley chips in: ${PUBLIC_WORKS.needs.Lumber} Lumber for the deck, ${PUBLIC_WORKS.needs.Copper} Copper for the fittings, and ${PUBLIC_WORKS.crop_qty} of any one crop from your farm to feed the crew.`,
-        'Gotz'
+        `The footbridge below the Willow Bend dock washed out in the spring flood. Silas keeps asking after it: his maps stop at the river, and the best of the far bank is on the other side. I'll rebuild it if the valley chips in: ${PUBLIC_WORKS.needs.Lumber} Lumber for the deck, ${PUBLIC_WORKS.needs.Copper} Copper for the fittings, and ${PUBLIC_WORKS.crop_qty} of any one crop from your farm to feed the crew.`,
+        'Ingrid'
       );
     }
     while (w.done_day === null) {
@@ -10603,11 +10605,11 @@ export class Game {
       const sel = await this.menu(`Village project: ${PUBLIC_WORKS.name}`, opts, 0, info);
       if (sel === null || sel >= offers.length) return;
       const n = this.works_deliver(offers[sel][0]);
-      this.msg(`You handed Gotz ${n} ${offers[sel][0]} for the footbridge.`, '0B');
+      this.msg(`You handed Ingrid ${n} ${offers[sel][0]} for the footbridge.`, '0B');
     }
     await this.say(
-      `That's everything. Basil's been itching to get across, so he and I start in the morning. Give us ${PUBLIC_WORKS.days} days: it'll be open ${absdayLabel(w.done_day!, false)}.`,
-      'Gotz'
+      `That's everything. Silas's been itching to get across, so he and I start in the morning. Give us ${PUBLIC_WORKS.days} days: it'll be open ${absdayLabel(w.done_day!, false)}.`,
+      'Ingrid'
     );
   }
 
@@ -10617,15 +10619,15 @@ export class Game {
     if (w.built || w.done_day === null || this.absday() < w.done_day) return [];
     w.built = true;
     this.apply_public_works();
-    this.keepsake('footbridge', 'Carved plank', 'Gotz carved a spare plank from the Willow Bend footbridge into a little river otter for you.');
+    this.keepsake('footbridge', 'Carved plank', 'Ingrid carved a spare plank from the Willow Bend footbridge into a little river otter for you.');
     for (const n of PUBLIC_WORKS.helpers) this.friend[n] = clamp((this.friend[n] || 0) + PUBLIC_WORKS.friend, 0, 100);
-    return ['Gotz and Basil finished the Willow Bend footbridge! You can cross the river below the dock now.'];
+    return ['Ingrid and Silas finished the Willow Bend footbridge! You can cross the river below the dock now.'];
   }
 
   async order_expansion(): Promise<void> {
     if (this.project) {
       const left = Math.max(1, this.project[1] - this.absday());
-      await this.say(`I'm still building your ${this.project[0]}. ${left} more day${left > 1 ? 's' : ''}.`, 'Gotz');
+      await this.say(`I'm still building your ${this.project[0]}. ${left} more day${left > 1 ? 's' : ''}.`, 'Ingrid');
       return;
     }
     const names = Object.keys(EXPANSIONS);
@@ -10642,21 +10644,21 @@ export class Game {
       lines.push(`  You have ${this.gold}G and ${this.inv['Lumber'] || 0} Lumber`);
       return lines;
     };
-    const sel = await this.menu('Gotz Carpentry — Expansions', opts, 0, info);
+    const sel = await this.menu('Ingrid Carpentry — Expansions', opts, 0, info);
     if (sel === null) return;
     const n = names[sel];
     const [gold, lumber, req] = EXPANSIONS[n];
     if (this.house_flags.includes(n)) {
-      await this.say('Already built that one. Solid work, if I say so myself.', 'Gotz');
+      await this.say('Already built that one. Solid work, if I say so myself.', 'Ingrid');
     } else if (req && !this.house_flags.includes(req)) {
-      await this.say(`I need to build the ${req} first.`, 'Gotz');
+      await this.say(`I need to build the ${req} first.`, 'Ingrid');
     } else if (this.gold < gold || (this.inv['Lumber'] || 0) < lumber) {
-      await this.say(`That'll be ${gold}G and ${lumber} Lumber. Come back when you have it.`, 'Gotz');
+      await this.say(`That'll be ${gold}G and ${lumber} Lumber. Come back when you have it.`, 'Ingrid');
     } else if (await this.confirm(`Build the ${n} for ${gold}G + ${lumber} Lumber?`)) {
       this.gold -= gold;
       this.take('Lumber', lumber);
       this.project = [n, this.absday() + BUILD_DAYS];
-      await this.say(`Right. I'll have your ${n} done in ${BUILD_DAYS} days.`, 'Gotz');
+      await this.say(`Right. I'll have your ${n} done in ${BUILD_DAYS} days.`, 'Ingrid');
     }
   }
 
@@ -10690,12 +10692,12 @@ export class Game {
         await this.say('Ahh... a hot bath in your Bathroom. (+40 Stamina, -25 Fatigue)', null);
       }
     } else if (tile === 'vase') {
-      const flowers = ['Moondrop Flower', 'Pink Cat Flower', 'Toy Flower', 'Magic Red Flower', 'Blue Magic Grass'].filter(
+      const flowers = ['Duskbell Flower', 'Rosecap Flower', 'Pinwheel Daisy', 'Emberbloom Flower', 'Wishing Moss'].filter(
         (f) => (this.inv[f] || 0) > 0
       );
       if (!flowers.length) {
         await this.say(
-          `Flower Vase (${this.vase_flower || 'Empty'}): Place a Moondrop, Pink Cat, or Toy Flower here to boost overnight Stamina & Fatigue recovery!`,
+          `Flower Vase (${this.vase_flower || 'Empty'}): Place a Duskbell, Rosecap, or Pinwheel Daisy here to boost overnight Stamina & Fatigue recovery!`,
           'Vase'
         );
       } else {
@@ -10769,7 +10771,7 @@ export class Game {
         if (s === 0) {
           return [
             '  Combine any ingredient from your rucksack to experiment!',
-            '  Invalid combinations produce a Failed Dish (needed for Elli Leaves!).',
+            '  Invalid combinations produce a Failed Dish (needed for Margit Leaves!).',
           ];
         }
         const d = dishes[s - 1];
@@ -10804,7 +10806,7 @@ export class Game {
           const used = usable[ingSel];
           this.take(used, 1);
           this.give('Failed Dish', 1);
-          this.msg(`You experimented with ${used} and made a Failed Dish! (Used in Elli Leaves!)`, '0E');
+          this.msg(`You experimented with ${used} and made a Failed Dish! (Used in Margit Leaves!)`, '0E');
         }
         continue;
       }

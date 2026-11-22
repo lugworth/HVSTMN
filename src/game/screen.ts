@@ -1,4 +1,4 @@
-// Terminal screen buffer and async input handling for HRVSTMN
+// Terminal screen buffer and async input handling for FURROW
 import { COMPACT_MIN_COLS, MIN_ROWS } from './compact';
 
 export type Cell = [char: string, fg: string, bg: string, bold: boolean];

@@ -87,7 +87,7 @@ before(() => {
 
 const fresh = () => {
   const g = new Game(new Screen(132, 30), true) as any;
-  g.new_game('Pete', 'Moon');
+  g.new_game('Ash', 'Bramble');
   return g;
 };
 
@@ -142,16 +142,16 @@ describe('engine regressions', () => {
   test('barn animals and once-per-day flags survive save/load', () => {
     const a = fresh();
     a.animals = [{ kind: 'cow', name: 'Bess', aff: 40 }];
-    a.talked = new Set(['Ann']);
-    a.gifted = new Set(['Ann']);
+    a.talked = new Set(['Tess']);
+    a.gifted = new Set(['Tess']);
     a.honey_picked = true;
     a.prayed = true;
     a.save(2);
     const b = new Game(new Screen(132, 30), true) as any;
     b.load(2);
     assert.deepEqual(b.animals, a.animals);
-    assert.ok(b.gifted instanceof Set && b.gifted.has('Ann'));
-    assert.ok(b.talked instanceof Set && b.talked.has('Ann'));
+    assert.ok(b.gifted instanceof Set && b.gifted.has('Tess'));
+    assert.ok(b.talked instanceof Set && b.talked.has('Tess'));
     assert.equal(b.honey_picked, true);
     assert.equal(b.prayed, true);
   });
@@ -211,14 +211,14 @@ describe('the rearranged valley', () => {
     assert.deepEqual(Object.keys(b.forage.river), ['3,3']);
   });
 
-  test('dig spots and forage turn up in Ironwood Grove, and the Teleport Stone reaches the forge', () => {
+  test('dig spots and forage turn up in Ironwood Grove, and the Waystone reaches the forge', () => {
     const g = fresh();
     assert.ok(DIG_MAPS.includes('grove'));
     for (const season of SEASONS) assert.ok(REGION_FORAGE.grove[season].length >= 3, season);
     for (const pool of Object.values(REGION_FORAGE.grove)) for (const item of pool) assert.ok(ITEMS[item], `${item} is a real item`);
     g.spawn_forage();
     assert.ok(Object.keys(g.forage.grove).length > 0);
-    assert.ok(g.walkable('grove', 22, 18), 'the Teleport Stone lands on open ground by the forge');
+    assert.ok(g.walkable('grove', 22, 18), 'the Waystone lands on open ground by the forge');
   });
 });
 
@@ -304,10 +304,10 @@ describe('daily surprises', () => {
 
   test('a doorstep parcel brings forage from a friend', () => {
     const g = fresh();
-    g.friend = { Ann: 40 };
+    g.friend = { Tess: 40 };
     const report: string[] = [];
     withRandom([0, 0.6, 0], () => g.night_surprise(report)); // kinds: star, parcel -> parcel
-    assert.match(report[0], /^Ann left a parcel by your door: 2 /);
+    assert.match(report[0], /^Tess left a parcel by your door: 2 /);
   });
 });
 
@@ -406,7 +406,7 @@ describe('outer-region content', () => {
     assert.equal(g.inv['Sea Glass'], 1, 'the keepsake is given once');
   });
 
-  test('Cedar Hollow pond takes a wild gift for a lucky day; it is not the Goddess Pond', async () => {
+  test('Cedar Hollow pond takes a wild gift for a lucky day; it is not the Wellkeeper Pond', async () => {
     const g = fresh();
     quiet(g);
     g.warp('woods', 47, 19, [1, 0]);
@@ -421,7 +421,7 @@ describe('outer-region content', () => {
     await g.interact();
     assert.equal(g.inv.Fiddlehead, 1);
     assert.equal(g.hollow_luck_day, g.absday());
-    assert.equal(g.goddess_gifts, 0, 'no Goddess offering here');
+    assert.equal(g.goddess_gifts, 0, 'no Wellkeeper offering here');
     await g.interact();
     assert.equal(g.inv.Fiddlehead, 1, 'once a day');
     // lucky pickups can come in pairs, today only
@@ -491,20 +491,20 @@ describe('outer-region content', () => {
       [-1, -1, 0, 0, -1]
     );
     // a new farm starts the landmarks over
-    a.new_game('Pete', 'Moon');
+    a.new_game('Ash', 'Bramble');
     assert.equal(a.skip_best, 0);
     assert.equal(a.lighthouse_log, 0);
   });
 });
 
-/** Roll until the rare catch shows up (it is a few percent with a Mystrile rod). */
+/** Roll until the rare catch shows up (it is a few percent with a Starsteel rod). */
 function await_rare(g: any): string | null {
   const rare = REGION_CATCH[g.mapname].rare;
   for (let i = 0; i < 5000; i++) if (g.roll_catch() === rare) return rare;
   return null;
 }
 
-describe("Friday evenings at Doug's Inn (task 01)", () => {
+describe("Friday evenings at Gideon's Inn (task 01)", () => {
   // Spring 5, Year 1 is a Friday (absday 4).
   const friday = (minutes = 19 * 60) => {
     const g = fresh();
@@ -543,10 +543,10 @@ describe("Friday evenings at Doug's Inn (task 01)", () => {
     quiet(g);
     g.menu = async () => 1; // join in
     while (g.inn_scene().id !== 'recipes') g.inn_scenes_seen.push(g.inn_scene().id);
-    const before = g.friend['Ann'] || 0;
+    const before = g.friend['Tess'] || 0;
     const cookies = g.inv['Cookies'] || 0;
     await g.inn_evening();
-    assert.equal(g.friend['Ann'], before + INN_JOIN_FRIEND);
+    assert.equal(g.friend['Tess'], before + INN_JOIN_FRIEND);
     assert.equal(g.inv['Cookies'], cookies + 1);
   });
 
@@ -566,7 +566,7 @@ describe("Friday evenings at Doug's Inn (task 01)", () => {
     quiet(g);
     g.menu = async () => 0;
     await g.inn_evening();
-    assert.ok(g.today_lines().some((l: string) => l.includes("Friday evening at Doug's")));
+    assert.ok(g.today_lines().some((l: string) => l.includes("Friday evening at Gideon's")));
     const h = fresh();
     h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
     assert.deepEqual(h.inn_scenes_seen, g.inn_scenes_seen);
@@ -581,15 +581,15 @@ describe("Friday evenings at Doug's Inn (task 01)", () => {
   });
 });
 
-describe("Gray's two-chapter copper request (task 04)", () => {
+describe("Rowan's two-chapter copper request (task 04)", () => {
   const talkGray = async (g: any) => {
     const said: string[] = [];
     g.say = async (text: string) => { said.push(text); };
-    await g.talk('Gray');
+    await g.talk('Rowan');
     return said;
   };
 
-  test('chapter one: Gray asks for copper, then reminds you once a day', async () => {
+  test('chapter one: Rowan asks for copper, then reminds you once a day', async () => {
     const g = fresh();
     const ask = await talkGray(g);
     assert.equal(g.gray_quest, 1);
@@ -598,25 +598,25 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     const remind = await talkGray(g);
     assert.ok(remind[0].includes('Still need'));
     assert.equal(g.gray_quest, 1, 'nothing delivered without copper');
-    assert.ok(g.today_lines().some((l: string) => l.includes('Copper from the Spring Mine')));
+    assert.ok(g.today_lines().some((l: string) => l.includes('Copper from the Copperseam Mine')));
   });
 
   test('delivering copper pays, starts chapter two and leaves a note for the next can upgrade', async () => {
     const g = fresh();
     await talkGray(g);
     g.give('Copper', GRAY_COPPER_QTY + 1);
-    const [gold, friend, done] = [g.gold, g.friend['Gray'] || 0, g.requests_done];
+    const [gold, friend, done] = [g.gold, g.friend['Rowan'] || 0, g.requests_done];
     g.talked.clear();
     const said = await talkGray(g);
     assert.equal(g.inv['Copper'], 1, 'takes exactly the copper asked for');
     assert.equal(g.gold, gold + GRAY_COPPER_REWARD);
-    assert.ok(g.friend['Gray'] >= friend + GRAY_QUEST_FRIEND);
+    assert.ok(g.friend['Rowan'] >= friend + GRAY_QUEST_FRIEND);
     assert.equal(g.requests_done, done + 1);
     assert.equal(g.gray_quest, 2);
     assert.equal(g.gray_note_level, 1, 'a Basic can is pointed at Copper');
     assert.ok(said.some((l) => l.includes('Copper is the one to save for') && l.includes('1000G')));
-    assert.ok(said.some((l) => l.includes('Mystrile') && l.includes('15 tiles')), 'names the big jump');
-    assert.ok(g.today_lines().some((l: string) => l.includes('Take Saibara 1000G + 1 Copper')));
+    assert.ok(said.some((l) => l.includes('Starsteel') && l.includes('15 tiles')), 'names the big jump');
+    assert.ok(g.today_lines().some((l: string) => l.includes('Take Hilde 1000G + 1 Copper')));
   });
 
   test('chapter two closes once the can reaches the noted level', async () => {
@@ -628,18 +628,18 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     g.talked.clear();
     assert.ok((await talkGray(g))[0].includes('Remember my note'));
     g.levels['Watering Can'] = 1;
-    const friend = g.friend['Gray'];
+    const friend = g.friend['Rowan'];
     const said = await talkGray(g);
     assert.equal(g.gray_quest, 3);
     assert.ok(said[0].includes('Copper can'));
-    assert.ok(g.friend['Gray'] >= friend + GRAY_QUEST_FRIEND);
+    assert.ok(g.friend['Rowan'] >= friend + GRAY_QUEST_FRIEND);
     assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Note')));
     g.talked.clear();
     await talkGray(g); // ordinary chatter afterwards
     assert.equal(g.gray_quest, 3);
   });
 
-  for (const [lvl, words] of [[4, 'Lake Mine'], [5, 'Carter'], [6, 'Mythic'], [7, 'nothing left']] as const) {
+  for (const [lvl, words] of [[4, 'Mirewater Mine'], [5, 'Lucan'], [6, 'Heirloom'], [7, 'nothing left']] as const) {
     test(`a level ${lvl} can gets a closing line about ${words}, and no note`, async () => {
       const g = fresh();
       g.levels['Watering Can'] = lvl;
@@ -653,7 +653,7 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     });
   }
 
-  test('from a Silver can, Gold is next and Mystrile is named as the big jump without "everything between"', async () => {
+  test('from a Silver can, Gold is next and Starsteel is named as the big jump without "everything between"', async () => {
     const g = fresh();
     g.levels['Watering Can'] = 2;
     await talkGray(g);
@@ -661,7 +661,7 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     g.talked.clear();
     const said = await talkGray(g);
     assert.ok(said.some((l) => l.includes('Gold is the one to save for')));
-    const jump = said.find((l) => l.includes('Mystrile'))!;
+    const jump = said.find((l) => l.includes('Starsteel'))!;
     assert.ok(jump && !jump.includes('Everything between'), jump);
   });
 
@@ -672,20 +672,20 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     g.upgrading = ['Watering Can', g.absday() + 1];
     g.talked.clear();
     const said = await talkGray(g);
-    assert.ok(said.some((l) => l.startsWith("Once Saibara's done") && l.includes('Silver is the one to save for')));
+    assert.ok(said.some((l) => l.startsWith("Once Hilde's done") && l.includes('Silver is the one to save for')));
     assert.equal(g.gray_note_level, 2);
-    assert.ok(g.today_lines().some((l: string) => l.includes('Take Saibara 2000G + 1 Silver')));
+    assert.ok(g.today_lines().some((l: string) => l.includes('Take Hilde 2000G + 1 Silver')));
     // paying for the noted upgrade turns the note into a pick-up reminder
     g.upgrading = null;
     g.levels['Watering Can'] = 1;
     g.upgrading = ['Watering Can', g.absday() + 1];
-    assert.ok(g.today_lines().some((l: string) => l.includes('Saibara has your can')));
+    assert.ok(g.today_lines().some((l: string) => l.includes('Hilde has your can')));
   });
 
-  test('marrying Gray mid-quest does not strand it', async () => {
+  test('marrying Rowan mid-quest does not strand it', async () => {
     const g = fresh();
     await talkGray(g);
-    g.married = 'Gray';
+    g.married = 'Rowan';
     g.mapname = 'house';
     g.give('Copper', GRAY_COPPER_QTY);
     g.talked.clear();
@@ -694,7 +694,7 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     assert.equal(g.inv['Copper'] || 0, 0);
   });
 
-  test("quest talks still check for the Mary & Gray rival event", async () => {
+  test("quest talks still check for the Odessa & Rowan rival event", async () => {
     const g = fresh();
     let checked = 0;
     g.check_heart_and_rival_events = async () => { checked++; };
@@ -702,13 +702,13 @@ describe("Gray's two-chapter copper request (task 04)", () => {
     assert.equal(checked, 1);
   });
 
-  test('a held gift still goes to Gray as a gift, not to the quest', async () => {
+  test('a held gift still goes to Rowan as a gift, not to the quest', async () => {
     const g = fresh();
     g.give('Copper', 1);
     g.held = 'Copper';
     await talkGray(g);
     assert.equal(g.gray_quest, 0);
-    assert.ok(g.gifted.has('Gray'));
+    assert.ok(g.gifted.has('Rowan'));
   });
 
   test('quest progress survives a reload; old saves start before chapter one', () => {
@@ -760,10 +760,10 @@ describe('labeled valley map (task 33)', () => {
     assert.match(r.text, /^\d+ steps west$/);
     assert.deepEqual(r.cell, [18, 16]);
     g.warp('in_inn', ...g.interiors.inn.entry);
-    assert.equal(g.pin_route().text, 'step outside to Mineral Town');
+    assert.equal(g.pin_route().text, 'step outside to Brackenford');
     g.map_pin = 'lookout';
     g.warp('beach', 30, 5);
-    assert.equal(g.pin_route().text, "north exit to Mineral Town, toward Skyline Ridge");
+    assert.equal(g.pin_route().text, "north exit to Brackenford, toward Skyline Ridge");
   });
 
   test('the minimap and the map view show where to go while a pin is set', () => {
@@ -793,10 +793,10 @@ describe('labeled valley map (task 33)', () => {
     g.show_minimap = false;
     g.render();
     const hint = g.scr.buf[0].map((c: any) => c[0]).join('');
-    assert.ok(hint.includes("⚒ Saibara's Forge: west exit"), hint);
+    assert.ok(hint.includes("⚒ Hilde's Forge: west exit"), hint);
     g.map_pin = null;
     g.render();
-    assert.ok(!rowText(g, 0).includes("Saibara's Forge"), 'no pointer without a pin');
+    assert.ok(!rowText(g, 0).includes("Hilde's Forge"), 'no pointer without a pin');
   });
 
   test('G opens the map; arrows pick a landmark, Enter pins and unpins, Esc closes', async () => {
@@ -845,7 +845,7 @@ describe('labeled valley map (task 33)', () => {
     g.minutes = 12 * 60;
     g.map_pin = 'museum';
     g.warp('farm', 14, 10);
-    assert.ok(g.today_lines().some((l: string) => l.includes('Pin    Museum: east exit to Mineral Town')));
+    assert.ok(g.today_lines().some((l: string) => l.includes('Pin    Museum: east exit to Brackenford')));
     const h = fresh();
     h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
     assert.equal(h.map_pin, 'museum');
@@ -867,7 +867,7 @@ describe('labeled valley map (task 33)', () => {
     g.map_pin = 'forge';
     g.enter_mine(3, 'spring');
     const r = g.pin_route();
-    assert.equal(r.text, "climb out to Mother's Hill");
+    assert.equal(r.text, "climb out to Beacon Hill");
     assert.equal(g.map.tile(r.cell[0], r.cell[1]), 'up');
     assert.notEqual(r.arrow, '>', 'points at the ladder, not a default arrow');
   });
@@ -924,7 +924,7 @@ describe('the Willow Bend footbridge (task 12)', () => {
       [g.forage.river, g.objs.river] = keep;
     }
   };
-  /** Hand Gotz everything the project needs, with Turnips as the crop. */
+  /** Hand Ingrid everything the project needs, with Turnips as the crop. */
   const deliverAll = (g: any) => {
     g.give('Lumber', PUBLIC_WORKS.needs.Lumber);
     g.give('Copper', PUBLIC_WORKS.needs.Copper);
@@ -953,10 +953,10 @@ describe('the Willow Bend footbridge (task 12)', () => {
     g.face = [1, 0];
     const said = quiet(g);
     await g.handle('x');
-    assert.match(said.join(' '), /washed out.*Gotz could rebuild it/);
+    assert.match(said.join(' '), /washed out.*Ingrid could rebuild it/);
   });
 
-  test("Gotz's menu offers the project; partial deliveries count and only what is missing is taken", () => {
+  test("Ingrid's menu offers the project; partial deliveries count and only what is missing is taken", () => {
     const g = fresh();
     g.give('Lumber', 5);
     assert.equal(g.works_deliver('Lumber'), 5);
@@ -968,7 +968,7 @@ describe('the Willow Bend footbridge (task 12)', () => {
     assert.equal(g.works_deliver('Lumber'), 0, 'lumber is done');
     g.give('Copper', 1);
     g.works_deliver('Copper');
-    assert.equal(g.works_line(), 'Gotz needs 1 Copper, 3 of one farm crop');
+    assert.equal(g.works_line(), 'Ingrid needs 1 Copper, 3 of one farm crop');
     assert.equal(g.public_works.done_day, null);
   });
 
@@ -1002,7 +1002,7 @@ describe('the Willow Bend footbridge (task 12)', () => {
       return o.indexOf('Hand over 4 Lumber') >= 0 ? o.indexOf('Hand over 4 Lumber') : null;
     };
     await g.works_menu();
-    assert.match(said[0], /Basil/, 'Gotz names the neighbour who wants the bridge');
+    assert.match(said[0], /Silas/, 'Ingrid names the neighbour who wants the bridge');
     assert.equal(g.public_works.delivered['Lumber'], 4);
     assert.ok(info.some((l) => l.includes('Lumber 4/12')), info.join('|'));
     assert.ok(info.some((l) => l.includes('Still needed: 8 Lumber')), info.join('|'));
@@ -1010,11 +1010,11 @@ describe('the Willow Bend footbridge (task 12)', () => {
 
   test('the last delivery starts the build; two nights later the river can be crossed', async () => {
     const g = fresh();
-    const f0 = { Gotz: g.friend['Gotz'], Basil: g.friend['Basil'] };
+    const f0 = { Ingrid: g.friend['Ingrid'], Silas: g.friend['Silas'] };
     deliverAll(g);
     assert.equal(g.public_works.done_day, g.absday() + PUBLIC_WORKS.days);
-    assert.match(g.works_line(), /^Gotz and Basil are building the footbridge \(done Spring 3\)$/);
-    assert.ok(g.today_lines().includes('  Bridge Gotz and Basil are building the footbridge (done Spring 3)'));
+    assert.match(g.works_line(), /^Ingrid and Silas are building the footbridge \(done Spring 3\)$/);
+    assert.ok(g.today_lines().includes('  Bridge Ingrid and Silas are building the footbridge (done Spring 3)'));
     assert.equal(g.valley_landmarks().some((l: any) => l.id === 'footbridge'), false, 'no landmark yet');
     await sleep(g);
     assert.equal(g.public_works.built, false, 'one night is not enough');
@@ -1027,11 +1027,11 @@ describe('the Willow Bend footbridge (task 12)', () => {
       assert.equal(g.walkable('river', x, y), true);
     }
     assert.equal(crosses(g), true, 'the west bank reaches the dock path');
-    assert.equal(g.friend['Gotz'], f0.Gotz + PUBLIC_WORKS.friend);
-    assert.equal(g.friend['Basil'], f0.Basil + PUBLIC_WORKS.friend);
+    assert.equal(g.friend['Ingrid'], f0.Ingrid + PUBLIC_WORKS.friend);
+    assert.equal(g.friend['Silas'], f0.Silas + PUBLIC_WORKS.friend);
     assert.equal(g.works_line(), null);
     assert.ok(!g.today_lines().some((l: string) => l.includes('Bridge')));
-    assert.match(g.footbridge_sign(), /^Willow Bend footbridge — Rebuilt by Gotz, Basil and Pete, Spring 3, Year 1\.$/);
+    assert.match(g.footbridge_sign(), /^Willow Bend footbridge — Rebuilt by Ingrid, Silas and Ash, Spring 3, Year 1\.$/);
     const opts = await g.shop_options('carpenter');
     assert.ok(!opts.some(([o]: [string]) => o.startsWith('Village project')), 'the project leaves the menu');
   });
@@ -1104,7 +1104,7 @@ describe('the Willow Bend footbridge (task 12)', () => {
     c.applySaveData(old);
     assert.deepEqual(c.public_works, { delivered: {}, crop: null, done_day: null, built: false });
     for (const [x, y] of footbridge_cells()) assert.equal(c.maps.river.tile(x, y), 'water');
-    assert.equal(c.works_line(), 'Gotz needs 12 Lumber, 2 Copper, 3 of one farm crop');
+    assert.equal(c.works_line(), 'Ingrid needs 12 Lumber, 2 Copper, 3 of one farm crop');
   });
 });
 
@@ -1132,7 +1132,7 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     assert.ok(!g.valley_links().woods.includes('beach'));
     g.map_pin = 'pier';
     g.warp('woods', 45, 19);
-    assert.equal(g.pin_route().text, 'north exit to Your Farm, toward Mineral Beach');
+    assert.equal(g.pin_route().text, 'north exit to Your Farm, toward Brackenford Beach');
     assert.deepEqual(g.shortcuts, []);
   });
 
@@ -1162,7 +1162,7 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     assert.ok(isOpen(g));
     assert.ok(g.msgs.some(([t]: [string]) => t.includes('short way to Cedar Hollow')));
     assert.ok(g.fx.some((f: any) => f.map === 'beach' && f.x === 0 && f.kind === 'dust'));
-    assert.equal(sign(g, 'woods', HEDGE_GATE.woodsSign), 'Hedge gate — the short way to Mineral Beach');
+    assert.equal(sign(g, 'woods', HEDGE_GATE.woodsSign), 'Hedge gate — the short way to Brackenford Beach');
     assert.equal(sign(g, 'beach', HEDGE_GATE.beachSign), 'Hedge gate — the short way to Cedar Hollow');
     // walk east out of the hollow onto the beach...
     const mid = HEDGE_GATE.at + 1;
@@ -1195,7 +1195,7 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     g.warp('woods', 45, 19);
     g.map_pin = 'pier';
     const r = g.pin_route();
-    assert.equal(r.text, 'east exit to Mineral Beach');
+    assert.equal(r.text, 'east exit to Brackenford Beach');
     assert.equal(r.cell[0], g.maps.woods.w - 1);
     g.render();
     g.draw_valley(0);
@@ -1222,7 +1222,7 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     b.applySaveData({ ...old, shortcuts: ['hollow_gate', 'nowhere'] });
     assert.deepEqual(b.shortcuts, ['hollow_gate']);
     // a new farm starts with the gate shut
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     assert.equal(isOpen(g), false);
     assert.equal(toWoods(g).length, 0);
   });
@@ -1234,15 +1234,15 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     // Cedar Hollow -> town is two regions either way (via the farm, or via the beach)
     g.map_pin = 'supermarket';
     g.warp('woods', 30, 2); // by the north entrance
-    assert.equal(g.pin_route().text, 'north exit to Your Farm, toward Mineral Town');
+    assert.equal(g.pin_route().text, 'north exit to Your Farm, toward Brackenford');
     g.warp('woods', g.maps.woods.w - 3, HEDGE_GATE.at + 1); // by the gate
-    assert.equal(g.pin_route().text, 'east exit to Mineral Beach, toward Mineral Town');
-    // town -> Poultry Farm: west through the farm from the west end, south through the beach from the south gate
+    assert.equal(g.pin_route().text, 'east exit to Brackenford Beach, toward Brackenford');
+    // town -> Feathercote: west through the farm from the west end, south through the beach from the south gate
     g.map_pin = 'poultry';
     g.warp('town', 3, 6);
     assert.equal(g.pin_route().text, 'west exit to Your Farm, toward Cedar Hollow');
     g.warp('town', 35, 29);
-    assert.equal(g.pin_route().text, 'south exit to Mineral Beach, toward Cedar Hollow');
+    assert.equal(g.pin_route().text, 'south exit to Brackenford Beach, toward Cedar Hollow');
   });
 
   test('the latch prompt reads cleanly at 50 columns', async () => {
@@ -1265,7 +1265,7 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
   });
 });
 
-describe('Saturday stall in Rose Square (task 09)', () => {
+describe('Saturday stall in Market Cross (task 09)', () => {
   /** A fresh game on the first Saturday morning, standing at the stall with goods to sell. */
   const saturday = () => {
     const g = fresh();
@@ -1287,7 +1287,7 @@ describe('Saturday stall in Rose Square (task 09)', () => {
     }
   };
 
-  test('the stall stands in Rose Square and can be stocked only on a Saturday morning', () => {
+  test('the stall stands in Market Cross and can be stocked only on a Saturday morning', () => {
     const g = saturday();
     assert.equal(g.weekday, 5, 'Spring 6 is a Saturday');
     assert.equal(g.maps.town.tile(STALL_SPOT[0], STALL_SPOT[1]), 'stall');
@@ -1580,7 +1580,7 @@ describe('fishing and the request board', () => {
     const g = fresh();
     g.season = 3;
     const winter = g.request_pool();
-    assert.ok(winter.includes('White Grass') && !winter.includes('Bamboo Shoot') && !winter.includes('Blackberry'));
+    assert.ok(winter.includes('Frostwort') && !winter.includes('Bamboo Shoot') && !winter.includes('Blackberry'));
     g.season = 0;
     assert.ok(g.request_pool().includes('Bamboo Shoot'));
     assert.ok(!g.request_pool().includes('Turnip'), 'nothing planted yet');
@@ -1619,9 +1619,9 @@ describe('fishing and the request board', () => {
   test('loading a save drops requests nothing can fill and keeps the rest', () => {
     const g = fresh();
     g.requests = [
-      { id: 1, npc: 'Ann', item: 'Monkfish', qty: 2, reward: 100, deadline: g.absday() + 2 },
-      { id: 2, npc: 'Gray', item: 'Small Fish', qty: 1, reward: 100, deadline: g.absday() + 2 },
-      { id: 3, npc: 'Mary', item: 'Spa Catfish', qty: 1, reward: 100, deadline: g.absday() + 2 },
+      { id: 1, npc: 'Tess', item: 'Monkfish', qty: 2, reward: 100, deadline: g.absday() + 2 },
+      { id: 2, npc: 'Rowan', item: 'Small Fish', qty: 1, reward: 100, deadline: g.absday() + 2 },
+      { id: 3, npc: 'Odessa', item: 'Spa Catfish', qty: 1, reward: 100, deadline: g.absday() + 2 },
     ];
     g.inv['Spa Catfish'] = 1; // already in the bag, so that one can still be handed over
     g.save(1);
@@ -1678,7 +1678,7 @@ describe('context action reticle', () => {
 describe('the camera stays on the map', () => {
   test('waking at home after collapsing outdoors on a phone-sized screen does not crash', async () => {
     const g = new Game(new Screen(44, 30), true) as any;
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     // stand somewhere on the farm where the camera has scrolled a few rows down
     let found = false;
     for (let y = 8; y < g.maps.farm.h - 2 && !found; y++) for (let x = 3; x < g.maps.farm.w - 3 && !found; x++) {
@@ -1728,12 +1728,12 @@ describe('market regulars at the stall (task 10)', () => {
     const w = g.market_wants();
     assert.equal(g.market_next(), g.absday(1, 0, 6), 'the next market is Saturday');
     const today = g.today_lines().join('\n');
-    assert.match(today, new RegExp(`Saturday regulars: Doug wants ${w.pantry.join(' and ')}; Lillia wants an? ${w.flower}`));
+    assert.match(today, new RegExp(`Saturday regulars: Gideon wants ${w.pantry.join(' and ')}; Rosalind wants an? ${w.flower}`));
     const said: string[] = [];
     g.say = async (text: string) => { said.push(text); };
     g.warp('town', STALL_SPOT[0], STALL_SPOT[1] + 1, [0, -1]);
     await g.interact();
-    assert.match(said.join(' '), new RegExp(`This Saturday: Doug wants ${w.pantry[0]}`));
+    assert.match(said.join(' '), new RegExp(`This Saturday: Gideon wants ${w.pantry[0]}`));
     g.day = 4;
     assert.deepEqual(g.market_wants(), w, 'the list holds all week');
     g.day = 13;
@@ -1751,34 +1751,34 @@ describe('market regulars at the stall (task 10)', () => {
       return menus.length === 1 ? opts.indexOf('Put out a good...') : null;
     };
     await g.interact();
-    assert.ok(menus[0].info.some((l: string) => l.startsWith('Regulars: Doug wants')), 'the lists in the stall menu');
+    assert.ok(menus[0].info.some((l: string) => l.startsWith('Regulars: Gideon wants')), 'the lists in the stall menu');
     const picker = menus[1].opts;
-    assert.ok(picker.find((o) => o.startsWith(w.pantry[0]))!.endsWith('Doug wants this'));
-    assert.ok(picker.find((o) => o.startsWith(w.flower))!.endsWith('Lillia wants this'));
+    assert.ok(picker.find((o) => o.startsWith(w.pantry[0]))!.endsWith('Gideon wants this'));
+    assert.ok(picker.find((o) => o.startsWith(w.flower))!.endsWith('Rosalind wants this'));
     assert.ok(!picker.find((o) => o.startsWith('Small Fish'))!.includes('wants this'));
   });
 
-  test('Doug comes at noon and Lillia at 3 PM, and each buys from their list at a premium', async () => {
+  test('Gideon comes at noon and Rosalind at 3 PM, and each buys from their list at a premium', async () => {
     const g = monday();
     const w = g.market_wants();
     toSaturday(g);
     g.inv = { [w.pantry[0]]: 5, [w.flower]: 3, 'Small Fish': 3 };
-    const [dougFriend, lilliaFriend] = [g.friend.Doug || 0, g.friend.Lillia || 0];
+    const [dougFriend, lilliaFriend] = [g.friend.Gideon || 0, g.friend.Rosalind || 0];
     g.stall_open([[w.pantry[0], 5], [w.flower, 3], ['Small Fish', 3]]);
     await steady(g, async () => {
       await g.advance(3 * 60); // to noon
-      assert.deepEqual(g.stall.callers, ['Doug']);
+      assert.deepEqual(g.stall.callers, ['Gideon']);
       assert.equal(g.stall.goods[0].sold, 3, 'three of a staple he wanted');
       assert.equal(g.stall.goods[1].sold, 0, 'not the flower');
       assert.equal(g.stall.gold, Math.round(ITEMS[w.pantry[0]][0] * 1.6) * 3);
       await g.advance(3 * 60); // to 3 PM
-      assert.deepEqual(g.stall.callers, ['Doug', 'Lillia']);
+      assert.deepEqual(g.stall.callers, ['Gideon', 'Rosalind']);
       assert.equal(g.stall.goods[1].sold, 2, 'two of the flower she hoped for');
     });
-    assert.equal(g.friend.Doug, dougFriend + 3);
-    assert.equal(g.friend.Lillia, lilliaFriend + 3);
-    assert.ok(g.stall.log.some((l: string) => l.startsWith('Doug: "Just what')));
-    assert.ok(g.stall.log.some((l: string) => l.startsWith('Lillia: "You found one!')));
+    assert.equal(g.friend.Gideon, dougFriend + 3);
+    assert.equal(g.friend.Rosalind, lilliaFriend + 3);
+    assert.ok(g.stall.log.some((l: string) => l.startsWith('Gideon: "Just what')));
+    assert.ok(g.stall.log.some((l: string) => l.startsWith('Rosalind: "You found one!')));
   });
 
   test('a regular whose list is not on the stall leaves without, and says what they came for', async () => {
@@ -1790,11 +1790,11 @@ describe('market regulars at the stall (task 10)', () => {
     await steady(g, async () => g.advance(6 * 60));
     assert.equal(g.stall.goods[0].sold, 0);
     assert.equal(g.stall.gold, 0);
-    assert.ok(g.stall.log.includes(`Doug came for ${w.pantry.join(' and ')} for the inn, and left without.`));
-    assert.ok(g.stall.log.some((l: string) => l.startsWith(`Lillia hoped for a`) && l.includes(w.flower)));
+    assert.ok(g.stall.log.includes(`Gideon came for ${w.pantry.join(' and ')} for the inn, and left without.`));
+    assert.ok(g.stall.log.some((l: string) => l.startsWith(`Rosalind hoped for a`) && l.includes(w.flower)));
   });
 
-  test('in winter Lillia stays home and Doug asks for eggs and a preserve (task 31)', () => {
+  test('in winter Rosalind stays home and Gideon asks for eggs and a preserve (task 31)', () => {
     const g = monday();
     g.season = 3;
     g.day = 1;
@@ -1803,7 +1803,7 @@ describe('market regulars at the stall (task 10)', () => {
     assert.equal(w.pantry.length, 2);
     assert.ok(PRESERVES.includes(w.pantry[0]), w.pantry.join(', '));
     assert.equal(w.pantry[1], 'Egg', 'nothing grows in winter, so the other pick is eggs');
-    assert.equal(g.market_clue(), `Doug wants ${w.pantry[0]} and Egg.`);
+    assert.equal(g.market_clue(), `Gideon wants ${w.pantry[0]} and Egg.`);
   });
 
   test('no clue for a Saturday that is a festival, since there is no market', () => {
@@ -1825,7 +1825,7 @@ describe('market regulars at the stall (task 10)', () => {
     const b = new Game(new Screen(132, 30), true) as any;
     b.load(2);
     await steady(b, async () => b.advance(3 * 60));
-    assert.deepEqual(b.stall.callers, ['Doug']);
+    assert.deepEqual(b.stall.callers, ['Gideon']);
     assert.equal(b.stall.goods[0].sold, 3);
   });
 });
@@ -1849,28 +1849,28 @@ describe('companion planting (task 17)', () => {
   };
   const plant = (g: any, x: number, y: number, crop: string, age: number) => { g.crops[`${x},${y}`] = [crop, age]; };
 
-  test('a Cucumber beside a Moondrop in bloom gives two a picking, and keeps regrowing', async () => {
+  test('a Cucumber beside a Duskbell in bloom gives two a picking, and keeps regrowing', async () => {
     const g = field();
     plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
-    plant(g, 22, 16, 'Moondrop Flower', RIPE('Moondrop Flower')); // diagonal counts
+    plant(g, 22, 16, 'Duskbell Flower', RIPE('Duskbell Flower')); // diagonal counts
     assert.equal(g.companion_bonus('21,15'), COMPANION.bonus);
     g.inv = {};
     await g.interact();
     assert.equal(g.inv.Cucumber, 2);
-    assert.match(g.msgs.at(-1)[0], /You harvested 2 Cucumber! The Moondrop Flower beside it drew the bees/);
+    assert.match(g.msgs.at(-1)[0], /You harvested 2 Cucumber! The Duskbell Flower beside it drew the bees/);
     assert.equal(g.crops['21,15'][1], RIPE('Cucumber') - CROPS.Cucumber[3], 'it regrows as usual');
   });
 
-  test('no bonus without a blooming Moondrop next to it', async () => {
+  test('no bonus without a blooming Duskbell next to it', async () => {
     const g = field();
     plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
-    plant(g, 23, 15, 'Moondrop Flower', RIPE('Moondrop Flower')); // two tiles away
+    plant(g, 23, 15, 'Duskbell Flower', RIPE('Duskbell Flower')); // two tiles away
     assert.equal(g.companion_bonus('21,15'), 0, 'two tiles away is too far');
-    plant(g, 22, 15, 'Moondrop Flower', 2); // next to it, still growing
+    plant(g, 22, 15, 'Duskbell Flower', 2); // next to it, still growing
     assert.equal(g.companion_bonus('21,15'), 0, 'not in bloom yet');
-    plant(g, 22, 15, 'Toy Flower', RIPE('Toy Flower'));
-    assert.equal(g.companion_bonus('21,15'), 0, 'only the Moondrop');
-    plant(g, 22, 15, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    plant(g, 22, 15, 'Pinwheel Daisy', RIPE('Pinwheel Daisy'));
+    assert.equal(g.companion_bonus('21,15'), 0, 'only the Duskbell');
+    plant(g, 22, 15, 'Duskbell Flower', RIPE('Duskbell Flower'));
     assert.equal(g.companion_bonus('22,15'), 0, 'the flower itself gets nothing');
     g.inv = {};
     await g.interact();
@@ -1880,7 +1880,7 @@ describe('companion planting (task 17)', () => {
   test('the bonus fills the Basket up to its capacity, with any spare berry kept in the rucksack', async () => {
     const g = field();
     plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
-    plant(g, 21, 14, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    plant(g, 21, 14, 'Duskbell Flower', RIPE('Duskbell Flower'));
     g.inv = { Basket: 1 };
     g.held = 'Basket';
     g.basket = { Turnip: BASKET_CAPACITY - 1 };
@@ -1889,9 +1889,9 @@ describe('companion planting (task 17)', () => {
     assert.equal(g.inv.Cucumber, 1);
   });
 
-  test('Harvest Sprites collect the bonus too, even when they pick the flower in the same pass', () => {
+  test('Hearthfolk collect the bonus too, even when they pick the flower in the same pass', () => {
     const g = field();
-    plant(g, 22, 15, 'Moondrop Flower', RIPE('Moondrop Flower'));
+    plant(g, 22, 15, 'Duskbell Flower', RIPE('Duskbell Flower'));
     plant(g, 21, 15, 'Cucumber', RIPE('Cucumber'));
     plant(g, 23, 15, 'Cucumber', RIPE('Cucumber'));
     plant(g, 25, 15, 'Cucumber', RIPE('Cucumber')); // not touching the flower
@@ -1900,17 +1900,17 @@ describe('companion planting (task 17)', () => {
     g.bin = {};
     g.run_sprites_work([]);
     assert.equal(g.bin.Cucumber, 2 + 2 + 1);
-    assert.equal(g.bin['Moondrop Flower'], 1);
+    assert.equal(g.bin['Duskbell Flower'], 1);
   });
 
-  test('aiming Cucumber seeds marks the tiles that would sit beside a Moondrop and says so', () => {
+  test('aiming Cucumber seeds marks the tiles that would sit beside a Duskbell and says so', () => {
     const g = field();
-    plant(g, 23, 15, 'Moondrop Flower', 1); // any stage: it will bloom
+    plant(g, 23, 15, 'Duskbell Flower', 1); // any stage: it will bloom
     g.inv = { 'Cucumber Seeds': 1 };
     g.tool = 'Cucumber Seeds';
     const p = g.companion_preview('Cucumber Seeds', 21, 15);
     assert.deepEqual(p.cells.sort(), ['22,14', '22,15', '22,16']);
-    assert.match(g.facing_action().summary, /^Sow cucumber · 3 by Moondrop: 2 a picking$/);
+    assert.match(g.facing_action().summary, /^Sow cucumber · 3 by Duskbell: 2 a picking$/);
     g.render();
     const marked = g.scr.tags.flat().filter((t: any) => t?.companion).map((t: any) => `${t.wx},${t.wy}`).sort();
     assert.deepEqual(marked, ['22,14', '22,15', '22,16']);
@@ -1920,34 +1920,34 @@ describe('companion planting (task 17)', () => {
     assert.equal(g.scr.tags.flat().filter((t: any) => t?.companion).length, 0, 'no marks without the bag');
   });
 
-  test('aiming Moondrop seeds marks the Cucumber plants the flowers would help', () => {
+  test('aiming Duskbell seeds marks the Cucumber plants the flowers would help', () => {
     const g = field();
     plant(g, 23, 14, 'Cucumber', 2);
     plant(g, 26, 16, 'Cucumber', 2); // too far from the 3x3 at (21,15)
-    g.inv = { 'Moondrop Flower Seeds': 1 };
-    g.tool = 'Moondrop Flower Seeds';
+    g.inv = { 'Duskbell Flower Seeds': 1 };
+    g.tool = 'Duskbell Flower Seeds';
     assert.deepEqual(g.companion_preview(g.tool, 21, 15).cells, ['23,14']);
-    assert.match(g.facing_action().summary, /^Sow moondrop flower · helps 1 Cucumber: \+1 a picking$/);
+    assert.match(g.facing_action().summary, /^Sow duskbell flower · helps 1 Cucumber: \+1 a picking$/);
   });
 
   test('sowing next to the pair says so; checking a cucumber tells you about its flower', async () => {
     const g = field();
-    plant(g, 23, 15, 'Moondrop Flower', 1);
+    plant(g, 23, 15, 'Duskbell Flower', 1);
     g.inv = { 'Cucumber Seeds': 1 };
     g.tool = 'Cucumber Seeds';
     await g.sow('Cucumber Seeds', [21, 15]);
-    assert.match(g.msgs.at(-1)[0], /You sowed Cucumber seeds on 9 tiles\. 3 Cucumber plants are paired with Moondrop Flower\./);
+    assert.match(g.msgs.at(-1)[0], /You sowed Cucumber seeds on 9 tiles\. 3 Cucumber plants are paired with Duskbell Flower\./);
     g.tool = 'Hoe';
     g.face = [1, 0];
     g.px = 21; g.py = 15; // facing (22, 15), a new cucumber beside the young flower
     await g.interact();
     assert.match(g.msgs.at(-1)[0], /will draw bees once it blooms/);
-    g.crops['23,15'][1] = RIPE('Moondrop Flower');
+    g.crops['23,15'][1] = RIPE('Duskbell Flower');
     await g.interact();
-    assert.match(g.msgs.at(-1)[0], /A Moondrop Flower in bloom beside it: 2 a picking/);
+    assert.match(g.msgs.at(-1)[0], /A Duskbell Flower in bloom beside it: 2 a picking/);
   });
 
-  test("Jeff's seed shop explains the pairing for Cucumber seeds", () => {
+  test("Hollis's seed shop explains the pairing for Cucumber seeds", () => {
     const g = fresh();
     g.season = 0;
     const seen: string[][] = [];
@@ -1957,13 +1957,13 @@ describe('companion planting (task 17)', () => {
     };
     return g.buy_seeds().then(() => {
       const line = (name: string) => seen.find((r) => r[0].startsWith(name))!.join(' ');
-      assert.match(line('Cucumber Seeds'), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
+      assert.match(line('Cucumber Seeds'), /Companion: a Duskbell Flower in bloom beside a Cucumber gives 2 a picking/);
       assert.ok(!/Companion:/.test(line('Turnip Seeds')));
       assert.ok(!line('Cucumber Seeds').includes('LOCKED'), 'cucumber seeds are on sale from the first day');
     });
   });
 
-  test("Won's shop explains the pairing where Moondrop seeds are sold", async () => {
+  test("Ferreira's shop explains the pairing where Duskbell seeds are sold", async () => {
     const g = fresh();
     let info: any = null;
     let opts: string[] = [];
@@ -1973,9 +1973,9 @@ describe('companion planting (task 17)', () => {
       return null;
     };
     await g.won_shop();
-    const at = opts.findIndex((o) => o.startsWith('Moondrop Flower Seeds'));
-    assert.match(info(at).join(' '), /Companion: a Moondrop Flower in bloom beside a Cucumber gives 2 a picking/);
-    const toy = info(opts.findIndex((o) => o.startsWith('Toy Flower Seeds')));
+    const at = opts.findIndex((o) => o.startsWith('Duskbell Flower Seeds'));
+    assert.match(info(at).join(' '), /Companion: a Duskbell Flower in bloom beside a Cucumber gives 2 a picking/);
+    const toy = info(opts.findIndex((o) => o.startsWith('Pinwheel Daisy Seeds')));
     assert.ok(!toy.some((l: string) => /Companion/.test(l)), 'no pairing for Toy Flowers');
     assert.deepEqual(toy, ['Sown today: ready Spring 13.'], 'just the planting forecast (task 24)');
   });
@@ -2027,7 +2027,7 @@ describe('seed saving (task 19)', () => {
     const preview = seen.find((m) => m.title === 'Save Cucumber seeds?')!;
     assert.deepEqual(preview.opts, ['Keep the Cucumber', 'Save seeds from 3 Cucumber'], 'keeping is the highlighted answer');
     assert.match(preview.info.join(' '), /Gives 1 bag of Cucumber Seeds: sows 3x3, 9 days to grow, regrows every 5d/);
-    assert.match(preview.info.join(' '), /Jeff sells the bag for 200G; 3 Cucumber would ship for 180G/);
+    assert.match(preview.info.join(' '), /Hollis sells the bag for 200G; 3 Cucumber would ship for 180G/);
     assert.equal(g.inv.Cucumber, 3, 'kept');
     // now save them
     seen = answering(g, ['Cucumber', 'Save seeds', 'Save seeds from', null]);
@@ -2069,7 +2069,7 @@ describe('seed saving (task 19)', () => {
     assert.equal(g.inv['Cucumber Seeds'] || 0, 0);
   });
 
-  test("Jeff's shop mentions saving your own", async () => {
+  test("Hollis's shop mentions saving your own", async () => {
     const g = fresh();
     g.season = 0;
     let rows: string[] = [];
@@ -2130,13 +2130,13 @@ describe('makers you can walk up to (task 30)', () => {
     quiet(g);
     g.house_flags = ['Coop Expansion'];
     g.gold = 25000;
-    g.inv = { Adamantite: 1 };
+    g.inv = { Deepiron: 1 };
     answering(g, ['Mayonnaise Maker']);
     await g.order_maker();
     assert.deepEqual(g.makers, ['Mayonnaise Maker']);
     assert.equal(g.maps.farm.tile(spot.x, spot.y), 'maker');
     assert.equal(TILES.maker[3], false, 'you stand beside it, not on it');
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     assert.equal(g.maps.farm.tile(spot.x, spot.y), 'grass');
   });
 
@@ -2313,10 +2313,10 @@ describe('a few preserves (task 31)', () => {
     };
     await g.cook();
     assert.deepEqual(g.inv, { 'Medicinal Herb': 1, 'Dried Herbs': 1 });
-    assert.ok(seen[0].some((l) => l.includes('Keeps for winter. Doug buys preserves for the inn in Fall and Winter.')), seen[0].join(' | '));
+    assert.ok(seen[0].some((l) => l.includes('Keeps for winter. Gideon buys preserves for the inn in Fall and Winter.')), seen[0].join(' | '));
   });
 
-  test('Doug asks for one preserve in Fall and Winter, never in Spring or Summer', () => {
+  test('Gideon asks for one preserve in Fall and Winter, never in Spring or Summer', () => {
     const seen = new Set<string>();
     for (let season = 0; season < 4; season++) {
       for (let week = 0; week < 4; week++) {
@@ -2338,7 +2338,7 @@ describe('a few preserves (task 31)', () => {
     assert.ok(seen.size >= 2, `more than one preserve turns up over the cold weeks (${[...seen].join(', ')})`);
   });
 
-  test('at a winter market Doug buys the preserve he asked for at his premium', async () => {
+  test('at a winter market Gideon buys the preserve he asked for at his premium', async () => {
     const g = mondayIn(3);
     const w = g.market_wants();
     const want = w.pantry[0];
@@ -2352,7 +2352,7 @@ describe('a few preserves (task 31)', () => {
     assert.equal(g.stall.goods[0].sold, MARKET_SHOPPERS.pantry.each);
     assert.equal(g.stall.goods[0].item, want);
     assert.ok(g.stall.gold >= Math.round(ITEMS[want][0] * MARKET_SHOPPERS.pantry.markup) * MARKET_SHOPPERS.pantry.each);
-    assert.match(g.stall.log.at(-1), new RegExp(`Doug: "Just what the inn's kitchen needs\\." Bought .*${want}`));
+    assert.match(g.stall.log.at(-1), new RegExp(`Gideon: "Just what the inn's kitchen needs\\." Bought .*${want}`));
   });
 
   test('the rucksack marks a preserve and says who wants it this week', async () => {
@@ -2371,7 +2371,7 @@ describe('a few preserves (task 31)', () => {
     await g.rucksack();
     assert.deepEqual(infos.PRESERVE, [
       `PRESERVE  ·  Ships ${ITEMS[want][0]}G  ·  +${ITEMS[want][1]} Stamina`,
-      `Keeps for winter. Doug wants ${want} at this Saturday's market.`,
+      `Keeps for winter. Gideon wants ${want} at this Saturday's market.`,
     ]);
     assert.equal(infos.CROP.length, 1, 'a turnip gets no preserve line');
     assert.equal(g.preserve_note('Turnip'), null);
@@ -2410,7 +2410,7 @@ describe('orders for finished goods (task 32)', () => {
       for (const p of o.pieces) {
         for (const it of p.any) assert.ok(ITEMS[it], `${it} is an item`);
         assert.ok(['food', 'dish', 'animal'].includes(ITEMS[p.any[0]][2]), `${p.label} is a finished good`);
-        parts += Math.min(...p.any.map((it) => ITEMS[it][0] || 100)) * p.qty; // at the lowest grade (Bread: Jeff's 100G)
+        parts += Math.min(...p.any.map((it) => ITEMS[it][0] || 100)) * p.qty; // at the lowest grade (Bread: Hollis's 100G)
         assert.ok(p.where.length > 0);
       }
       assert.ok(o.reward > parts, `${o.id}: ${o.reward}G beats shipping the parts (${parts}G)`);
@@ -2421,7 +2421,7 @@ describe('orders for finished goods (task 32)', () => {
     const g = fresh();
     assert.equal(g.order_refresh(), null, 'no Kitchen, no Makers');
     g.makers = ['Yarn Maker'];
-    assert.equal(g.order_refresh().id, 'manna_scarf', 'a Yarn Maker opens Manna\'s scarf');
+    assert.equal(g.order_refresh().id, 'manna_scarf', 'a Yarn Maker opens Elspeth\'s scarf');
     const h = fresh();
     h.house_flags = ['Kitchen'];
     assert.equal(h.order_refresh().id, 'inn_supper', 'a Kitchen opens the supper basket, but not the cheese board');
@@ -2431,16 +2431,16 @@ describe('orders for finished goods (task 32)', () => {
   test('the board lists the order first and its page shows which pieces are still missing', async () => {
     const g = withOrder();
     g.inv = { Bread: 1, Turnip: 2 };
-    const seen = answering(g, ['★ Doug', null]);
+    const seen = answering(g, ['★ Gideon', null]);
     await g.request_menu();
-    assert.match(seen[0].opts[0], new RegExp(`^★ Doug's order: a supper basket for the inn — ${supper.reward}G \\(${ORDER_DAYS}d left\\)$`));
+    assert.match(seen[0].opts[0], new RegExp(`^★ Gideon's order: a supper basket for the inn — ${supper.reward}G \\(${ORDER_DAYS}d left\\)$`));
     assert.deepEqual(seen[0].info, [
       'A bundle of finished goods. Still needed: Bread, Pickled Turnip and Dried Herbs.',
       'Hand pieces over as you make them; paid when it is complete.',
     ]);
     assert.equal(seen[1].title, 'Order: a supper basket for the inn');
     assert.deepEqual(seen[1].info.slice(1), [
-      "  · Bread 0/1, in your rucksack (Jeff's General Store, 100G)",
+      "  · Bread 0/1, in your rucksack (Hollis's General Store, 100G)",
       '  · Pickled Turnip 0/1, missing 1 (Kitchen: 2 Turnip)',
       '  · Dried Herbs 0/1, missing 1 (Kitchen: 3 Medicinal Herb)',
     ]);
@@ -2451,29 +2451,29 @@ describe('orders for finished goods (task 32)', () => {
     const g = withOrder();
     quiet(g);
     const gold = g.gold;
-    const friend = g.friend.Doug || 0;
+    const friend = g.friend.Gideon || 0;
     g.inv = { Bread: 2, 'Pickled Turnip': 1 };
-    answering(g, ['★ Doug', 'Hand over']);
+    answering(g, ['★ Gideon', 'Hand over']);
     await g.request_menu();
     assert.deepEqual(g.inv, { Bread: 1 }, 'one of each piece, no more');
     assert.deepEqual(g.order.delivered, [1, 1, 0]);
     assert.equal(g.gold, gold, 'not paid yet');
-    assert.match(g.msgs.at(-1)[0], /^You handed Doug 1 Bread and 1 Pickled Turnip\. Still needed: Dried Herbs\.$/);
-    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Order  Doug: Dried Herbs (')));
+    assert.match(g.msgs.at(-1)[0], /^You handed Gideon 1 Bread and 1 Pickled Turnip\. Still needed: Dried Herbs\.$/);
+    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Order  Gideon: Dried Herbs (')));
 
     // the page now ticks off what was handed over, and offers nothing to hand over
-    const seen = answering(g, ['★ Doug', null]);
+    const seen = answering(g, ['★ Gideon', null]);
     await g.request_menu();
     assert.ok(seen[1].info.includes('  ✓ Bread 1/1'));
     assert.ok(seen[1].info.includes('  ✓ Pickled Turnip 1/1'));
     assert.deepEqual(seen[1].opts, ['Leave']);
 
     g.inv['Dried Herbs'] = 1;
-    answering(g, ['★ Doug', 'Hand over']);
+    answering(g, ['★ Gideon', 'Hand over']);
     await g.request_menu();
     assert.equal(g.order, null);
     assert.equal(g.gold, gold + supper.reward);
-    assert.equal(g.friend.Doug, Math.min(100, friend + 8));
+    assert.equal(g.friend.Gideon, Math.min(100, friend + 8));
     assert.equal(g.requests_done, 1);
     assert.equal(g.order_next, g.absday() + ORDER_GAP, 'a short gap before the next order');
     assert.equal(g.order_refresh(), null);
@@ -2495,12 +2495,12 @@ describe('orders for finished goods (task 32)', () => {
     g.day += ORDER_DAYS + 1;
     const report: string[] = [];
     g.request_day(report);
-    assert.ok(report.includes("Doug's order for a supper basket for the inn lapsed at the Rose Square board."), report.join(' | '));
+    assert.ok(report.includes("Gideon's order for a supper basket for the inn lapsed at the Market Cross board."), report.join(' | '));
     assert.equal(g.order, null);
     g.day += ORDER_GAP;
     const later: string[] = [];
     g.request_day(later);
-    assert.ok(later.some((l) => l.startsWith('Doug posted an order at the Rose Square board')), later.join(' | '));
+    assert.ok(later.some((l) => l.startsWith('Gideon posted an order at the Market Cross board')), later.join(' | '));
   });
 
   test('an order and its progress survive a reload; a broken one is dropped', () => {
@@ -2532,7 +2532,7 @@ describe('orders for finished goods (task 32)', () => {
 });
 
 describe('planting forecast (task 24)', () => {
-  test("Jeff's seed list says when a bag sown today is picked", async () => {
+  test("Hollis's seed list says when a bag sown today is picked", async () => {
     const g = fresh();
     g.day = 10;
     const infos: Record<string, string[]> = {};
@@ -2560,7 +2560,7 @@ describe('planting forecast (task 24)', () => {
     assert.ok(infos.Cucumber.includes('  Sown today: too late, it needs 9 days and Spring ends on the 30th.'));
   });
 
-  test("Won's seeds for another season forecast from that season's first day", async () => {
+  test("Ferreira's seeds for another season forecast from that season's first day", async () => {
     const g = fresh();
     let lines: string[] = [];
     g.menu = async (_t: string, opts: string[], _s = 0, info: any = null) => {
@@ -2615,7 +2615,7 @@ describe('first-morning checklist (task 50)', () => {
     assert.ok(today.includes('  First morning  [ ] Till  [ ] Sow  [ ] Water'), today.join('\n'));
     assert.ok(today.includes('         Equip the Hoe (2) and press SPACE on the field south of your house.'));
     const big = new Game(new Screen(132, 44), true) as any; // a desktop-height side panel has room for it
-    big.new_game('Pete', 'Moon');
+    big.new_game('Ash', 'Bramble');
     big.render();
     const screen = big.scr.buf.map((r: any[]) => r.map((c) => c[0]).join('')).join('\n');
     assert.match(screen, /FIRST MORNING/);
@@ -2682,7 +2682,7 @@ describe('first-morning checklist (task 50)', () => {
 });
 
 describe('reminders on the calendar (task 51)', () => {
-  /** Spring 3, a turnip patch sown yesterday and Mary's... whoever's birthday is near. */
+  /** Spring 3, a turnip patch sown yesterday and Odessa's... whoever's birthday is near. */
   const farmDay = () => {
     const g = fresh();
     g.day = 3;
@@ -2865,7 +2865,7 @@ describe('compost from leftovers (task 18)', () => {
     assert.deepEqual(g.composted, [], 'used up');
   });
 
-  test('a regrowing crop gets the bonus once, and Harvest Sprites count it too', () => {
+  test('a regrowing crop gets the bonus once, and Hearthfolk count it too', () => {
     const g = field();
     g.tilled.add('21,15');
     g.composted = ['21,15'];
@@ -3228,14 +3228,14 @@ describe('villagers remember milestones (task 03)', () => {
     return said[0];
   };
 
-  test('Zack remembers your first shipment, once, naming what you ship most', async () => {
+  test('Otto remembers your first shipment, once, naming what you ship most', async () => {
     const g = fresh();
-    assert.doesNotMatch(await chat(g, 'Zack'), /first crate/, 'nothing shipped yet');
+    assert.doesNotMatch(await chat(g, 'Otto'), /first crate/, 'nothing shipped yet');
     g.shipped_total = 400;
     g.shipped_counts = { Turnip: 6, Potato: 2 };
-    assert.equal(await chat(g, 'Zack'), MILESTONE_LINES.first_shipment.replace('{item}', 'Turnip'));
-    assert.ok(g.milestones_said.includes('Zack:first_shipment'));
-    assert.doesNotMatch(await chat(g, 'Zack'), /first crate/, 'said once');
+    assert.equal(await chat(g, 'Otto'), MILESTONE_LINES.first_shipment.replace('{item}', 'Turnip'));
+    assert.ok(g.milestones_said.includes('Otto:first_shipment'));
+    assert.doesNotMatch(await chat(g, 'Otto'), /first crate/, 'said once');
   });
 
   test('the curator mentions each museum case you complete', async () => {
@@ -3254,7 +3254,7 @@ describe('villagers remember milestones (task 03)', () => {
 
   test('neighbours notice the footbridge you helped rebuild, each in their own words', async () => {
     const g = fresh();
-    assert.equal(g.milestone_line('Popuri'), null, 'not built yet');
+    assert.equal(g.milestone_line('Juniper'), null, 'not built yet');
     g.public_works.built = true;
     const lines = new Set<string>();
     for (const n of Object.keys(MILESTONE_LINES.footbridge)) {
@@ -3264,12 +3264,12 @@ describe('villagers remember milestones (task 03)', () => {
       assert.equal(g.milestone_line(n), null, `${n} says it once`);
     }
     assert.equal(lines.size, Object.keys(MILESTONE_LINES.footbridge).length);
-    assert.equal(g.milestone_line('Jeff'), null, 'only the neighbours who use it');
+    assert.equal(g.milestone_line('Hollis'), null, 'only the neighbours who use it');
   });
 
   test('what has been said survives a reload', () => {
     const g = fresh();
-    g.milestones_said = ['Zack:first_shipment', 'Ann:footbridge'];
+    g.milestones_said = ['Otto:first_shipment', 'Tess:footbridge'];
     const snap = JSON.parse(JSON.stringify(g.snapshot()));
     const h = fresh();
     h.applySaveData(snap);
@@ -3299,43 +3299,43 @@ describe('shared memories in Villager Notes (task 07)', () => {
 
   test('a gift they love is kept once; other gifts are not', async () => {
     const g = fresh();
-    const loved = NPCS.Ann.loves[0];
-    const liked = NPCS.Ann.likes[0];
-    await gift(g, 'Ann', liked);
+    const loved = NPCS.Tess.loves[0];
+    const liked = NPCS.Tess.likes[0];
+    await gift(g, 'Tess', liked);
     assert.deepEqual(g.memories, []);
-    await gift(g, 'Ann', loved);
-    assert.deepEqual(g.memories, [{ day: g.absday(), npc: 'Ann', text: `Ann loved the ${loved} you brought.`, key: `Ann:love:${loved}` }]);
+    await gift(g, 'Tess', loved);
+    assert.deepEqual(g.memories, [{ day: g.absday(), npc: 'Tess', text: `Tess loved the ${loved} you brought.`, key: `Tess:love:${loved}` }]);
     g.day += 1;
-    await gift(g, 'Ann', loved);
+    await gift(g, 'Tess', loved);
     assert.equal(g.memories.length, 1, 'the same favourite is kept once');
   });
 
   test('a remembered birthday, a filled request, an order and a milestone remark are kept', async () => {
     const g = fresh();
-    const [season, day] = BIRTHDAYS_OF('Ann');
+    const [season, day] = BIRTHDAYS_OF('Tess');
     g.season = season;
     g.day = day;
-    await gift(g, 'Ann', NPCS.Ann.likes[0]);
-    assert.match(g.memories.at(-1).text, /^Ann's birthday: you remembered, with an? .+\.$/);
+    await gift(g, 'Tess', NPCS.Tess.likes[0]);
+    assert.match(g.memories.at(-1).text, /^Tess's birthday: you remembered, with an? .+\.$/);
 
-    g.requests = [{ id: 1, npc: 'Gray', item: 'Copper', qty: 2, reward: 300, deadline: g.absday() + 2 }];
+    g.requests = [{ id: 1, npc: 'Rowan', item: 'Copper', qty: 2, reward: 300, deadline: g.absday() + 2 }];
     g.inv = { Copper: 2 };
     g.request_deliver(0);
-    assert.equal(g.memories.at(-1).text, 'You brought Gray 2 × Copper for the request board.');
+    assert.equal(g.memories.at(-1).text, 'You brought Rowan 2 × Copper for the request board.');
 
     g.house_flags = ['Kitchen'];
     g.order_last = 'inn_cheese';
     g.order_refresh();
     g.inv = { Bread: 1, 'Pickled Turnip': 1, 'Dried Herbs': 1 };
     g.order_deliver();
-    assert.equal(g.memories.at(-1).text, 'You put together a supper basket for the inn for Doug.');
+    assert.equal(g.memories.at(-1).text, 'You put together a supper basket for the inn for Gideon.');
 
     g.shipped_total = 100;
     g.shipped_counts = { Turnip: 1 };
     g.say = async () => {};
     g.held = null;
-    await g.talk('Zack');
-    assert.equal(g.memories.at(-1).text, 'Zack remembered picking up your very first shipment.');
+    await g.talk('Otto');
+    assert.equal(g.memories.at(-1).text, 'Otto remembered picking up your very first shipment.');
   });
 
   test('Villager Notes ends with the memories, newest first, and says what will be kept when empty', () => {
@@ -3344,14 +3344,14 @@ describe('shared memories in Villager Notes (task 07)', () => {
     assert.equal(pages.length, 1);
     const text = (p: any[]) => p.map((l: any) => (l.kind === 'spans' ? l.spans.map((s: any) => s.text).join('') : l.kind === 'ledger' ? l.label : '')).join('\n');
     assert.match(text(pages[0]), /Nothing yet\. Gifts they love/);
-    g.remember('Ann', 'First memory.');
+    g.remember('Tess', 'First memory.');
     g.day += 1;
-    g.remember('Kai', 'Second memory.');
+    g.remember('Nico', 'Second memory.');
     pages = g.memory_pages(50, 20);
     const t = text(pages[0]);
     assert.ok(t.indexOf('Second memory.') < t.indexOf('First memory.'), 'newest first');
     assert.match(t, /Spring 2, Year 1/);
-    for (let i = 0; i < 30; i++) g.remember('Ann', `Moment ${i}.`);
+    for (let i = 0; i < 30; i++) g.remember('Tess', `Moment ${i}.`);
     pages = g.memory_pages(50, 12);
     assert.ok(pages.length > 1, 'long journals turn the page');
     for (const p of pages) assert.ok(p.length <= 12);
@@ -3359,12 +3359,12 @@ describe('shared memories in Villager Notes (task 07)', () => {
 
   test('the journal keeps the latest MEMORY_MAX moments and survives a reload', () => {
     const g = fresh();
-    for (let i = 0; i < MEMORY_MAX + 5; i++) g.remember('Ann', `Moment ${i}.`);
+    for (let i = 0; i < MEMORY_MAX + 5; i++) g.remember('Tess', `Moment ${i}.`);
     assert.equal(g.memories.length, MEMORY_MAX);
     assert.equal(g.memories[0].text, 'Moment 5.');
     assert.equal(g.remember('Nobody', 'x'), false);
     const snap = JSON.parse(JSON.stringify(g.snapshot()));
-    snap.memories.push({ day: 1, npc: 'Nobody', text: 'x' }, { day: 'x', npc: 'Ann', text: 'y' });
+    snap.memories.push({ day: 1, npc: 'Nobody', text: 'x' }, { day: 'x', npc: 'Tess', text: 'y' });
     const h = fresh();
     h.applySaveData(snap);
     assert.deepEqual(h.memories, g.memories);
@@ -3420,7 +3420,7 @@ describe('a mantel for festival souvenirs (task 45)', () => {
     h.confirm = async () => false;
     await h.fest_run(['Flower Festival', 9, 17, 'none']);
     assert.deepEqual(h.souvenirs.map((v: any) => v.name), ['Flower Festival program']);
-    await h.fest_run(['Harvest Festival', 9, 17, 'none']);
+    await h.fest_run(['Harvest Supper', 9, 17, 'none']);
     assert.equal(h.souvenirs.length, 1, 'only the first festival you attend');
   });
 
@@ -3570,19 +3570,19 @@ describe('hives with seasonal honey (task 22)', () => {
 
   test('the flower with the most blooms in reach flavours the honey; far or unopened flowers do not count', async () => {
     const g = atHive();
-    bloom(g, 'Moondrop Flower', 5, 10);
-    bloom(g, 'Moondrop Flower', 6, 10);
-    bloom(g, 'Toy Flower', 7, 10);
-    bloom(g, 'Toy Flower', HIVE_SPOT[0] + HIVE_RANGE + 1, 10); // out of reach
-    g.crops['8,10'] = ['Toy Flower', 0]; // not in bloom yet
-    assert.deepEqual(g.hive_blooms(), { 'Moondrop Flower': 2, 'Toy Flower': 1 });
-    assert.deepEqual(g.hive_honey(), { item: 'Moondrop Honey', flower: 'Moondrop Flower', blooms: 2 });
+    bloom(g, 'Duskbell Flower', 5, 10);
+    bloom(g, 'Duskbell Flower', 6, 10);
+    bloom(g, 'Pinwheel Daisy', 7, 10);
+    bloom(g, 'Pinwheel Daisy', HIVE_SPOT[0] + HIVE_RANGE + 1, 10); // out of reach
+    g.crops['8,10'] = ['Pinwheel Daisy', 0]; // not in bloom yet
+    assert.deepEqual(g.hive_blooms(), { 'Duskbell Flower': 2, 'Pinwheel Daisy': 1 });
+    assert.deepEqual(g.hive_honey(), { item: 'Duskbell Honey', flower: 'Duskbell Flower', blooms: 2 });
     await g.interact();
-    assert.equal(g.inv['Moondrop Honey'], 1);
-    assert.equal(g.msgs.at(-1)[0], 'You gathered Moondrop Honey from the hive! The bees found 2 Moondrop Flowers nearby.');
+    assert.equal(g.inv['Duskbell Honey'], 1);
+    assert.equal(g.msgs.at(-1)[0], 'You gathered Duskbell Honey from the hive! The bees found 2 Duskbell Flowers nearby.');
     const said = quiet(g);
     await g.interact();
-    assert.match(said[0], /With 2 Moondrop Flowers in bloom nearby, it will be Moondrop Honey\./);
+    assert.match(said[0], /With 2 Duskbell Flowers in bloom nearby, it will be Duskbell Honey\./);
   });
 
   test('each flavour is a real item that its fans love as a gift', async () => {
@@ -3592,13 +3592,13 @@ describe('hives with seasonal honey (task 22)', () => {
       for (const n of f.fans) assert.ok(NPCS[n], n);
     }
     const g = fresh();
-    const fan = HONEY_FLAVOURS['Pink Cat Flower'].fans[0];
+    const fan = HONEY_FLAVOURS['Rosecap Flower'].fans[0];
     const before = g.friend[fan] || 0;
     const said: string[] = [];
     g.say = async (t: string) => { said.push(t); };
     g.check_heart_and_rival_events = async () => {};
-    g.inv['Pink Cat Honey'] = 1;
-    g.held = 'Pink Cat Honey';
+    g.inv['Rosecap Honey'] = 1;
+    g.held = 'Rosecap Honey';
     await g.talk(fan);
     assert.match(said[0], /I love this!/);
     assert.ok(g.friend[fan] > before + 2);
@@ -3682,7 +3682,7 @@ describe('places to stop and sit (task 44)', () => {
     assert.equal(s2.length, 1);
   });
 
-  test('the Ridge lookout keeps its forecast, with the sunset scene and Cliff on Sundays', async () => {
+  test('the Ridge lookout keeps its forecast, with the sunset scene and Felix on Sundays', async () => {
     const g = fresh();
     const f = SEATS.lookout.friend!;
     onWeekday(g, f.weekday);
@@ -3697,13 +3697,13 @@ describe('places to stop and sit (task 44)', () => {
 
   test('a spouse keeps you company on the porch at sunset', async () => {
     const g = atSeat('porch');
-    g.married = 'Ann';
+    g.married = 'Tess';
     g.weather = 'Sunny';
     g.minutes = 18 * 60;
     const said: string[] = [];
     g.say = async (t: string, who: string) => { said.push(`${who}: ${t}`); };
     await g.interact();
-    assert.ok(said.some((l) => l.startsWith('Ann: Ann comes out with two cups of tea')), said.join(' | '));
+    assert.ok(said.some((l) => l.startsWith('Tess: Tess comes out with two cups of tea')), said.join(' | '));
   });
 });
 
@@ -3789,12 +3789,12 @@ describe('named farm plots (task 42)', () => {
     h.applySaveData(snap);
     assert.deepEqual(h.plots, g.plots);
     assert.equal(h.maps.farm.tile(21, 15), 'plotsign');
-    h.new_game('Pete', 'Moon');
+    h.new_game('Ash', 'Bramble');
     assert.deepEqual(h.plots, []);
     assert.equal(h.maps.farm.tile(21, 15), 'field');
   });
 
-  test("Jeff sells Plot Signs", async () => {
+  test("Hollis sells Plot Signs", async () => {
     const g = fresh();
     const opts = await g.shop_options('supermarket');
     assert.ok(opts.some(([o]: [string]) => o === 'Buy Plot Sign (50G)'));
@@ -3826,34 +3826,34 @@ describe('favors from close neighbors (task 05)', () => {
 
   test('only a close friend offers, on a free afternoon, with something to help with', () => {
     const g = neighborly();
-    assert.ok(g.favor_available('Rick'));
-    g.friend.Rick = FAVOR_FRIENDSHIP - 1;
-    assert.ok(!g.favor_available('Rick'), 'not yet a close friend');
-    g.friend.Rick = FAVOR_FRIENDSHIP;
+    assert.ok(g.favor_available('Dennis'));
+    g.friend.Dennis = FAVOR_FRIENDSHIP - 1;
+    assert.ok(!g.favor_available('Dennis'), 'not yet a close friend');
+    g.friend.Dennis = FAVOR_FRIENDSHIP;
     g.minutes = 10 * 60;
-    assert.ok(!g.favor_available('Rick'), 'mornings are busy');
+    assert.ok(!g.favor_available('Dennis'), 'mornings are busy');
     g.minutes = 18 * 60;
-    assert.ok(!g.favor_available('Rick'), 'evening is past the free afternoon');
+    assert.ok(!g.favor_available('Dennis'), 'evening is past the free afternoon');
     g.minutes = 13 * 60;
     g.chickens = 0;
-    assert.ok(!g.favor_available('Rick'), 'no chickens to feed');
-    assert.ok(!g.favor_available('Doug'), 'only neighbors with a favor in mind offer one');
+    assert.ok(!g.favor_available('Dennis'), 'no chickens to feed');
+    assert.ok(!g.favor_available('Gideon'), 'only neighbors with a favor in mind offer one');
   });
 
   test('accepting puts the promise in Today\'s Plan; it happens the next morning and is remembered', async () => {
     const g = neighborly();
-    const { said, menus } = await talkTo(g, 'Rick', 0);
-    assert.equal(said[0], FAVORS.Rick.offer);
+    const { said, menus } = await talkTo(g, 'Dennis', 0);
+    assert.equal(said[0], FAVORS.Dennis.offer);
     assert.equal(menus.length, 1);
-    assert.deepEqual(g.favor, { npc: 'Rick', day: g.absday() + 1 });
-    assert.ok(g.today_lines().includes(`  Favor  Tomorrow: ${FAVORS.Rick.plan}.`));
-    assert.ok(!g.favor_available('Cliff'), 'one favor at a time');
+    assert.deepEqual(g.favor, { npc: 'Dennis', day: g.absday() + 1 });
+    assert.ok(g.today_lines().includes(`  Favor  Tomorrow: ${FAVORS.Dennis.plan}.`));
+    assert.ok(!g.favor_available('Felix'), 'one favor at a time');
 
     g.fed = 0;
     await g.new_day('passout');
-    assert.equal(g.fed, 2, 'Rick fed both chickens');
-    assert.ok(g.memories.some((m: any) => m.npc === 'Rick' && m.text === FAVORS.Rick.memory));
-    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Favor  Today: Rick feeds your chickens')));
+    assert.equal(g.fed, 2, 'Dennis fed both chickens');
+    assert.ok(g.memories.some((m: any) => m.npc === 'Dennis' && m.text === FAVORS.Dennis.memory));
+    assert.ok(g.today_lines().some((l: string) => l.startsWith('  Favor  Today: Dennis feeds your chickens')));
 
     await g.new_day('passout');
     assert.equal(g.favor, null, 'cleared once its day has passed');
@@ -3863,60 +3863,60 @@ describe('favors from close neighbors (task 05)', () => {
 
   test('declining is fine: they wait a week before offering again', async () => {
     const g = neighborly();
-    const { said } = await talkTo(g, 'Mary', 1);
+    const { said } = await talkTo(g, 'Odessa', 1);
     assert.equal(g.favor, null);
     assert.ok(said.some((l: string) => /next week/.test(l)));
     g.talked.clear();
     g.day += FAVOR_GAP - 1;
-    assert.ok(!g.favor_available('Mary'));
+    assert.ok(!g.favor_available('Odessa'));
     g.day += 1;
-    assert.ok(g.favor_available('Mary'));
+    assert.ok(g.favor_available('Odessa'));
   });
 
   test('a talk that has a milestone to share keeps it; the favor waits for another visit', async () => {
     const g = neighborly();
     g.public_works.built = true;
-    const { said, menus } = await talkTo(g, 'Rick', 0);
-    assert.equal(said[0], MILESTONE_LINES.footbridge.Rick);
+    const { said, menus } = await talkTo(g, 'Dennis', 0);
+    assert.equal(said[0], MILESTONE_LINES.footbridge.Dennis);
     assert.equal(menus.length, 0);
     assert.equal(g.favor, null);
     g.talked.clear();
-    await talkTo(g, 'Rick', 0);
-    assert.equal(g.favor?.npc, 'Rick', 'next visit, the offer comes');
+    await talkTo(g, 'Dennis', 0);
+    assert.equal(g.favor?.npc, 'Dennis', 'next visit, the offer comes');
   });
 
-  test('Cliff waters a dozen dry crops at most, and nothing when rain already did', () => {
+  test('Felix waters a dozen dry crops at most, and nothing when rain already did', () => {
     const g = neighborly();
-    g.favor = { npc: 'Cliff', day: g.absday() };
+    g.favor = { npc: 'Felix', day: g.absday() };
     const report: string[] = [];
     g.favor_morning(report);
     assert.equal(g.crop_water_count(), 15 - FAVOR_WATER_MAX);
-    assert.deepEqual(report, [FAVORS.Cliff.done]);
+    assert.deepEqual(report, [FAVORS.Felix.done]);
 
     const r = neighborly();
-    r.favor = { npc: 'Cliff', day: r.absday() };
+    r.favor = { npc: 'Felix', day: r.absday() };
     for (const k of Object.keys(r.crops)) r.wet.add(k);
     const wet: string[] = [];
     r.favor_morning(wet);
     assert.match(wet[0], /already watered/);
-    assert.ok(!r.memories.some((m: any) => m.npc === 'Cliff'), 'nothing done, nothing to remember');
+    assert.ok(!r.memories.some((m: any) => m.npc === 'Felix'), 'nothing done, nothing to remember');
     assert.equal(r.favor, null);
     assert.ok(!r.today_lines().some((l: string) => l.startsWith('  Favor')), 'the plan does not claim it was done');
   });
 
-  test('Cliff does not offer to water when tomorrow brings rain', () => {
+  test('Felix does not offer to water when tomorrow brings rain', () => {
     const g = neighborly();
-    assert.ok(g.favor_available('Cliff'));
+    assert.ok(g.favor_available('Felix'));
     for (const w of ['Rain', 'Typhoon']) {
       g.tomorrow = w;
-      assert.ok(!g.favor_available('Cliff'), w);
+      assert.ok(!g.favor_available('Felix'), w);
     }
-    assert.ok(g.favor_available('Rick'), 'other favors are unaffected');
+    assert.ok(g.favor_available('Dennis'), 'other favors are unaffected');
   });
 
   test('an empty coop on the morning: reported, nothing claimed', () => {
     const g = neighborly();
-    g.favor = { npc: 'Rick', day: g.absday() };
+    g.favor = { npc: 'Dennis', day: g.absday() };
     g.chickens = 0;
     const report: string[] = [];
     g.favor_morning(report);
@@ -3925,23 +3925,23 @@ describe('favors from close neighbors (task 05)', () => {
     assert.ok(!g.today_lines().some((l: string) => l.startsWith('  Favor')));
   });
 
-  test("Mary's note lists the day's shop hours, closed days included", () => {
+  test("Odessa's note lists the day's shop hours, closed days included", () => {
     const g = neighborly();
     g.day = 4; // a Thursday: the forge is shut
     assert.equal(g.weekday, 3);
-    g.favor = { npc: 'Mary', day: g.absday() };
+    g.favor = { npc: 'Odessa', day: g.absday() };
     const lines = g.today_lines();
-    const at = lines.indexOf("  Favor  Mary's note on today's shop hours:");
+    const at = lines.indexOf("  Favor  Odessa's note on today's shop hours:");
     assert.ok(at >= 0);
-    assert.ok(lines.includes("         Saibara's Blacksmith: closed today"));
+    assert.ok(lines.includes("         Hilde's Blacksmith: closed today"));
     assert.ok(lines.includes('         Supermarket: 9AM–5PM'));
     assert.equal(lines.slice(at + 1).filter((l: string) => l.startsWith('         ') && l.includes(':')).length >= 6, true);
   });
 
   test('the promise survives a save; bad or stale data is dropped and old saves load', () => {
     const g = neighborly();
-    g.favor = { npc: 'Cliff', day: g.absday() + 1 };
-    g.favor_offered = { Cliff: g.absday() };
+    g.favor = { npc: 'Felix', day: g.absday() + 1 };
+    g.favor_offered = { Felix: g.absday() };
     const h = fresh();
     h.applySaveData(JSON.parse(JSON.stringify(g.snapshot())));
     assert.deepEqual(h.favor, g.favor);
@@ -3949,11 +3949,11 @@ describe('favors from close neighbors (task 05)', () => {
 
     const bad = JSON.parse(JSON.stringify(g.snapshot()));
     bad.favor = { npc: 'Nobody', day: 'soon' };
-    bad.favor_offered = { Nobody: 1, Mary: 'x', Rick: 2 };
+    bad.favor_offered = { Nobody: 1, Odessa: 'x', Dennis: 2 };
     const k = fresh();
     k.applySaveData(bad);
     assert.equal(k.favor, null);
-    assert.deepEqual(k.favor_offered, { Rick: 2 });
+    assert.deepEqual(k.favor_offered, { Dennis: 2 });
 
     const old = JSON.parse(JSON.stringify(g.snapshot()));
     delete old.favor;
@@ -4205,13 +4205,13 @@ describe('valley postcards (task 46)', () => {
     await g.view_postcard(0);
     assert.equal(saved.length, 1);
     assert.ok(saved[0].startsWith(second.rows[0].trimEnd()), 'the card after browsing right');
-    assert.ok(saved[0].includes(g.postcard_caption(second)) && saved[0].includes('Pete of Moon Farm'));
+    assert.ok(saved[0].includes(g.postcard_caption(second)) && saved[0].includes('Ash of Bramble Farm'));
     assert.deepEqual(g.postcards, [first], 'that card was removed');
   });
 
   test('the viewer fits a phone screen', async () => {
     const g = new Game(new Screen(50, 28), true) as any;
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     g.first_steps = null;
     g.started = true;
     g.warp('town', 36, 14, [0, 1]);
@@ -4298,7 +4298,7 @@ describe('museum exhibits that tell a story (task 16)', () => {
 });
 
 describe('mine side chambers (task 40)', () => {
-  /** A Spring Mine floor with a sealed chamber on it, and the player facing it. */
+  /** A Copperseam Mine floor with a sealed chamber on it, and the player facing it. */
   const chamber = async (floor = 6, type: 'spring' | 'lake' = 'spring') => {
     const g = fresh();
     quiet(g);
@@ -4387,12 +4387,12 @@ describe('mine side chambers (task 40)', () => {
     const g = fresh();
     g.mine_type = 'spring';
     g.mine_floor = 14;
-    assert.deepEqual(g.pocket_loot('geode'), { items: { Adamantite: 1 }, gold: 0 });
+    assert.deepEqual(g.pocket_loot('geode'), { items: { Deepiron: 1 }, gold: 0 });
     const seam = g.pocket_loot('seam');
     assert.equal(Object.values(seam.items).reduce((a: number, n: any) => a + n, 0), 3);
     assert.ok(!('Junk Ore' in seam.items));
     const moss = g.pocket_loot('moss');
-    assert.equal(moss.items['Black Grass'], 2);
+    assert.equal(moss.items['Nightshade'], 2);
     assert.ok(moss.gold >= 40 && moss.gold <= 90);
     g.mine_type = 'lake';
     g.mine_floor = 3;

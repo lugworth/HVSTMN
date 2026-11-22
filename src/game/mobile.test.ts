@@ -29,7 +29,7 @@ const rowText = (s: Screen, y: number) => s.buf[y].map((c) => c[0]).join('');
 function farm(cols: number, rows: number) {
   const s = new Screen(cols, rows);
   const g = new Game(s, true) as any;
-  g.new_game('Pete', 'Moon');
+  g.new_game('Ash', 'Bramble');
   g.warp('farm', 23, 9);
   g.render();
   return { s, g };
@@ -118,7 +118,7 @@ describe('touch input helpers', () => {
 describe('compact text helpers', () => {
   test('wrapLine leaves short lines alone and never exceeds the width', () => {
     assert.deepEqual(wrapLine('short', 20), ['short']);
-    const long = 'Zack collects at 5:00 PM (11h 00m from now) and pays for everything in the bin.';
+    const long = 'Otto collects at 5:00 PM (11h 00m from now) and pays for everything in the bin.';
     for (const w of [20, 33, 46]) {
       const out = wrapLine(long, w);
       assert.ok(out.length > 1);
@@ -128,8 +128,8 @@ describe('compact text helpers', () => {
   });
 
   test('wrapLine hangs continuation lines under a label column', () => {
-    const out = wrapLine('  Ship   Zack collects at 5:00 PM (11h 00m from now).', 30);
-    assert.equal(out[0], '  Ship   Zack collects at 5:00');
+    const out = wrapLine('  Ship   Otto collects at 5:00 PM (11h 00m from now).', 30);
+    assert.equal(out[0], '  Ship   Otto collects at 5:00');
     assert.ok(out[1].startsWith('         PM'), out[1]);
   });
 
@@ -229,7 +229,7 @@ describe('compact engine layout', () => {
     const { s } = farm(80, 24);
     assert.equal(s.ctx?.view.y, 0);
     assert.equal(s.buf[5][s.ctx!.divX][0], '|');
-    assert.ok(s.tags[1].some((tag, x) => x > s.ctx!.divX && tag?.label?.text === 'HRVSTMN'));
+    assert.ok(s.tags[1].some((tag, x) => x > s.ctx!.divX && tag?.label?.text === 'FURROW'));
     const classic = farm(80, 24);
     classic.s.style = 'classic';
     classic.g.render();
@@ -241,7 +241,7 @@ describe('compact engine layout', () => {
   test('paged screens re-wrap long lines on narrow screens', async () => {
     const s = new Screen(53, 28);
     const g = new Game(s, true) as any;
-    g.new_game('Pete', 'Moon');
+    g.new_game('Ash', 'Bramble');
     s.pushKey('space');
     await g.show_pages('Notes', [['  Plan: clear weeds, water crops, care for animals, then ship before 5 PM.']]);
     const text = s.buf.map((row) => row.map((c) => c[0]).join('')).join('\n');
@@ -254,7 +254,7 @@ describe('compact engine layout', () => {
     const g = new Game(s, false) as any;
     g.render();
     const text = s.buf.map((row) => row.map((c) => c[0]).join(''));
-    assert.ok(text.some((l) => l.includes('~ Harvest Moon: Friends of Mineral Town ~')));
+    assert.ok(text.some((l) => l.includes('a farming tale')));
     assert.ok(!text.some((l) => l.includes('(Complete')), 'long subtitle dropped');
   });
 });
@@ -277,7 +277,7 @@ describe('touch context action', () => {
   test('during text entry the touch action is DONE (enter), not a space', async () => {
     const s = new Screen(53, 28);
     const g = new Game(s, true) as any;
-    const p = g.text_input("What's your name?", 'Pete');
+    const p = g.text_input("What's your name?", 'Ash');
     assert.equal(g.typing, true);
     assert.deepEqual(g.context_action(), { key: 'enter', label: 'DONE' });
     s.pushKey('A');

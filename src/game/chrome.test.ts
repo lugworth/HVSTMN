@@ -21,7 +21,7 @@ function farm(cols: number, rows: number, setup?: (g: any) => void, style?: Visu
   const s = new Screen(cols, rows);
   if (style) s.style = style;
   const g = new Game(s, true) as any;
-  g.new_game('Pete', 'Moon');
+  g.new_game('Ash', 'Bramble');
   g.warp('farm', 23, 9);
   setup?.(g);
   g.render();

@@ -190,7 +190,7 @@ export function build_farm(): GameMap {
 
 export function build_town(): GameMap {
   const m = GameMap.fromPrebuilt('town');
-  // The forge, the poultry farm and Yodel Ranch have moved out to the countryside (see
+  // The forge, the poultry farm and Highmeadow Dairy have moved out to the countryside (see
   // build_grove and build_woods), and the library has moved across town.
   for (const plot of Object.values(TOWN_PLOTS)) clearPlot(m, plot[0], plot[1], plot[2], plot[3]);
   // The south-east block is the town's quiet corner: the Library and the Museum side by side.
@@ -215,22 +215,22 @@ export function build_town(): GameMap {
   // An orchard on the west side: rows of fruit trees with a walk between them.
   for (const y of [9, 11]) for (let x = 3; x <= 11; x += 2) m.set(x, y, 'tree');
   m.rect(15, 7, 1, 13, 'path'); // the alley between the two streets
-  // East Road: from Rose Square straight out to Willow Bend, with a lane up to the main street.
+  // East Road: from Market Cross straight out to Willow Bend, with a lane up to the main street.
   m.rect(44, 11, 28, 3, 'path');
   m.rect(62, 8, 2, 3, 'path');
   m.set(27, 8, 'sign');
   m.signs[pkey(27, 8)] =
-    "Fingerpost — WEST: your farm, and beyond it Ironwood Grove (Saibara's forge). SOUTH OF THE FARM: Cedar Hollow (Poultry Farm, Yodel Ranch, Aja Winery). EAST: Willow Bend (Harvest Sprites). SOUTH: the beach, and Lighthouse Point (Zack & Won).";
-  // Add Rose Square Trash Can & Plaza Sign
+    "Fingerpost — WEST: your farm, and beyond it Ironwood Grove (Hilde's forge). SOUTH OF THE FARM: Cedar Hollow (Feathercote, Highmeadow Dairy, Thornvale Vineyard). EAST: Willow Bend (Hearthfolk). SOUTH: the beach, and Lighthouse Point (Otto & Ferreira).";
+  // Add Market Cross Trash Can & Plaza Sign
   m.set(30, 11, 'trash');
   m.signs[pkey(30, 11)] = 'trash';
   m.set(30, 15, 'sign');
-  m.signs[pkey(30, 15)] = 'Rose Square — Drop litter in the Trash Can (U) north of the plaza!';
+  m.signs[pkey(30, 15)] = 'Market Cross — Drop litter in the Trash Can (U) north of the plaza!';
   m.set(42, 10, 'sign');
   m.signs[pkey(42, 10)] = 'request_board';
   // The player's Saturday market stall, on the east side of the square.
   m.set(STALL_SPOT[0], STALL_SPOT[1], 'stall');
-  // Add South path & bridge across the river to Mineral Beach (warp only at the south border y=31!)
+  // Add South path & bridge across the river to Brackenford Beach (warp only at the south border y=31!)
   m.rect(35, 21, 3, 7, 'path');
   m.rect(35, 28, 3, 2, 'bridge');
   m.rect(35, 30, 3, 2, 'path');
@@ -242,27 +242,27 @@ export function build_town(): GameMap {
 
 export function build_mountain(): GameMap {
   const m = GameMap.fromPrebuilt('mountain');
-  // Hot Spring pool in SW Mother's Hill (soak to recover Stamina & Fatigue, or toss Egg for Spa-Boiled Egg!)
+  // Hot Spring pool in SW Beacon Hill (soak to recover Stamina & Fatigue, or toss Egg for Spa-Boiled Egg!)
   m.rect(6, 16, 5, 3, 'spring');
   m.set(5, 17, 'sign');
   m.signs[pkey(5, 17)] = 'Hot Spring — Step in or press X to soak (+Stamina, -Fatigue). Hold an Egg and press X to make a Spa-Boiled Egg!';
 
-  // Goddess Pond waterfall next to Spring Mine entrance
+  // Wellkeeper Pond waterfall next to Copperseam Mine entrance
   m.rect(45, 7, 3, 2, 'pond');
   m.set(44, 8, 'sign');
-  m.signs[pkey(44, 8)] = 'Goddess Pond — Hold an item and press X facing the pond to make an offering to the Harvest Goddess!';
+  m.signs[pkey(44, 8)] = 'Wellkeeper Pond — Hold an item and press X facing the pond to make an offering to the Wellkeeper!';
 
-  // Lake Mine island in the middle of Mother's Hill Lake (surrounded by water; freezes in Winter!)
+  // Mirewater Mine island in the middle of Beacon Hill Lake (surrounded by water; freezes in Winter!)
   m.rect(14, 8, 3, 2, 'grass');
   m.set(15, 8, 'cave');
   m.doors[pkey(15, 8)] = 'lakemine';
   m.set(15, 15, 'sign');
-  m.signs[pkey(15, 15)] = "Mother's Hill Lake — Freezes over in Winter so you can cross to the Lake Mine! (Or toss a Cucumber to summon Kappa!)";
+  m.signs[pkey(15, 15)] = "Beacon Hill Lake — Freezes over in Winter so you can cross to the Mirewater Mine! (Or toss a Cucumber to summon Reed Heron!)";
   return m;
 }
 
 export function build_beach(): GameMap {
-  const m = new GameMap('beach', 'Mineral Beach', 64, 24, 'sand');
+  const m = new GameMap('beach', 'Brackenford Beach', 64, 24, 'sand');
   m.border('tree');
   // North exit back to Town
   m.rect(31, 0, 4, 4, 'path');
@@ -276,9 +276,9 @@ export function build_beach(): GameMap {
   // Wooden Fishing & Fireworks Pier jutting into the sea
   m.rect(31, 4, 3, 16, 'bridge');
   m.set(30, 12, 'sign');
-  m.signs[pkey(30, 12)] = 'Mineral Beach Pier — Fish in the ocean or watch the Summer 24 Fireworks!';
-  // (Zack & Won's house now stands on Lighthouse Point, east along the shore.)
-  // Kai's Seaside Lodge
+  m.signs[pkey(30, 12)] = 'Brackenford Beach Pier — Fish in the ocean or watch the Summer 24 Fireworks!';
+  // (Otto & Ferreira's house now stands on Lighthouse Point, east along the shore.)
+  // Nico's Seaside Lodge
   m.building(42, 5, 10, 5, 5, 'kai_shack', 'SEASIDE', '09');
   m.rect(47, 10, 2, 3, 'path');
   return m;
@@ -286,7 +286,7 @@ export function build_beach(): GameMap {
 
 // ---------------------------------------------------------------- outer regions
 // Five original regions spread the valley out around the first four maps:
-//   Skyline Ridge (north of Mother's Hill), Willow Bend (east of town),
+//   Skyline Ridge (north of Beacon Hill), Willow Bend (east of town),
 //   Cedar Hollow (south of the farm), Lighthouse Point (east of the beach)
 //   and Ironwood Grove (west of the farm).
 
@@ -340,15 +340,15 @@ export function build_woods(): GameMap {
   m.set(50, 18, 'sign');
   m.signs[pkey(50, 18)] = 'Mossy Pond — Folk drop in a gift that grew wild (hold it, face the water, press X) for a lucky day of foraging.';
   m.set(36, 2, 'sign');
-  m.signs[pkey(36, 2)] = 'Cedar Hollow — Fallen branches gather here every morning. Bring an Axe! Ranch Lane runs east to the Poultry Farm and Yodel Ranch; the Winery is down by the clearing.';
-  // Ranch Lane: a pasture clearing east of the trail, with Lillia's Poultry Farm and Yodel Ranch
+  m.signs[pkey(36, 2)] = 'Cedar Hollow — Fallen branches gather here every morning. Bring an Axe! Ranch Lane runs east to the Feathercote and Highmeadow Dairy; the Winery is down by the clearing.';
+  // Ranch Lane: a pasture clearing east of the trail, with Rosalind's Feathercote and Highmeadow Dairy
   // side by side and a lane along their doors.
   m.rect(38, 1, 25, 10, 'grass');
   placeBuilding(m, townBuilding('poultry'), 38, 2);
   placeBuilding(m, townBuilding('yodel'), 51, 2);
   m.rect(36, 7, 27, 2, 'path');
   for (let y = 9; y <= 10; y++) for (let x = 38; x <= 62; x++) if (layoutNoise(x, y, 8) < 0.12) m.set(x, y, 'flower');
-  // Aja Winery, south of the creek on the path to the clearing, with a few rows of vines beside it.
+  // Thornvale Vineyard, south of the creek on the path to the clearing, with a few rows of vines beside it.
   m.building(31, 15, 9, 4, 4, 'winery', 'WINERY', '0E');
   m.rect(41, 15, 5, 2, 'grass');
   for (const x of [41, 43, 45]) for (const y of [15, 16]) m.set(x, y, 'flower');
@@ -427,7 +427,7 @@ export function build_river(): GameMap {
   const [sx, sy] = FOOTBRIDGE_SIGN;
   m.set(sx, sy, 'sign');
   m.signs[pkey(sx, sy)] = 'footbridge';
-  // The Harvest Sprites' hut, in the meadow on the far bank, just off the road.
+  // The Hearthfolk' hut, in the meadow on the far bank, just off the road.
   m.building(49, 6, 9, 4, 4, 'sprites', 'SPRITES', '0A');
   m.set(53, 10, 'path');
   m.set(28, 10, 'sign');
@@ -458,8 +458,8 @@ export function build_point(): GameMap {
   m.rect(1, 11, 52, 3, 'path');
   m.set(45, 10, 'sign');
   m.signs[pkey(45, 10)] = 'lighthouse_log';
-  // Zack & Won's house, a short walk along the shore road from the beach.
-  m.building(18, 5, 10, 5, 5, 'zack', 'ZACK/WON', '0D');
+  // Otto & Ferreira's house, a short walk along the shore road from the beach.
+  m.building(18, 5, 10, 5, 5, 'zack', 'CARRIER', '0D');
   m.rect(23, 10, 2, 1, 'path');
   // the sea runs off the map edge instead of stopping at a treeline
   m.rect(63, 1, 1, 22, 'water');
@@ -468,7 +468,7 @@ export function build_point(): GameMap {
   return m;
 }
 
-/** Ironwood Grove: old woodland west of the farm, with Saibara's forge, a worked-out quarry and a still pool. */
+/** Ironwood Grove: old woodland west of the farm, with Hilde's forge, a worked-out quarry and a still pool. */
 export function build_grove(): GameMap {
   const m = new GameMap('grove', 'Ironwood Grove', 64, 26, 'grass');
   for (let y = 1; y < m.h - 1; y++) {
@@ -497,7 +497,7 @@ export function build_grove(): GameMap {
   m.rect(44, 14, 6, 1, 'water');
   m.rect(46, 9, 2, 5, 'path');
   m.set(59, 5, 'sign');
-  m.signs[pkey(59, 5)] = "Ironwood Grove — Saibara's forge is down the track to the south-west. The old quarry lies at the end of the road, and there is quiet fishing at the pool.";
+  m.signs[pkey(59, 5)] = "Ironwood Grove — Hilde's forge is down the track to the south-west. The old quarry lies at the end of the road, and there is quiet fishing at the pool.";
   m.set(23, 5, 'sign');
   m.signs[pkey(23, 5)] = 'Old Quarry — Worked out long ago. Folk still turn up odd things in the ground around here.';
   return m;
@@ -558,7 +558,7 @@ export function build_valley(): Record<string, GameMap> {
 
 /**
  * Task 34: an old field gate in the hedge between Cedar Hollow's clearing (east edge, rows 18-20)
- * and Mineral Beach (west edge, rows 7-9). It is latched on the beach side; the signs stand just
+ * and Brackenford Beach (west edge, rows 7-9). It is latched on the beach side; the signs stand just
  * north of it, clear of the cells the opening carves.
  */
 export const HEDGE_GATE = { at: 18, bAt: 7, woodsSign: [61, 17], beachSign: [0, 6] } as const;
@@ -574,7 +574,7 @@ function add_hedge_gate_signs(maps: Record<string, GameMap>): void {
 
 function open_hedge_gate(maps: Record<string, GameMap>): void {
   link(maps.woods, maps.beach, 'e', HEDGE_GATE.at, HEDGE_GATE.bAt);
-  maps.woods.signs[pkey(...HEDGE_GATE.woodsSign)] = 'Hedge gate — the short way to Mineral Beach';
+  maps.woods.signs[pkey(...HEDGE_GATE.woodsSign)] = 'Hedge gate — the short way to Brackenford Beach';
   maps.beach.signs[pkey(...HEDGE_GATE.beachSign)] = 'Hedge gate — the short way to Cedar Hollow';
 }
 
@@ -592,7 +592,7 @@ export function build_house(): GameMap {
 }
 
 export function build_mine(floor: number, objs: Record<string, Record<string, string>>, mineType: 'spring' | 'lake' = 'spring'): GameMap {
-  const titlePrefix = mineType === 'lake' ? 'Lake Mine' : 'Spring Mine';
+  const titlePrefix = mineType === 'lake' ? 'Mirewater Mine' : 'Copperseam Mine';
   const m = new GameMap('mine', `${titlePrefix} B${floor}F`, 25, 15, 'mfloor', true);
   m.border('mwall');
   const rng = py_rng();
@@ -611,7 +611,7 @@ export function build_mine(floor: number, objs: Record<string, Record<string, st
   }
   m.set(ux, uy, 'up');
 
-  // Lake Mine Floor 9 has an underground pond where the Coelacanth King Fish lives!
+  // Mirewater Mine Floor 9 has an underground pond where the Coelacanth King Fish lives!
   if (mineType === 'lake' && floor === 9) {
     m.rect(10, 5, 5, 4, 'water');
   }
@@ -675,7 +675,7 @@ export function build_interior(bid: string, exit_to: [string, number, number]): 
     }
   }
 
-  // Add Inn Telephone on the counter of Doug's Inn for Saturday TV Shopping orders!
+  // Add Inn Telephone on the counter of Gideon's Inn for Saturday TV Shopping orders!
   if (bid === 'inn') {
     m.set(14, 2, 'phone');
     m.signs[pkey(14, 2)] = 'inn_phone';

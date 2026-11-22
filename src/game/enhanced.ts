@@ -1,4 +1,4 @@
-// Enhanced ASCII renderer for HRVSTMN.
+// Enhanced ASCII renderer for FURROW.
 //
 // The engine writes plain (glyph, fg, bg) cells plus semantic CellTags (tile
 // name, world position, deco, entity). This module turns that into a richer
@@ -1127,7 +1127,7 @@ export function cropFamily(cropName?: string): CropFamily {
   if (TRELLIS_CROPS.has(cropName)) return 'trellis';
   if (STALK_CROPS.has(cropName)) return 'stalk';
   if (LEAFY_CROPS.has(cropName)) return 'leafy';
-  if (cropName.includes('Flower') || cropName === 'Moondrop' || cropName === 'Pink Cat' || cropName === 'Magic Red') return 'flower';
+  if (cropName.includes('Flower') || cropName === 'Duskbell' || cropName === 'Rosecap' || cropName === 'Emberbloom') return 'flower';
   return 'root';
 }
 
@@ -1239,7 +1239,7 @@ const EMOTE_STYLE: Record<EmoteKind, [string, string]> = {
 };
 const BOX: Record<string, string> = { 'box:h': '─', 'box:v': '│', 'box:tl': '╭', 'box:tr': '╮', 'box:bl': '╰', 'box:br': '╯' };
 
-/** Effect colour by tool tier (Cogmind's rule: colour shows strength). Basic to Blessed. */
+/** Effect colour by tool tier (Cogmind's rule: colour shows strength). Basic to Hallowed. */
 // Each tier must stay distinct after the Isotope neon snap: dim grey, dim orange, bright white,
 // bright orange, cyan, purple, pink. Copper and gold share a hue, so they differ in brightness.
 export const TIER_COLOURS = ['#8a8a8a', '#a85a10', '#f4f4f4', '#ffb347', '#33ffcc', '#cc00ff', '#ff4db8'];
