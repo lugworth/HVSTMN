@@ -579,10 +579,12 @@ const compass = (dx: number, dy: number): string =>
   Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'east' : 'west') : dy >= 0 ? 'south' : 'north';
 
 /** The map's entrances: its edge warps grouped by where they lead, with the cell just inside. */
-function entrances(m: GameMap): { to: string; mid: [number, number]; inward: [number, number] }[] {
+export function edgeEntrances(m: GameMap): { to: string; mid: [number, number]; inward: [number, number] }[] {
   const groups = new Map<string, [number, number][]>();
   for (const [k, [to]] of Object.entries(m.warps)) {
     const cell = k.split(',').map(Number) as [number, number];
+    const [x, y] = cell;
+    if (x > 0 && x < m.w - 1 && y > 0 && y < m.h - 1) continue;
     if (!groups.has(to)) groups.set(to, []);
     groups.get(to)!.push(cell);
   }
@@ -630,7 +632,7 @@ const PLACE_NAMES: Record<string, string> = { mine: 'Copperseam Mine', lakemine:
 export function add_wayfinding_signs(maps: Record<string, GameMap>, names: Record<string, string>): void {
   for (const [name, m] of Object.entries(maps)) {
     if (name === 'farm' || m.indoor) continue;
-    const ways = entrances(m);
+    const ways = edgeEntrances(m);
     for (const { to, mid, inward } of ways) {
       const spot = signSpot(m, mid, inward);
       if (!spot) continue;
