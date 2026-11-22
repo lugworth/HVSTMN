@@ -41,23 +41,23 @@ import {
 } from './rules';
 import { REGION_CATCH, UPGRADE, CAN_CAP, CROPS, SEASONS, FORAGE, REGION_FORAGE, MARKET_FLOWERS, PANTRY_STAPLES, MARKET_SHOPPERS } from './constants';
 
-describe('Harvest Moon: Friends of Mineral Town Rules & Mechanics', () => {
-  test('Power Berries scale max stamina from 150 to 250 (+10 each)', () => {
+describe('FURROW rules & mechanics', () => {
+  test('Heartseeds scale max stamina from 150 to 250 (+10 each)', () => {
     assert.equal(getMaxStamina(0), 150);
     assert.equal(getMaxStamina(5), 200);
     assert.equal(getMaxStamina(10), 250);
-    assert.equal(getMaxStamina(15), 250); // Clamped at 10 Power Berries
+    assert.equal(getMaxStamina(15), 250); // Clamped at 10 Heartseeds
   });
 
-  test('Tool area scales across all 8 tool tiers (Basic to Mythic)', () => {
+  test('Tool area scales across all 8 tool tiers (Basic to Heirloom)', () => {
     // Hoe facing right [1, 0]
     assert.equal(getToolArea('Hoe', 0, 10, 10, [1, 0]).length, 1);
     assert.equal(getToolArea('Hoe', 1, 10, 10, [1, 0]).length, 2);
     assert.equal(getToolArea('Hoe', 2, 10, 10, [1, 0]).length, 3);
     assert.equal(getToolArea('Hoe', 3, 10, 10, [1, 0]).length, 4);
     assert.equal(getToolArea('Hoe', 4, 10, 10, [1, 0]).length, 6);
-    assert.equal(getToolArea('Hoe', 6, 10, 10, [1, 0]).length, 36); // Blessed 3x12
-    assert.equal(getToolArea('Hoe', 7, 10, 10, [1, 0]).length, 90); // Mythic 5x18
+    assert.equal(getToolArea('Hoe', 6, 10, 10, [1, 0]).length, 36); // Hallowed 3x12
+    assert.equal(getToolArea('Hoe', 7, 10, 10, [1, 0]).length, 90); // Heirloom 5x18
 
     // Watering Can
     assert.equal(getToolArea('Watering Can', 0, 10, 10, [0, 1]).length, 1);
@@ -66,7 +66,7 @@ describe('Harvest Moon: Friends of Mineral Town Rules & Mechanics', () => {
     assert.equal(getToolArea('Watering Can', 3, 10, 10, [0, 1]).length, 9);
     assert.equal(getToolArea('Watering Can', 4, 10, 10, [0, 1]).length, 15);
 
-    // Sickle centered area at Gold/Mystrile
+    // Sickle centered area at Gold/Starsteel
     assert.equal(getToolArea('Sickle', 3, 10, 10, [0, 1]).length, 9);
     assert.equal(getToolArea('Sickle', 4, 10, 10, [0, 1]).length, 25);
   });
@@ -160,9 +160,9 @@ describe('Harvest Moon: Friends of Mineral Town Rules & Mechanics', () => {
     });
   });
 
-  test('Spring Mine and Lake Mine drop tables', () => {
-    assert.equal(rollSpringMineDrop(60, true, 3), 'Mythic Stone');
-    assert.equal(rollSpringMineDrop(10, false, 3), 'Adamantite');
+  test('Copperseam Mine and Mirewater Mine drop tables', () => {
+    assert.equal(rollSpringMineDrop(60, true, 3), 'Heirloom Stone');
+    assert.equal(rollSpringMineDrop(10, false, 3), 'Deepiron');
     assert.equal(rollLakeMineDrop(50, 2), 'Pink Diamond');
     assert.equal(rollLakeMineDrop(60, 2), 'Alexandrite');
     assert.equal(rollLakeMineDrop(10, 2), 'Diamond');
@@ -246,7 +246,7 @@ describe('outer-region fishing and stone skipping', () => {
     assert.ok(!('Catfish' in of('mountain', 0, 3)) && 'Catfish' in of('town', 0, 3));
     assert.ok(Math.abs(of('beach', 0, 4)['Squid'] - 0.12) < 1e-9, 'squid off the beach in spring');
     assert.ok('Pirate Treasure' in of('beach', 1, 4) && !('Squid' in of('beach', 1, 4)));
-    assert.ok(!('Squid' in of('beach', 0, 3)), 'needs a Mystrile rod');
+    assert.ok(!('Squid' in of('beach', 0, 3)), 'needs a Starsteel rod');
     assert.ok(!('Squid' in of('farm', 0, 5)), 'only off the beach');
     for (const map of ['farm', 'beach', 'mountain']) for (let lvl = 0; lvl <= 7; lvl++) {
       const odds = valleyCatchOdds({ map, season: 3, rodLvl: lvl });
@@ -296,13 +296,13 @@ describe('inn Friday scene rotation', () => {
   });
 });
 
-describe("Gray's watering-can advice", () => {
-  test('the next upgrade from Basic is Copper, and the big later jump is Mystrile', () => {
+describe("Rowan's watering-can advice", () => {
+  test('the next upgrade from Basic is Copper, and the big later jump is Starsteel', () => {
     const a = canUpgradeAdvice(0, UPGRADE, CAN_CAP)!;
     assert.deepEqual([a.now.tiles, a.next.level, a.next.cost, a.next.ore, a.next.tiles, a.next.cap], [1, 1, 1000, 'Copper', 3, 55]);
     assert.equal(a.big?.level, 4);
   });
-  test('each level 0-3 points one step up; the big jump is always Mystrile when it is still ahead', () => {
+  test('each level 0-3 points one step up; the big jump is always Starsteel when it is still ahead', () => {
     for (const lvl of [0, 1, 2, 3]) {
       const a = canUpgradeAdvice(lvl, UPGRADE, CAN_CAP)!;
       assert.equal(a.next.level, lvl + 1);
@@ -310,7 +310,7 @@ describe("Gray's watering-can advice", () => {
       assert.equal(a.big?.level ?? null, lvl + 1 < 4 ? 4 : null);
     }
   });
-  test('Mystrile and beyond get no ore-upgrade advice', () => {
+  test('Starsteel and beyond get no ore-upgrade advice', () => {
     for (const lvl of [4, 5, 6, 7]) assert.equal(canUpgradeAdvice(lvl, UPGRADE, CAN_CAP), null);
   });
 });
@@ -428,7 +428,7 @@ describe('market regulars and their lists (task 10)', () => {
     assert.ok(lists.size >= 3, `four spring Saturdays give varied lists (${lists.size})`);
   });
 
-  test('Doug asks for two different staples: eggs, or crops in their own season', () => {
+  test('Gideon asks for two different staples: eggs, or crops in their own season', () => {
     for (let season = 0; season < 3; season++) {
       for (let day = 0; day < 400; day += 7) {
         const { pantry } = wants(day, season);
@@ -454,7 +454,7 @@ describe('market regulars and their lists (task 10)', () => {
     assert.deepEqual(marketWants(5, 3, PANTRY_STAPLES, inSeason(3), MARKET_FLOWERS, 0, keeps).pantry, []);
   });
 
-  test("Lillia's flower can always be had that season, and she wants none in winter", () => {
+  test("Rosalind's flower can always be had that season, and she wants none in winter", () => {
     const grows = (flower: string, season: number) =>
       CROPS[flower]?.[0] === SEASONS[season] ||
       (FORAGE[SEASONS[season]] || []).includes(flower) ||
@@ -484,7 +484,7 @@ describe('market regulars and their lists (task 10)', () => {
     goods[2].sold = 2;
     assert.deepEqual(marketVisit(goods, ['Potato', 'Egg'], price, markup, each), [], 'sold out of everything on the list');
     assert.deepEqual(marketVisit(goods, ['Cabbage'], price, markup, each), [], 'nothing on the list was put out');
-    assert.ok(markup > 1.5 && MARKET_SHOPPERS.flower.markup > markup, 'regulars pay more than any villager, Lillia most of all');
+    assert.ok(markup > 1.5 && MARKET_SHOPPERS.flower.markup > markup, 'regulars pay more than any villager, Rosalind most of all');
   });
 });
 

@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { contourPattern } from './contour';
+import { FARM_SYMBOLS, FARM_SYMBOL_FALLBACK } from './farm-symbols';
 import { Screen, RenderCtx } from './screen';
 import { grey, windowLit, blueNoise, toneFor, shakeOffset, TIER_COLOURS, edgeGlyph, SPRITE_KEEP, spritePattern, rowAlpha, hiresLevel, effectiveHiresLevel, subAlpha, subPattern, HIRES_MIN_FONT, resetTrail, computeFrame, drawFrame, frameSignature, frameDirtyRect, skyFor, mix, hexToRgb, hash, lightning, toIsotope, isotopeRamps, rgbToHex, neon, hsv, lightReach, cropFamily, themeFor, THEMES, type OutCell } from './enhanced';
 
@@ -8,6 +9,7 @@ const lum = (hex: string) => {
   const [r, g, b] = hexToRgb(hex);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
+const TREE_GLYPHS = new Set<string>([FARM_SYMBOLS.fir, FARM_SYMBOLS.pine, FARM_SYMBOLS.broadleaf, FARM_SYMBOLS.bareTree]);
 
 function scene(over: Partial<RenderCtx> = {}): Screen {
   const s = new Screen(80, 24);
@@ -255,9 +257,9 @@ describe('computeFrame', () => {
 
   test('frames without a scene context (title, menus) pass through', () => {
     const s = new Screen(80, 24);
-    s.put(1, 1, 'HRVSTMN', '0A');
+    s.put(1, 1, 'FURROW', '0A');
     const out = computeFrame(s, 0);
-    assert.equal(out[1][1].ch, 'H');
+    assert.equal(out[1][1].ch, 'F');
   });
 
   test('ground right below a building is shaded', () => {
@@ -337,7 +339,7 @@ describe('computeFrame', () => {
   test('title screen gets a night sky, stars and a gradient logo', () => {
     const s = new Screen(100, 30);
     s.scene = 'title';
-    s.put(10, 2, 'HRVSTMN', '0A', '00', true);
+    s.put(10, 2, 'FURROW', '0A', '00', true);
     for (let i = 0; i < 7; i++) s.tag(10 + i, 2, { t: 'ui', k: 'logo' });
     const out = computeFrame(s, 0);
     assert.notEqual(out[10][50].bg, '#000000');
@@ -557,7 +559,7 @@ describe('computeFrame', () => {
         for (let y = 2; y < 7; y++) { s.put(x, y, 'T', '0B', '00', true); s.tag(x, y, { t: 'tree', wx: x, wy: y }); }
         for (let y = 7; y < 14; y++) { s.put(x, y, '~', '0D', '00'); s.tag(x, y, { t: 'water', wx: x, wy: y }); }
       }
-      return computeFrame(s, 0)[7].filter((o) => '♣♠❀•'.includes(o.ch)).length;
+      return computeFrame(s, 0)[7].filter((o) => TREE_GLYPHS.has(o.ch)).length;
     };
     assert.ok(shore('Sunny') > 15, 'shore row mirrors the treeline');
     assert.equal(shore('Rain'), 0, 'rain breaks reflections up');
@@ -632,14 +634,12 @@ describe('computeFrame', () => {
 
   test('high-resolution textures: map texture cells get a 2x2 half-size pattern', () => {
     const s = scene();
-    for (let x = 0; x < 50; x++) for (let y = 2; y < 6; y++) { s.put(x, y, 'T', '0B', '00', true); s.tag(x, y, { t: 'tree', wx: x, wy: y }); }
     s.put(10, 10, '@', '07', '00', true);
     s.tag(10, 10, { t: 'grass', wx: 10, wy: 10, ent: 'player' });
     const out = computeFrame(s, 0);
-    const tree = out[3].find((o) => o.ch === '♣' && !o.accent)!;
-    const pat = subPattern(tree, 16);
-    assert.ok(pat && [...pat].length === 4, 'trees become four mini leaves');
-    assert.equal(subPattern(tree, HIRES_MIN_FONT - 1), null, 'off when the font is too small');
+    const ground = out[3].find((o) => o.texture?.kind === 'ground')!;
+    assert.equal(subPattern(ground, 16)?.length, 4, 'ground gets four contour samples');
+    assert.equal(subPattern(ground, HIRES_MIN_FONT - 1), null, 'off when the font is too small');
     assert.equal(subPattern(out[10][10], 16), null, 'sprites stay full size');
     assert.equal(subPattern({ ch: '♣', fg: '#fff', bg: '#000', bold: false, ui: true }, 16), null, 'HUD stays full size');
   });
@@ -779,7 +779,7 @@ describe('computeFrame', () => {
     assert.ok(!near.ui && lum(near.bg) > 0, 'the margin next to the map is not black');
     assert.ok(lum(near.bg) <= lum(out[10][15].bg), 'and no brighter than the map edge');
     assert.ok(lum(far.bg) < lum(near.bg) || far.bg === '#000000', 'it fades with distance');
-    assert.ok(out[10].slice(10, 15).some((o) => '♣♠'.includes(o.ch)), 'the treeline carries on');
+    assert.ok(out[10].slice(10, 15).some((o) => TREE_GLYPHS.has(o.ch)), 'the treeline carries on');
     assert.ok(out[10][36].bg !== '#000000', 'on both sides');
     const indoor = computeFrame(narrow({ indoor: true }), 0);
     assert.equal(indoor[10][14].bg, '#000000', 'rooms stay framed by black');
@@ -1094,6 +1094,62 @@ describe('computeFrame', () => {
 });
 
 describe('Contour Farm presentation', () => {
+  test('tree silhouettes follow world positions and broadleaf trees go bare in winter', () => {
+    const trees = (mapName: string, season: number, offset = 0) => {
+      const s = scene({ mapName, season, reducedMotion: true });
+      for (let x = 0; x < 32; x++) {
+        s.put(x + offset, 8, 'T', '0B', '00', true);
+        s.tag(x + offset, 8, { t: 'tree', wx: x + 4, wy: 13 });
+      }
+      return computeFrame(s, 0)[8].slice(offset, offset + 32).map((cell) => cell.ch);
+    };
+    const spring = trees('farm', 0);
+    assert.deepEqual(new Set(spring), new Set([FARM_SYMBOLS.fir, FARM_SYMBOLS.pine, FARM_SYMBOLS.broadleaf]));
+    assert.deepEqual(trees('farm', 0, 7), spring, 'moving the camera preserves the species');
+    assert.deepEqual(trees('farm', 3), spring.map((ch) => ch === FARM_SYMBOLS.broadleaf ? FARM_SYMBOLS.bareTree : ch));
+    const broadleafCount = (glyphs: string[]) => glyphs.filter((ch) => ch === FARM_SYMBOLS.broadleaf).length;
+    assert.ok(broadleafCount(trees('ridge', 0)) < broadleafCount(spring), 'Skyline Ridge has more evergreens');
+  });
+
+  test('farm symbols distinguish produce, sprouts, stumps and the shipping crate', () => {
+    const s = scene({ reducedMotion: true });
+    s.put(10, 10, ',', '0B');
+    s.tag(10, 10, { t: 'field', k: 'crop:sprout', cropName: 'Turnip', wx: 10, wy: 10 });
+    s.put(12, 10, 'v', '09');
+    s.tag(12, 10, { t: 'field', k: 'crop:ripe', cropName: 'Carrot', wx: 12, wy: 10 });
+    s.put(14, 10, 'i', '09');
+    s.tag(14, 10, { t: 'field', k: 'crop:ripe', cropName: 'Corn', wx: 14, wy: 10 });
+    s.put(16, 10, 'O', '09');
+    s.tag(16, 10, { t: 'field', k: 'obj:stump', wx: 16, wy: 10 });
+    s.put(18, 10, '$', '09');
+    s.tag(18, 10, { t: 'bin', wx: 18, wy: 10 });
+
+    const row = computeFrame(s, 0)[10];
+    assert.deepEqual([10, 12, 14, 16, 18].map((x) => row[x].ch),
+      [FARM_SYMBOLS.sprout, FARM_SYMBOLS.carrot, FARM_SYMBOLS.corn, FARM_SYMBOLS.stump, FARM_SYMBOLS.shippingCrate]);
+    s.ctx!.cues = true;
+    s.ctx!.mapName = 'house';
+    s.ctx!.indoor = true;
+    const cues = computeFrame(s, 0)[10];
+    assert.equal(cues[12].ch, '!', 'ripe crops retain their accessibility cue');
+    assert.equal(cues[18].ch, '$', 'the house ledger retains its own glyph');
+  });
+
+  test('the canvas uses readable fallbacks until the farm font is available', () => {
+    const symbols = Object.values(FARM_SYMBOLS);
+    const frame = [symbols.map((ch) => ({ ch, fg: '#ffffff', bg: '#000000', bold: false }))];
+    const painted = (farmSymbols: boolean) => {
+      const glyphs: string[] = [];
+      const ctx = new Proxy({ fillText: (ch: string) => glyphs.push(ch) }, {
+        get: (t, key) => key in t ? t[key as keyof typeof t] : () => {},
+      }) as unknown as CanvasRenderingContext2D;
+      drawFrame(ctx, frame, { cw: 7, ch: 15, fontPx: 12, font: 'monospace', hires: false, farmSymbols });
+      return glyphs;
+    };
+    assert.deepEqual(painted(false), symbols.map((ch) => FARM_SYMBOL_FALLBACK[ch]));
+    assert.deepEqual(painted(true), symbols);
+  });
+
   test('world-anchored contour detail follows a tile when the camera shifts', () => {
     const a = scene({ reducedMotion: true });
     const b = scene({ reducedMotion: true });
@@ -1303,7 +1359,7 @@ describe('7 graphical upgrades', () => {
     assert.equal(cropFamily('Tomato'), 'trellis');
     assert.equal(cropFamily('Corn'), 'stalk');
     assert.equal(cropFamily('Cabbage'), 'leafy');
-    assert.equal(cropFamily('Pink Cat Flower'), 'flower');
+    assert.equal(cropFamily('Rosecap Flower'), 'flower');
     assert.equal(cropFamily('Grass'), 'grass');
     assert.equal(cropFamily('Turnip'), 'root');
 
@@ -1340,7 +1396,7 @@ describe('7 graphical upgrades', () => {
     s.put(18, 10, '@', '0A', '00', true);
     s.tag(18, 10, { t: 'grass', wx: 18, wy: 10, ent: 'player', face: [1, 0], riding: true });
     const out = computeFrame(s, 0);
-    assert.equal(out[10][10].ch, 'ˇ', 'chicken silhouette');
+    assert.equal(out[10][10].ch, FARM_SYMBOLS.hen, 'chicken silhouette');
     assert.ok(out[10][10].detail, 'chicken red comb detail');
     assert.equal(out[10][12].ch, '▴', 'dog silhouette');
     assert.ok(out[10][12].detail, 'dog collar detail');
@@ -1506,7 +1562,7 @@ describe('late-season blending, hot-spring steam, hearth embers and CRT scanline
       const s = new Screen(80, 24);
       s.scene = 'title';
       s.reducedMotion = reduced;
-      s.put(30, 3, 'HRVSTMN', '07', '00', true);
+      s.put(30, 3, 'FURROW', '07', '00', true);
       return s;
     };
     const stars = (s: Screen, t: number) => computeFrame(s, t).flat().filter((o) => o.ch === '★').length;
@@ -1601,7 +1657,7 @@ describe('visual polish pass', () => {
       for (let y = 6; y < 10; y++) { s.put(x, y, '~', '0D', '00'); s.tag(x, y, { t: 'water', wx: x, wy: y }); }
     }
     const out = computeFrame(s, 0);
-    const reflected = out[6].slice(15, 35).filter((o) => '♣♠'.includes(o.ch));
+    const reflected = out[6].slice(15, 35).filter((o) => TREE_GLYPHS.has(o.ch));
     assert.ok(reflected.length > 5);
     for (const o of reflected) {
       assert.equal(o.plain, true, 'reflections remain calm single glyphs');
@@ -1741,16 +1797,18 @@ describe('high-resolution world micro-detail', () => {
     }
   });
 
-  test('trees omit micro-detail and retain reverted /\\/\\ contour crowns', () => {
-    const s = scene({ palette: 'isotope' });
+  test('trees keep their silhouettes at full size with high-res detail enabled', () => {
+    const s = hiresScene({ palette: 'isotope' });
     for (let x = 10; x < 14; x++) {
       s.put(x, 5, 'T', '0B', '00', true);
       s.tag(x, 5, { t: 'tree', wx: x, wy: 5 });
     }
-    const out = computeFrame(s, 0);
-    assert.equal(out[5][10].micro, undefined);
-    const tree = out[5][10];
-    assert.equal(subPattern({ ...tree, glow: undefined, token: undefined }, 16, 2), '/\\/\\');
+    const trees = computeFrame(s, 0)[5].slice(10, 14);
+    for (const tree of trees) {
+      assert.ok(TREE_GLYPHS.has(tree.ch));
+      assert.equal(tree.micro, undefined);
+      assert.equal(subPattern(tree, 16, 2), null);
+    }
   });
 
   test('drawFrame paints rich sub-cell geometry when hires=true and omits it when hires=false', () => {
@@ -1775,10 +1833,9 @@ describe('high-resolution world micro-detail', () => {
     assert.ok(hi > lo + 80, `expected sub-cell rects when hires=true (${hi} vs ${lo})`);
   });
 
-  test('high-res is off for good: a new screen computes no micro-detail and paints no half-size glyphs', () => {
+  test('high-res is off by default: a new screen computes no micro-detail and paints no half-size glyphs', () => {
     const s = scene({ palette: 'mono' });
     assert.equal(s.hires, false);
-    assert.equal(typeof (s as any).setHires, 'undefined', 'no switch to turn it on');
     const frame = computeFrame(s, 0);
     assert.ok(frame.flat().every((o) => !o.micro), 'no micro-detail computed');
     const fonts = new Set<string>();
@@ -1788,6 +1845,19 @@ describe('high-resolution world micro-detail', () => {
     }) as unknown as CanvasRenderingContext2D;
     drawFrame(canvas, frame, { cw: 11, ch: 23, fontPx: 19, font: 'monospace', dpr: 2, hires: s.hires });
     for (const f of fonts) assert.match(f, /^(bold )?19px /, `only full-size glyphs (${f})`);
+  });
+
+  test('the high-res setting switches the micro-detail pass on and tells the page', () => {
+    const s = scene({ palette: 'mono' });
+    const seen: boolean[] = [];
+    s.onHiresChange = (v) => seen.push(v);
+    s.setHires(true);
+    s.setHires(true);
+    assert.deepEqual(seen, [true], 'one notice per change');
+    assert.ok(computeFrame(s, 0).flat().some((o) => o.micro), 'micro-detail computed');
+    s.setHires(false);
+    assert.deepEqual(seen, [true, false]);
+    assert.ok(computeFrame(s, 0).flat().every((o) => !o.micro));
   });
 
   test('micro changes invalidate both frameSignature and frameDirtyRect', () => {
@@ -1911,17 +1981,17 @@ describe('display font for HUD headings', () => {
     return calls;
   };
   const frame: OutCell[][] = [[
-    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'HRVSTMN', scale: 1.45, w: 9, h: 2 } },
+    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'FURROW', scale: 1.45, w: 9, h: 2 } },
     { ch: 'x', fg: '#ffffff', bg: '#000000', bold: false },
   ]];
 
   test('large headings use the display face; every other glyph stays in the grid font', () => {
     const calls = fontsUsed(frame, 'DisplayFace');
-    assert.deepEqual(calls.find((c) => c.text === 'HRVSTMN'), { text: 'HRVSTMN', font: 'bold 23.2px DisplayFace' });
+    assert.deepEqual(calls.find((c) => c.text === 'FURROW'), { text: 'FURROW', font: 'bold 23.2px DisplayFace' });
     assert.equal(calls.find((c) => c.text === 'x')?.font, '16px GridMono');
   });
 
   test('without a display face the headings fall back to the grid font', () => {
-    assert.equal(fontsUsed(frame).find((c) => c.text === 'HRVSTMN')?.font, 'bold 23.2px GridMono');
+    assert.equal(fontsUsed(frame).find((c) => c.text === 'FURROW')?.font, 'bold 23.2px GridMono');
   });
 });

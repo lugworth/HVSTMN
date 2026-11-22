@@ -1,4 +1,4 @@
-// Enhanced ASCII renderer for HRVSTMN.
+// Enhanced ASCII renderer for FURROW.
 //
 // The engine writes plain (glyph, fg, bg) cells plus semantic CellTags (tile
 // name, world position, deco, entity). This module turns that into a richer
@@ -7,9 +7,10 @@
 // changes game state, so 'classic' and 'enhanced' are pure presentation.
 
 import type { Cell, CellTag, EmoteKind, HudLabel, PaletteMode, RenderCtx, Screen } from './screen';
-import { PALETTE } from './constants';
+import { HIVE_SPOT, PALETTE } from './constants';
 import { contourPattern, type ContourTexture } from './contour';
 import { FENCE_PITCH, SEASON_GLYPHS } from './chrome';
+import { FARM_SYMBOLS, FARM_SYMBOL_FALLBACK } from './farm-symbols';
 
 export type OutCell = {
   ch: string;
@@ -29,6 +30,10 @@ export type OutCell = {
   face?: [number, number];
   /** Mounted state on player token. */
   riding?: boolean;
+  /** The player token is mid-step: drawn this many cells off its cell (see stepOffset). */
+  shift?: [number, number];
+  /** A neighbour the sliding token overlaps: changes with it so the cell repaints each frame. */
+  ghost?: number;
   /** Keeps its colour in the monochrome pass: things of interest. */
   accent?: boolean;
   /** HUD / panel cell: left untouched by the scene passes. */
@@ -412,7 +417,6 @@ type Theme = {
   tuft: string;
   trees: string[];
   treeBg: string;
-  treeGlyphs: [string, string];
   soilBg: string;
   soilDot: string;
   weed: string;
@@ -430,7 +434,7 @@ export const THEMES: Theme[] = [
   {
     // Spring
     grassBg: '#0c1f0b', grassBg2: '#11290f', grassDetail: '#2c6e1e', tuft: '#4fc12c',
-    trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606', treeGlyphs: ['♣', '♠'],
+    trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606',
     soilBg: '#231910', soilDot: '#4a3826', weed: '#3fa52a',
     waterBg: '#03204e', waterBg2: '#062c66', waterFg: '#3d8cff',
     blossom: ['#ffa8d8', '#ffd0ec', '#ff80c0'], wildflowers: ['#ffe27a', '#ff9ad0', '#ffffff', '#b8a0ff'],
@@ -438,7 +442,7 @@ export const THEMES: Theme[] = [
   {
     // Summer
     grassBg: '#0a2408', grassBg2: '#0f300b', grassDetail: '#2f8a1a', tuft: '#62dc2c',
-    trees: ['#2fd010', '#22aa0c', '#188a08'], treeBg: '#041404', treeGlyphs: ['♣', '♠'],
+    trees: ['#2fd010', '#22aa0c', '#188a08'], treeBg: '#041404',
     soilBg: '#22180e', soilDot: '#55402a', weed: '#48b82a',
     waterBg: '#022456', waterBg2: '#053272', waterFg: '#45a0ff',
     fruit: '#ff4a3a', wildflowers: ['#ffe27a', '#ff6a6a', '#ffffff'],
@@ -446,7 +450,7 @@ export const THEMES: Theme[] = [
   {
     // Fall
     grassBg: '#1f1a0b', grassBg2: '#272010', grassDetail: '#6e5a22', tuft: '#b0902c',
-    trees: ['#ff9900', '#ff5a1a', '#e8b400', '#c8361a', '#ff7a10'], treeBg: '#170c04', treeGlyphs: ['♣', '♠'],
+    trees: ['#ff9900', '#ff5a1a', '#e8b400', '#c8361a', '#ff7a10'], treeBg: '#170c04',
     soilBg: '#1f140c', soilDot: '#4a3424', weed: '#a8a030',
     waterBg: '#0a2040', waterBg2: '#0e2a52', waterFg: '#4a88d8',
     leaves: ['#ff9900', '#ff5a1a', '#e8b400'],
@@ -454,7 +458,7 @@ export const THEMES: Theme[] = [
   {
     // Winter
     grassBg: '#4a5464', grassBg2: '#566072', grassDetail: '#eef2fa', tuft: '#c4ceda',
-    trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820', treeGlyphs: ['♠', '♠'],
+    trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820',
     soilBg: '#394049', soilDot: '#a4aebc', weed: '#d0d8e0',
     waterBg: '#10304e', waterBg2: '#143a5c', waterFg: '#8ac8ff',
     snow: true,
@@ -688,7 +692,7 @@ function isTorch(F: Frame, x: number, y: number, tag: CellTag): boolean {
 }
 
 /** Fixtures worth noticing: they keep their colour in the monochrome look. */
-const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign']);
+const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign', 'pocket_seam', 'pocket_geode', 'pocket_moss']);
 
 const isRainy = (F: Frame) => !F.indoor && (F.weather === 'Rain' || F.weather === 'Typhoon');
 const isWet = (F: Frame) => isRainy(F) || (!F.indoor && F.wetness > 0.06);
@@ -795,7 +799,7 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       case 'obj:boulder':
         return { ch: '●', fg: '#8c8c98', bg: mix(soil, '#3a342e', 0.6), bold: false };
       case 'obj:stump':
-        return { ch: '◉', fg: '#b8702e', bg: soil, bold: false };
+        return { ch: FARM_SYMBOLS.stump, fg: '#b8702e', bg: soil, bold: false };
       case 'obj:branch':
         return { ch: '╱', fg: '#c58a4a', bg: soil, bold: true };
       case 'obj:dig': {
@@ -831,7 +835,7 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       if (fam === 'leafy') return { ch: 'ʷ', fg: '#68d43c', bg, bold: true, detail: drop };
       if (fam === 'flower') return { ch: ',', fg: '#7ad04a', bg, bold: true, detail: drop ?? { ch: '·', fg: '#ffa8d8' } };
       if (fam === 'grass') return { ch: '`', fg: '#62cc38', bg, bold: false };
-      return { ch: ',', fg: '#7ad04a', bg, bold: true, detail: drop };
+      return { ch: FARM_SYMBOLS.sprout, fg: '#7ad04a', bg, bold: true, detail: drop };
     }
     if (k.startsWith('crop:young')) {
       if (fam === 'trellis') return { ch: '┼', fg: '#48c828', bg, bold: true, plain: true, detail: drop ?? { ch: '·', fg: '#ffe066' } };
@@ -889,9 +893,12 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       return { ch: pick(['✿', '❀'], hash(wx, wy, 2)), fg: pal(fg), bg: gb, bold: true, accent: true };
     }
     case 'tree': {
-      const windy = !F.indoor && (F.weather === 'Typhoon' || F.weather === 'Blizzard');
-      const sway = windy ? hash(wx * 2, wy, 90 + (Math.floor(F.t * 3) % 2)) < 0.5 : false;
-      const ch = (hs < 0.72) !== sway ? th.treeGlyphs[0] : th.treeGlyphs[1];
+      // World coordinates keep a tree recognizable as the view and seasons change.
+      const hive = F.map === 'farm' && wx === HIVE_SPOT[0] && wy === HIVE_SPOT[1];
+      const deciduous = hive || hs >= (F.map === 'ridge' ? 0.82 : 0.54);
+      const ch = deciduous
+        ? (th.snow ? FARM_SYMBOLS.bareTree : FARM_SYMBOLS.broadleaf)
+        : (hs < 0.29 ? FARM_SYMBOLS.fir : FARM_SYMBOLS.pine);
       const bg = mix(th.treeBg, '#000000', hash(wx, wy, 2) * 0.5);
       let fgc = pick(th.trees, hash(wx * 2, wy, 1));
       // canopies are lit from above: bright crown, shaded underside
@@ -901,14 +908,14 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       else if (!dn || dn.t !== 'tree') fgc = mix(fgc, '#000000', 0.32);
       // seasonal accents: spring blossom, summer fruit, winter snow on the tips
       const acc = hash(wx * 2, wy, 41);
-      // two-tone canopies: the tree stays grey, the blossom or fruit is a small colour detail
-      if (th.blossom && acc < 0.12) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
-      if (th.fruit && acc < 0.07) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
-      if (th.leaves && acc < 0.18) return { ch, fg: fgc, bg, bold: true, accent: true }; // a few turning leaves
+      // Deciduous crowns carry the existing blossom, fruit and fall accents.
+      if (deciduous) {
+        if (th.blossom && acc < 0.23) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
+        if (th.fruit && acc < 0.13) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
+        if (th.leaves && acc < 0.36) return { ch, fg: fgc, bg, bold: true, accent: true };
+      }
       if (th.snow && acc < 0.3) fgc = '#eef4fc';
-      // summer canopies are fuller: an extra leafy glyph now and then
-      const leafy = th.fruit && acc > 0.9 ? '♠' : ch;
-      return { ch: leafy, fg: fgc, bg, bold: true };
+      return { ch, fg: fgc, bg, bold: true };
     }
     case 'field': {
       const soil = groundBg(F, tag);
@@ -997,6 +1004,13 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       }
       return { ch: '▒', fg: '#6a5844', bg: '#4a3c2e', bold: false };
     }
+    // sealed side chambers (mechanics task 40): the rock pattern is the clue
+    case 'pocket_seam':
+      return { ch: '≋', fg: '#ffcc33', bg: '#2e2924', bold: true, glow: '#ffcc33', glowR: 3, accent: true };
+    case 'pocket_geode':
+      return { ch: '◊', fg: '#9ff0ff', bg: '#2e2924', bold: true, glow: '#70e8ff', glowR: 3, accent: true };
+    case 'pocket_moss':
+      return { ch: '♣', fg: '#7ccf5a', bg: '#2e2924', bold: true, accent: true };
     case 'mwall':
       if (isTorch(F, x, y, tag)) return { ch: '†', fg: '#ff9900', bg: '#2e2924', bold: true, glow: '#ff9900', glowR: 9, accent: true };
       return { ch: hs < 0.5 ? '▓' : '▒', fg: '#4a423a', bg: '#2e2924', bold: false };
@@ -1104,7 +1118,8 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
     }
   }
   // Generic: furniture, signs, bins, doghouse... keep the readable glyph on a grounded background.
-  return { ch: g, fg: pal(fg), bg: F.indoor || (cell[2] === '01' && !tag.hl && !tag.hlArea) ? '#3a2818' : groundBg(F, tag), bold, accent: INTEREST.has(tag.t) };
+  const ch = tag.t === 'bin' && F.map === 'farm' ? FARM_SYMBOLS.shippingCrate : g;
+  return { ch, fg: pal(fg), bg: F.indoor || (cell[2] === '01' && !tag.hl && !tag.hlArea) ? '#3a2818' : groundBg(F, tag), bold, accent: INTEREST.has(tag.t) };
 }
 
 export type CropFamily = 'root' | 'trellis' | 'stalk' | 'leafy' | 'flower' | 'grass';
@@ -1120,13 +1135,13 @@ export function cropFamily(cropName?: string): CropFamily {
   if (TRELLIS_CROPS.has(cropName)) return 'trellis';
   if (STALK_CROPS.has(cropName)) return 'stalk';
   if (LEAFY_CROPS.has(cropName)) return 'leafy';
-  if (cropName.includes('Flower') || cropName === 'Moondrop' || cropName === 'Pink Cat' || cropName === 'Magic Red') return 'flower';
+  if (cropName.includes('Flower') || cropName === 'Duskbell' || cropName === 'Rosecap' || cropName === 'Emberbloom') return 'flower';
   return 'root';
 }
 
 function ripeCropGlyph(cropName: string, fam: CropFamily, fallback: string): { ch: string; detail?: { ch: string; fg: string } } {
-  if (cropName === 'Carrot') return { ch: '▼', detail: { ch: 'ʷ', fg: '#52d834' } };
-  if (cropName === 'Corn') return { ch: '║', detail: { ch: 'ʷ', fg: '#52d834' } };
+  if (cropName === 'Carrot') return { ch: FARM_SYMBOLS.carrot, detail: { ch: 'ʷ', fg: '#52d834' } };
+  if (cropName === 'Corn') return { ch: FARM_SYMBOLS.corn, detail: { ch: 'ʷ', fg: '#52d834' } };
   if (cropName === 'Pineapple') return { ch: '◉', detail: { ch: 'ʷ', fg: '#48d030' } };
   if (cropName === 'Pumpkin') return { ch: '◉', detail: { ch: '`', fg: '#48d030' } };
   if (cropName === 'Cabbage') return { ch: '❀' };
@@ -1172,7 +1187,7 @@ function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 
     if ('▄◢◣'.includes(o.ch)) return { ...o, ch: o.ch === '◢' ? '╱' : o.ch === '◣' ? '╲' : '─', fg: fullCol ? o.fg : '#d0d0d0' };
     return { ...o, ch: contourPattern(texture, 1), fg: fullCol ? o.fg : '#d0d0d0', bg: mix(o.bg, '#000000', fullCol ? 0.25 : 0.6), texture };
   }
-  if (tag.t === 'tree') return { ...o, fg: mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4), texture: { x, y, kind: 'tree' } };
+  if (tag.t === 'tree') return { ...o, fg: mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4) };
   if (tag.t === 'wall' && tag.k !== 'deco') return { ...o, ch: o.ch === '▀' ? '─' : o.ch, fg: mix(o.fg, '#ffffff', fullCol ? 0.25 : 0.55) };
   if (WATERY.has(tag.t)) {
     const texture: ContourTexture = { x: x + (Math.floor(F.t * 1.5) % 8) * 0.15, y, kind: 'water' };
@@ -1222,7 +1237,7 @@ const WEATHER_ICON: Record<string, [string, string]> = {
   Blizzard: ['❄', '#9ae8ff'],
 };
 /** Creature glyphs for animals and pets (engine letters -> pictograms). */
-const CREATURE_GLYPH: Record<string, string> = { H: '♞', C: '♉', S: '☁', s: '◦', c: 'ˇ', d: '▴' };
+const CREATURE_GLYPH: Record<string, string> = { H: '♞', C: '♉', S: '☁', s: '◦', c: FARM_SYMBOLS.hen, d: '▴' };
 const EMOTE_STYLE: Record<EmoteKind, [string, string]> = {
   heart: ['♥', '#ff4fa8'],
   note: ['✦', '#ffe066'],
@@ -1232,7 +1247,7 @@ const EMOTE_STYLE: Record<EmoteKind, [string, string]> = {
 };
 const BOX: Record<string, string> = { 'box:h': '─', 'box:v': '│', 'box:tl': '╭', 'box:tr': '╮', 'box:bl': '╰', 'box:br': '╯' };
 
-/** Effect colour by tool tier (Cogmind's rule: colour shows strength). Basic to Blessed. */
+/** Effect colour by tool tier (Cogmind's rule: colour shows strength). Basic to Hallowed. */
 // Each tier must stay distinct after the Isotope neon snap: dim grey, dim orange, bright white,
 // bright orange, cyan, purple, pink. Copper and gold share a hue, so they differ in brightness.
 export const TIER_COLOURS = ['#8a8a8a', '#a85a10', '#f4f4f4', '#ffb347', '#33ffcc', '#cc00ff', '#ff4db8'];
@@ -1393,6 +1408,43 @@ function styleMinimapCell(k: string, t: number): OutCell {
  * Build the styled frame for the current screen contents.
  * @param t seconds, used for animation (water, rain, snow, fireflies)
  */
+/** How long a step's slide and a wall bump last, in seconds (both shorter than one walking step). */
+export const STEP_SLIDE_SECS = 0.09;
+export const STEP_BUMP_SECS = 0.12;
+
+/**
+ * Where the player token is drawn, in cells off its own cell, `t` seconds into the performance
+ * clock: a slide starts at the old spot and eases out onto the new one; a bump leans a fifth of
+ * a cell toward the wall and back. Null once it has finished, or with motion off (t = 0).
+ */
+export function stepOffset(step: RenderCtx['step'], t: number): [number, number] | null {
+  if (!step || t <= 0) return null;
+  const age = t - step.born;
+  const life = step.kind === 'slide' ? STEP_SLIDE_SECS : STEP_BUMP_SECS;
+  // the epsilon: born + life - born can land a hair under life in floating point
+  if (age < 0 || age >= life - 1e-9) return null;
+  const p = age / life;
+  const k = step.kind === 'slide' ? (1 - p) ** 2 : 0.2 * Math.sin(Math.PI * p);
+  return [step.dx * k, step.dy * k];
+}
+
+/** Offset the player token for its step, and mark the cells it crosses so they repaint with it. */
+function applyStep(out: OutCell[][], step: RenderCtx['step'], t: number, W: number, H: number): void {
+  const off = stepOffset(step, t);
+  if (!off || !step) return;
+  const [x, y] = step.at;
+  const o = out[y]?.[x];
+  if (!o?.token) return;
+  o.shift = off;
+  const stamp = Math.round((Math.abs(off[0]) + Math.abs(off[1])) * 100) + 1;
+  const reach = Math.ceil(Math.max(Math.abs(off[0]), Math.abs(off[1]))) + 1;
+  for (let i = 1; i <= reach; i++) {
+    const nx = x + Math.sign(off[0]) * i;
+    const ny = y + Math.sign(off[1]) * i;
+    if (nx >= 0 && ny >= 0 && nx < W && ny < H && (nx !== x || ny !== y)) out[ny][nx] = { ...out[ny][nx], ghost: stamp };
+  }
+}
+
 export function computeFrame(
   scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires'>>,
   t: number,
@@ -1935,6 +1987,7 @@ export function computeFrame(
     monochrome(out, boxes, { ...tod, light: lightMap, tags, base });
   }
   if (ctx.wipe && motion && t > 0) applyWipe(out, v, W, H, ctx.wipe);
+  if (ctx.step && motion) applyStep(out, ctx.step, t, W, H);
   decorateBoxes(out, boxes, W, H, t);
   snapFrame(out);
   return out;
@@ -2783,7 +2836,7 @@ function connectedBorders(
 
 /**
  * Populate sub-cell architectural & terrain micro-detail metadata on world cells.
- * Trees are intentionally left untouched to preserve their classic `/\/\` & `♣`/`♠` silhouette.
+ * Trees keep their full-size silhouettes.
  */
 function worldMicroDetail(
   out: OutCell[][],
@@ -3315,6 +3368,8 @@ export type Metrics = {
   font: string;
   /** The display face for the large HUD headings; the grid font when absent. */
   displayFont?: string;
+  /** True after the bundled farm symbol font has loaded. */
+  farmSymbols?: boolean;
   dpr?: number;
   hires?: boolean;
   crt?: boolean;
@@ -3346,6 +3401,7 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.ch !== n.ch || p.fg !== n.fg || p.bg !== n.bg || p.bold !== n.bold ||
         p.glow !== n.glow || p.glowR !== n.glowR || p.token !== n.token || p.rim !== n.rim ||
         p.face?.[0] !== n.face?.[0] || p.face?.[1] !== n.face?.[1] || p.riding !== n.riding ||
+        p.shift?.[0] !== n.shift?.[0] || p.shift?.[1] !== n.shift?.[1] || p.ghost !== n.ghost ||
         p.plain !== n.plain || p.ui !== n.ui || p.accent !== n.accent || p.seed !== n.seed ||
         p.foam !== n.foam || p.foamCol !== n.foamCol ||
         p.plot !== n.plot || p.plotCol !== n.plotCol ||
@@ -3516,6 +3572,7 @@ export function rowAlpha(ch: string, seed: number, r: number, n: number): number
 export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Metrics, dirty?: DirtyRect) {
   const { cw, ch, fontPx, font } = m;
   const level = effectiveHiresLevel(fontPx, m.dpr ?? 1, m.hires ?? true);
+  const fallback = m.farmSymbols ? undefined : FARM_SYMBOL_FALLBACK;
   const X0 = Math.max(0, dirty?.x0 ?? 0);
   const Y0 = Math.max(0, dirty?.y0 ?? 0);
   const X1 = Math.min(frame[0]?.length ?? 0, dirty?.x1 ?? frame[0]?.length ?? 0);
@@ -3528,6 +3585,28 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
   const mb: boolean[] = [];
   const mini = (x: number, y: number, str: string, fg: string, a: number, b: boolean) => {
     mx.push(x); my.push(y); ms.push(str); mf.push(fg); ma.push(a); mb.push(b);
+  };
+  const sliding: [OutCell, number, number][] = [];
+  /** A villager, animal or player disc: fill, rim and the facing dot. */
+  const drawToken = (o: OutCell, px: number, py: number) => {
+    g.beginPath();
+    g.ellipse(px + cw / 2, py + ch / 2, cw * 0.62, ch * 0.46, 0, 0, Math.PI * 2);
+    g.fillStyle = o.token!;
+    g.fill();
+    if (o.rim) {
+      g.strokeStyle = o.rim;
+      g.lineWidth = o.riding ? 1.8 : 1.2;
+      g.stroke();
+    }
+    if (o.face && (o.face[0] !== 0 || o.face[1] !== 0)) {
+      const [fx, fy] = o.face;
+      const tipX = px + cw / 2 + fx * cw * 0.66;
+      const tipY = py + ch / 2 + fy * ch * 0.5;
+      g.beginPath();
+      g.arc(tipX, tipY, Math.max(1.6, cw * 0.14), 0, Math.PI * 2);
+      g.fillStyle = o.fg;
+      g.fill();
+    }
   };
   g.save();
   g.textBaseline = 'middle';
@@ -3554,6 +3633,11 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       const o = row[x];
       const px = x * cw;
       const py = y * ch;
+      // a token mid-step goes on top of everything else, once the cells it crosses are painted
+      if (o.shift) {
+        sliding.push([o, px + o.shift[0] * cw, py + o.shift[1] * ch]);
+        continue;
+      }
       let skipFillerGlyph = false;
       if (hiresMicro && o.micro && !o.ui) {
         skipFillerGlyph = paintMicroDetail(g, o, px, py, cw, ch);
@@ -3697,24 +3781,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       }
       if (o.token) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
-        g.beginPath();
-        g.ellipse(px + cw / 2, py + ch / 2, cw * 0.62, ch * 0.46, 0, 0, Math.PI * 2);
-        g.fillStyle = o.token;
-        g.fill();
-        if (o.rim) {
-          g.strokeStyle = o.rim;
-          g.lineWidth = o.riding ? 1.8 : 1.2;
-          g.stroke();
-        }
-        if (o.face && (o.face[0] !== 0 || o.face[1] !== 0)) {
-          const [fx, fy] = o.face;
-          const tipX = px + cw / 2 + fx * cw * 0.66;
-          const tipY = py + ch / 2 + fy * ch * 0.5;
-          g.beginPath();
-          g.arc(tipX, tipY, Math.max(1.6, cw * 0.14), 0, Math.PI * 2);
-          g.fillStyle = o.fg;
-          g.fill();
-        }
+        drawToken(o, px, py);
       }
       const f = `${o.bold ? 'bold ' : ''}${fontPx}px ${font}`;
       if (f !== curFont) {
@@ -3730,7 +3797,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         glowOn = false;
       }
       g.fillStyle = o.fg;
-      g.fillText(o.ch, px, py + ch / 2 + 1);
+      g.fillText(fallback?.[o.ch] ?? o.ch, px, py + ch / 2 + 1);
     }
   }
   // a glyph's glow must not leak into the passes below (small glyphs, overlays, CRT scanlines)
@@ -3749,6 +3816,24 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       }
     }
     g.globalAlpha = 1;
+  }
+  // the player mid-step, over the cells it is crossing
+  for (const [o, px, py] of sliding) {
+    g.shadowBlur = 0;
+    drawToken(o, px, py);
+    g.font = `${o.bold ? 'bold ' : ''}${fontPx}px ${font}`;
+    if (o.glow) {
+      g.shadowColor = o.glow;
+      g.shadowBlur = (o.glowR ?? 6) * (m.crt ? 1.4 : 1);
+    }
+    g.fillStyle = o.fg;
+    g.fillText(o.ch, px, py + ch / 2 + 1);
+    g.shadowBlur = 0;
+    if (o.detail) {
+      g.font = `bold ${fontPx / Math.max(2, level)}px ${font}`;
+      g.fillStyle = o.detail.fg;
+      g.fillText(o.detail.ch, px + cw * 0.48, py + ch * 0.3);
+    }
   }
 
   // shoreline foam, connected tilled-plot borders, and connected AoE tool reticles
@@ -4548,6 +4633,6 @@ function paintMicroDetail(
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
   // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.shift ? `S${o.shift[0].toFixed(3)},${o.shift[1].toFixed(3)}` : '') + (o.ghost ? `G${o.ghost}` : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
   return s;
 }

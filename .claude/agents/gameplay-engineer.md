@@ -10,7 +10,7 @@ You implement gameplay for HRVSTMN, a browser farming sim (Next.js 15 + TypeScri
 Map and world: outdoor maps are built in src/game/map.ts (`GameMap` with `rect`, `border`, `building`, `near`, `signs`, `deco`, `warps`, `doors`); regions are joined with `link()`/`link_regions()` (3-wide edge openings with warps both ways). The engine (`Game` in src/game/engine.ts) owns state: `maps`, `objs`, `forage`, `crops`, `wetness`, NPC positions, `fx` feedback, saves (`SAVE_FIELDS`, `snapshot()`/`applySaveData()`). `OUTDOOR_MAPS` and `FORAGE_TARGET` list every outdoor area. Walkability is `walkable()`; warps fire when stepping onto a warp cell.
 
 Rules:
-- Original mechanics and content only. The project is a tribute; do not recreate Harvest Moon: Friends of Mineral Town's exact maps, characters or content. Raise content questions instead of guessing.
+- Original mechanics and content only. FURROW has its own setting (Brackenford, its villagers and folklore; see docs/originality-rework.md). Never add names, characters, places, items or events from Harvest Moon / Story of Seasons or another existing game. Raise content questions instead of guessing.
 - Keep old saves loading: new state needs defaults when absent.
 - Keep the game readable at 80x24 and the side panel/messages working.
 - Streamline: reuse existing helpers, keep functions small, no new dependencies.

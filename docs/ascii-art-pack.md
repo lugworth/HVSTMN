@@ -1,6 +1,6 @@
-# HRVSTMN ASCII Art Pack
+# FURROW ASCII Art Pack
 
-Terminal-safe art for the Mineral Town tribute. Every
+Terminal-safe art for FURROW. Every
 block below is plain text: no emoji, no double-width
 symbols, no font-dependent ligatures. Rows are aligned for
 a 1:2 character cell and every colour reference is an

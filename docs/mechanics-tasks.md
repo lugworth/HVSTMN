@@ -1,4 +1,4 @@
-# HRVSTMN mechanics task list
+# FURROW mechanics task list
 
 Pick an unchecked task that fits the current assignment. Keep its number stable and use it in the PR description so other agents can find the work. Each task has its own PR.
 
@@ -15,7 +15,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 | Order | Tasks | First playable versions |
 | --- | --- | --- |
-| 1 | 01, 04, 33 | Three short inn scenes, one follow-up request from Gray, and named map markers. |
+| 1 | 01, 04, 33 | Three short inn scenes, one follow-up request from Rowan, and named map markers. |
 | 2 | 12, 34 | A public project that changes the map and a trail shortcut earned through exploration. Verify each across a reload. |
 | 3 | 09, 10 | A three-slot Saturday stall, then two shoppers with different shopping lists. |
 | 4 | 17, 19 | One companion planting pairing and one seed-saving recipe. Preview their effects. |
@@ -23,10 +23,10 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 ## Neighbors and family
 
-- [x] **01. Friday evenings at Doug’s Inn.** Rotate a card game, a recipe swap, and a story from an older villager. Let the player listen or join, and let unseen scenes recur.
-- [ ] **02. Short outings with villagers.** Meet Gray for a walk or Kai for a fishing session. A ten-minute in-game outing with two bits of dialogue is enough to try it.
-- [x] **03. Villagers remember milestones.** Let Zack mention your first shipment, the curator mention a completed exhibit, and neighbors notice a path you helped repair.
-- [x] **04. Requests with a second chapter.** Gray asks for copper from Spring Mine. After delivery, he shows you which watering-can upgrade is worth saving for and leaves a note about the next step.
+- [x] **01. Friday evenings at Gideon’s Inn.** Rotate a card game, a recipe swap, and a story from an older villager. Let the player listen or join, and let unseen scenes recur.
+- [ ] **02. Short outings with villagers.** Meet Rowan for a walk or Nico for a fishing session. A ten-minute in-game outing with two bits of dialogue is enough to try it.
+- [x] **03. Villagers remember milestones.** Let Otto mention your first shipment, the curator mention a completed exhibit, and neighbors notice a path you helped repair.
+- [x] **04. Requests with a second chapter.** Rowan asks for copper from Copperseam Mine. After delivery, he shows you which watering-can upgrade is worth saving for and leaves a note about the next step.
 - [x] **05. Ask for a favor.** A close neighbor offers one specific favor on a free afternoon, such as carrying a shipment or checking shop hours. Put the promise in Today’s Plan so it feels like an arrangement.
 - [ ] **06. Invite people to dinner.** Pick two guests and serve an existing recipe. Give each pairing one short exchange, with different reactions to what you serve.
 - [x] **07. Shared memories in Villager Notes.** Record moments like a first fishing trip, a favorite meal, or a request you finished together. Let the player reread the entries.
@@ -34,14 +34,14 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 ## Town life and events
 
-- [x] **09. Saturday stall in Rose Square.** Stock three goods before noon and see who stops by. Display sales and shopper comments at closing.
+- [x] **09. Saturday stall in Market Cross.** Stock three goods before noon and see who stops by. Display sales and shopper comments at closing.
 - [x] **10. Shopper preferences.** Make one customer look for pantry staples and another buy an unusual flower or preserve. Offer clues ahead of time so choosing what to stock is a decision.
 - [ ] **11. Guest vendors who become regulars.** Start with a traveling seed seller or carpenter who visits occasionally. A successful market or completed project earns a repeat spot.
-- [x] **12. Small public works.** Help Gotz and a neighbor repair one footbridge, orchard bench, or trail shelter. Ask for materials that different farm activities supply and show the finished work on the map.
+- [x] **12. Small public works.** Help Ingrid and a neighbor repair one footbridge, orchard bench, or trail shelter. Ask for materials that different farm activities supply and show the finished work on the map.
 - [ ] **13. Pick a festival role.** At an existing festival, choose to cook, help set up, or join the competition. Reuse the scene and add one distinct interaction for each role.
 - [x] **14. Tiny regional contests.** Try a two-hour evening catch at Willow Bend or a winter forage hunt. Reward one small decoration or an entry in the journal.
 - [ ] **15. Community pantry.** Turn surplus ingredients into a recurring shared meal. A neighbor can teach one new recipe after the first successful dinner.
-- [ ] **16. Museum exhibits that tell a story.** Display an ore, a river fish, and a relic together to tell the story of one region. Add a curator note or a lead to another discovery. [Fields of Mistria’s museum set notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-second-major-update-patch-notes-are-here)
+- [x] **16. Museum exhibits that tell a story.** Display an ore, a river fish, and a relic together to tell the story of one region. Add a curator note or a lead to another discovery. [Fields of Mistria’s museum set notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-second-major-update-patch-notes-are-here)
 
 ## Crops and the farm
 
@@ -74,13 +74,13 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 - [x] **37. A field notebook.** Record the place, weather, and time for interesting observations. Give the next hint in words such as “near shallow water after rain.”
 - [ ] **38. Read the water before casting.** Give a few fish distinct ripple shapes or preferred pockets. Let the player learn which sign corresponds to each habitat.
 - [x] **39. Set one crab pot or fish trap.** Mark it clearly and let the player check it on the next trip. Start with one spot and one bait decision.
-- [ ] **40. Mine side chambers.** Occasionally offer a visible choice between an ore pocket and the next ladder. Different rock patterns give clues about what the pocket holds.
+- [x] **40. Mine side chambers.** Occasionally offer a visible choice between an ore pocket and the next ladder. Different rock patterns give clues about what the pocket holds.
 
 ## Home and downtime
 
 - [ ] **41. Placeable farm details.** Let players put down paths, lamps, benches, and fences on allowed tiles. Preview each piece with the game’s existing one-cell glyphs.
 - [x] **42. Name farm plots.** Put a small sign next to a field and use its name in the daily list, such as “North Turnips have four dry tiles.”
-- [ ] **43. A rainy-night coffee or tea counter.** Brew from three or four ingredients at Doug’s Inn. The drink a regular asks for starts a short conversation that can continue next week.
+- [ ] **43. A rainy-night coffee or tea counter.** Brew from three or four ingredients at Gideon’s Inn. The drink a regular asks for starts a short conversation that can continue next week.
 - [x] **44. Places to stop and sit.** Give the Town Green bench, a porch, and the Ridge lookout a little scene at sunset or in light rain. A friend may be there on the right evening.
 - [x] **45. A mantel for festival souvenirs.** Display a ribbon, letter, or tiny sculpture from a day you remember. Interacting with it shows the date and a one-line memory.
 - [x] **46. Valley postcards.** Save a clean capture of the current scene with the location, season, and date. Keep a small album and allow a local export.
@@ -89,7 +89,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 ## Time, controls, and save comfort
 
-- [x] **49. A “Facing” row in the HUD.** Show the available action and what it affects, such as “Water turnip · 2 stamina” or “Talk to Gray.” Use the same action information on phones.
+- [x] **49. A “Facing” row in the HUD.** Show the available action and what it affects, such as “Water turnip · 2 stamina” or “Talk to Rowan.” Use the same action information on phones.
 - [x] **50. An optional first-morning checklist.** Check off tilling, planting, and watering as the player uses their starting turnip seeds. Let experienced players dismiss it.
 - [x] **51. Reminders on the calendar.** Pin a birthday, market, or personal harvest day and surface it in Today’s Plan. Keep reminders in the game clock.
 - [x] **52. A relaxed day setting.** Give players more real time per in-game hour. Keep the 5 PM shipping cutoff and shop schedules tied to the in-game clock.
@@ -100,7 +100,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 ## Mechanics from other games
 
-| Game | Published mechanic | What it suggests for HRVSTMN |
+| Game | Published mechanic | What it suggests for FURROW |
 | --- | --- | --- |
 | Fields of Mistria | Friday inn storylines, town repairs such as a bell tower, and rare animal coat colors. | Give villagers something to do together, make contributions visible, and let ranchers collect variants. [Developer patch notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-1-0-update-patch-notes-are-here) · [Game features](https://www.fieldsofmistria.com/) |
 | Stardew Valley | A visiting bookseller, a summer environmental event, new neighbors tied to quests, and dialogue that reacts to what happened. | Put surprises on a readable schedule, and let NPCs remember things that change. [ConcernedApe’s changelog](https://www.stardewvalley.net/stardew-valley-1-6-update-full-changelog/) |

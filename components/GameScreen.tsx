@@ -4,7 +4,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Screen, Cell, type PaletteMode } from '@/src/game/screen';
 import { Game } from '@/src/game/engine';
 import { PALETTE, TOOLS, DAY_PACES, type DayPace } from '@/src/game/constants';
-import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, type OutCell } from '@/src/game/enhanced';
+import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, stepOffset, type OutCell } from '@/src/game/enhanced';
+import { HeldDirections, type HeldContext } from '@/src/game/held';
+import { FARM_SYMBOLS } from '@/src/game/farm-symbols';
 import { isCompact } from '@/src/game/compact';
 import {
   chooseGrid,
@@ -12,14 +14,14 @@ import {
   dpadDirection,
   firstStep,
   lineHeight,
-  REPEAT_DELAY_MS,
   REPEAT_MS,
   type Dir,
 } from '@/src/game/viewport';
 import GameMenu, { type MenuClose, type MenuItem, type MenuSection } from './GameMenu';
 import { PIXEL_ICONS, bitmapToBoxShadow, toolIconId, type ToolbarIconId } from '@/src/game/toolbarIcons';
 
-const FONT = '"HRVSTMN Mono", "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace';
+const FARM_FONT = '"FURROW Farm Symbols"';
+const FONT = `"HRVSTMN Mono", ${FARM_FONT}, "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
 /** Pixelify Sans, for the large HUD headings (the same face as the toolbar and menu). */
 const DISPLAY_FONT = `"HRVSTMN Display", ${FONT}`;
 
@@ -54,6 +56,14 @@ const TOOLBAR = [
 ] as const;
 const TOOLBAR_FLAT: readonly (typeof TOOLBAR)[number][number][] = TOOLBAR.flat();
 const MENU_ID = 'game-menu';
+
+/** Keyboard keys that walk, by the name the engine knows them by (arrows, WASD, hjkl). */
+const WALK_KEYS: Record<string, Dir> = {
+  up: 'up', w: 'up', k: 'up',
+  down: 'down', s: 'down', j: 'down',
+  left: 'left', a: 'left', h: 'left',
+  right: 'right', d: 'right', l: 'right',
+};
 
 const KEYMAP: Record<string, string> = {
   ArrowUp: 'up',
@@ -204,6 +214,7 @@ export default function GameScreen() {
   const [dpadDir, setDpadDir] = useState<Dir | null>(null);
   const [reducedMotion, setReducedMotionState] = useState(false);
   const reducedMotionRef = useRef(false);
+  const [hires, setHiresState] = useState(false);
   const [crt, setCrtState] = useState(false);
   const crtRef = useRef(false);
   const [paletteMode, setPaletteModeState] = useState<PaletteMode>('mono');
@@ -230,12 +241,46 @@ export default function GameScreen() {
     }
   }, []);
 
+  // ---- Held directions (keyboard and D-pad): one walking rhythm, owned by the game (held.ts).
+  const held = useRef(new HeldDirections());
+  const heldTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heldCtx = useCallback((): HeldContext | null => {
+    const game = gameRef.current;
+    const screen = screenRef.current;
+    if (!game || !screen) return null;
+    return { modal: game.modal_depth > 0 || !game.started, idle: screen.keyQueue.length === 0, face: [game.face[0], game.face[1]] };
+  }, []);
+  const heldRelease = useCallback((name: string) => held.current.release(name, performance.now()), []);
+  const heldReleaseAll = useCallback(() => held.current.releaseAll(), []);
+
   // ---- Tap-to-walk: re-plans one step at a time so NPCs and the horse can't derail it.
   const walkRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelWalk = useCallback(() => {
     if (walkRef.current) clearTimeout(walkRef.current);
     walkRef.current = null;
   }, []);
+
+  const heldPress = useCallback(
+    (name: string, dir: Dir, key: string = name) => {
+      const ctx = heldCtx();
+      if (!ctx) return;
+      cancelWalk();
+      sendKey(held.current.press(name, dir, performance.now(), ctx, key));
+      if (heldTimer.current) return;
+      heldTimer.current = setInterval(() => {
+        const h = held.current;
+        if (!h.active) {
+          if (heldTimer.current) clearInterval(heldTimer.current);
+          heldTimer.current = null;
+          return;
+        }
+        const now = heldCtx();
+        const key = now && h.tick(performance.now(), now);
+        if (key) sendKey(key);
+      }, 16);
+    },
+    [heldCtx, cancelWalk, sendKey],
+  );
 
   const walkTo = useCallback(
     (gx: number, gy: number) => {
@@ -283,47 +328,33 @@ export default function GameScreen() {
   );
 
   // ---- D-pad: one surface; slide the thumb between directions, hold to keep walking.
-  const dpad = useRef<{ pointer: number | null; dir: Dir | null; modal: boolean; timer: ReturnType<typeof setTimeout> | null }>({
+  const dpad = useRef<{ pointer: number | null; dir: Dir | null }>({
     pointer: null,
     dir: null,
-    modal: false,
-    timer: null,
   });
 
   const dpadSet = useCallback(
     (dir: Dir | null) => {
       const d = dpad.current;
       if (dir === d.dir) return;
-      if (d.timer) clearTimeout(d.timer);
-      d.timer = null;
+      if (d.dir) heldRelease(`pad-${d.dir}`);
       d.dir = dir;
       setDpadDir(dir);
       if (!dir) return;
-      cancelWalk();
-      sendKey(dir);
+      // the pad sends the plain direction key; its hold name keeps it apart from a held arrow key
       buzz(8);
-      const tick = () => {
-        const screen = screenRef.current;
-        const game = gameRef.current;
-        if (d.dir !== dir) return;
-        // Don't queue steps the engine hasn't taken yet, and pause if a dialog pops up mid-walk
-        // (a held direction would otherwise skip through its pages).
-        if (screen && game && screen.keyQueue.length === 0 && (game.modal_depth > 0) === d.modal) screen.pushKey(dir);
-        d.timer = setTimeout(tick, REPEAT_MS);
-      };
-      d.timer = setTimeout(tick, REPEAT_DELAY_MS);
+      heldPress(`pad-${dir}`, dir, dir);
     },
-    [buzz, cancelWalk, sendKey],
+    [buzz, heldPress, heldRelease],
   );
 
   const dpadStop = useCallback(() => {
     const d = dpad.current;
-    if (d.timer) clearTimeout(d.timer);
-    d.timer = null;
+    if (d.dir) heldRelease(`pad-${d.dir}`);
     d.dir = null;
     d.pointer = null;
     setDpadDir(null);
-  }, []);
+  }, [heldRelease]);
 
   const dpadAt = (e: React.PointerEvent) => {
     const el = dpadRef.current;
@@ -389,6 +420,14 @@ export default function GameScreen() {
     } catch {
       // storage unavailable; the choice still applies this session
     }
+  }, []);
+
+  const toggleHires = useCallback(() => {
+    // Screen.setHires -> onHiresChange (set up with the screen) updates the checkbox and storage
+    const s = screenRef.current;
+    if (!s) return;
+    s.setHires(!s.hires);
+    s.onRender?.();
   }, []);
 
   const toggleCrt = useCallback(() => {
@@ -572,6 +611,7 @@ export default function GameScreen() {
             checked: pace === p,
             run: () => gameRef.current?.set_pace(p),
           })),
+          { id: 'detail', label: 'High-res detail', kind: 'checkbox', checked: hires, run: toggleHires },
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
           ...(isTouch
@@ -610,6 +650,8 @@ export default function GameScreen() {
 
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
+    let isMounted = true;
+    let farmSymbolsReady = false;
 
     let fontPx = 16;
     let cw = 9.6;
@@ -626,12 +668,23 @@ export default function GameScreen() {
     screen.reducedMotion = motionOff;
     reducedMotionRef.current = motionOff;
     setReducedMotionState(motionOff);
-    // High-res detail is gone; forget a choice saved while it was a setting.
+    let hiresOn = false;
     try {
-      window.localStorage.removeItem('hrvstmn-hires');
+      hiresOn = window.localStorage.getItem('hrvstmn-hires') === 'on';
     } catch {
-      // storage unavailable
+      hiresOn = false;
     }
+    screen.hires = hiresOn;
+    setHiresState(hiresOn);
+    screen.onHiresChange = (next) => {
+      setHiresState(next);
+      try {
+        window.localStorage.setItem('hrvstmn-hires', next ? 'on' : 'off');
+      } catch {
+        // storage unavailable; the choice still applies this session
+      }
+      screen.onRender?.();
+    };
     let crtOn = false;
     try {
       crtOn = window.localStorage.getItem('hrvstmn-crt') === 'on';
@@ -735,6 +788,7 @@ export default function GameScreen() {
     let lastSig = '';
 
     let shaking = false;
+    let stepFrame = 0;
     const renderEnhanced = () => {
       if (!canvas || !ctx) return;
       // heavy hits nudge the whole canvas for a moment; a CSS transform, so nothing repaints
@@ -750,7 +804,15 @@ export default function GameScreen() {
         prevFrame = null;
         lastSig = '';
       }
-      const frame = computeFrame(screen, screen.reducedMotion ? 0 : performance.now() / 1000);
+      const now = performance.now() / 1000;
+      const frame = computeFrame(screen, screen.reducedMotion ? 0 : now);
+      // a step's slide or bump runs at the display's frame rate, not the 10 fps ambient timer
+      if (!screen.reducedMotion && !stepFrame && stepOffset(screen.ctx?.step, now)) {
+        stepFrame = requestAnimationFrame(() => {
+          stepFrame = 0;
+          renderEnhanced();
+        });
+      }
       // mode changes (detail, palette, CRT) force a full repaint
       const prefix = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:`;
       const sig = `${prefix}${frameSignature(frame)}`;
@@ -759,7 +821,10 @@ export default function GameScreen() {
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
       lastSig = sig;
-      drawFrame(ctx, frame, { cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr, hires: screen.hires, crt: screen.crt }, dirty ?? undefined);
+      drawFrame(ctx, frame, {
+        cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr,
+        hires: screen.hires, crt: screen.crt, farmSymbols: farmSymbolsReady,
+      }, dirty ?? undefined);
       prevFrame = frame;
     };
 
@@ -815,6 +880,7 @@ export default function GameScreen() {
     // Re-measure, rebuild the canvas and repaint (the engine redraws a resized grid itself;
     // outside dialogs we ask for that right away so the screen never flashes blank).
     const relayout = () => {
+      if (!isMounted) return;
       layout();
       prevBuf = null;
       prevFrame = null;
@@ -829,6 +895,16 @@ export default function GameScreen() {
       Promise.all([FONT, DISPLAY_FONT].flatMap((f) => [document.fonts.load(`16px ${f}`), document.fonts.load(`bold 16px ${f}`)]))
         .then(relayout)
         .catch(() => {});
+      document.fonts.load(`16px ${FARM_FONT}`, FARM_SYMBOLS.fir)
+        .then((faces) => {
+          if (!isMounted || !faces.length) return;
+          farmSymbolsReady = true;
+          // The grid metrics are unchanged. Repaint any fallback glyphs now that the font is ready.
+          prevFrame = null;
+          lastSig = '';
+          screen.onRender?.();
+        })
+        .catch(() => {}); // The canvas keeps using the fallback glyphs.
     }
 
     // Keyboard handling
@@ -853,12 +929,20 @@ export default function GameScreen() {
       }
 
       e.preventDefault();
-      if ((name === 'c' || name === 'C') && !e.repeat) {
-        rowKeyInterruptedRef.current = Boolean(gameRef.current?.modal_depth || menuOpenRef.current);
+      // Walking keys keep the game's own rhythm: the OS key repeat is ignored (held.ts).
+      const dir = WALK_KEYS[name];
+      if (dir) {
+        if (!e.repeat) heldPress(name, dir);
+        return;
       }
-      if (name === 'row-repeat' && (rowKeyInterruptedRef.current || !gameRef.current?.started || !gameRef.current.row || gameRef.current.modal_depth > 0 || menuOpenRef.current || screen.keyQueue.length > 0)) return;
       sendKey(name);
     };
+    const onKeyUp = (e: KeyboardEvent) => {
+      const name = KEYMAP[e.key] ?? e.key;
+      if (WALK_KEYS[name]) heldRelease(name);
+    };
+    // A key let go in another window never sends its keyup here.
+    const onBlur = () => heldReleaseAll();
 
     const onKeyUp = (e: KeyboardEvent) => {
       if ((e.key === 'c' || e.key === 'C') && rowPointerRef.current === null) {
@@ -950,7 +1034,6 @@ export default function GameScreen() {
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Start game loop in background
-    let isMounted = true;
     (async () => {
       try {
         await game.run();
@@ -961,7 +1044,6 @@ export default function GameScreen() {
       }
     })();
 
-    const dpadState = dpad.current;
     return () => {
       isMounted = false;
       game.flushAutosave();
@@ -969,6 +1051,9 @@ export default function GameScreen() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
+      heldReleaseAll();
+      if (heldTimer.current) clearInterval(heldTimer.current);
+      heldTimer.current = null;
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pagehide', flushSave);
       window.removeEventListener('beforeunload', flushSave);
@@ -980,11 +1065,9 @@ export default function GameScreen() {
       clearTimeout(resizeTimer);
       clearInterval(animTimer);
       clearInterval(hudTimer);
-      if (dpadState.timer) clearTimeout(dpadState.timer);
-      stopRow();
       cancelWalk();
     };
-  }, [sendKey, cancelWalk, stopRow]);
+  }, [sendKey, cancelWalk, heldPress, heldRelease, heldReleaseAll]);
 
   // Leaving the name prompt (by any button) clears the field and drops the keyboard; iOS can
   // leave the page scrolled after its keyboard closes, so snap back.
@@ -1045,7 +1128,7 @@ export default function GameScreen() {
         <canvas
           ref={canvasRef}
           id="term"
-          aria-label="HRVSTMN game screen"
+          aria-label="FURROW game screen"
           aria-description="Move with WASD or arrow keys. Space uses the tool. X interacts. Question mark opens keyboard help."
           aria-busy={!ready}
           tabIndex={0}
@@ -1246,7 +1329,6 @@ export default function GameScreen() {
                 e.preventDefault();
                 if (dpad.current.pointer !== null) return;
                 dpad.current.pointer = e.pointerId;
-                dpad.current.modal = (gameRef.current?.modal_depth ?? 0) > 0;
                 try {
                   e.currentTarget.setPointerCapture(e.pointerId);
                 } catch {
