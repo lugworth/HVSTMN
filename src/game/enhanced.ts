@@ -1169,11 +1169,17 @@ const MONO_WATER_RIPPLE = 0.3;
 
 function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 'mono'): OutCell {
   const fullCol = palette === 'isotope';
+  const x = tag.wx ?? 0;
+  const y = tag.wy ?? 0;
+  if (tag.k === 'tree:edge') {
+    // Nearby crowns share the same shaded pockets so the far treeline recedes in clusters.
+    const shade = 0.46 + valueNoise(x / 7, y / 3.5, 214) * 0.42;
+    const crown = mix(o.fg, '#ffffff', fullCol ? 0.15 : 0.4);
+    return { ...o, fg: mix(crown, o.bg, shade), bold: false, accent: false, detail: undefined };
+  }
   // Without colour, things to clear off the field must outshine the ground they lie on.
   if (!fullCol && !F.indoor && !o.accent && tag.k?.startsWith('obj:')) return { ...o, fg: mix(o.fg, '#ffffff', MONO_OBJECT_LIFT), bold: true };
   if (F.indoor || tag.ent || o.accent || o.glow || o.ch === '˙' || o.ch === '✧' || tag.k?.startsWith('obj:') || tag.k?.startsWith('crop:') || tag.k?.startsWith('soil')) return o;
-  const x = tag.wx ?? 0;
-  const y = tag.wy ?? 0;
   if (['grass', 'field', 'sand'].includes(tag.t) && o.ch !== '╿' && o.ch !== '◦' && !F.theme.snow) {
     const texture: ContourTexture = { x, y, kind: tag.t === 'sand' ? 'sand' : 'ground' };
     if (fullCol) return { ...o, ch: contourPattern(texture, 1), fg: mix(o.fg, '#ffffff', 0.16), bold: false, texture };
@@ -1371,7 +1377,7 @@ export function shakeOffset(shake: RenderCtx['shake'], reducedMotion = false): [
   return [Math.round(amp * (k % 2 ? 1 : -1)), Math.round(amp * 0.5 * ((k >> 1) % 2 ? 1 : -1))];
 }
 
-function styleMinimapCell(k: string, t: number): OutCell {
+function styleMinimapCell(k: string, ch: string, t: number): OutCell {
   switch (k) {
     case 'minimap:water':
       return { ch: '≈', fg: '#45a0ff', bg: '#071e3d', bold: false, plain: true };
@@ -1386,13 +1392,17 @@ function styleMinimapCell(k: string, t: number): OutCell {
     case 'minimap:crop_ripe':
       return { ch: '●', fg: '#ffcc33', bg: '#22180c', bold: true, glow: '#ff9900', glowR: 3, plain: true };
     case 'minimap:path':
-      return { ch: '·', fg: '#8a8072', bg: '#1e1b18', bold: false, plain: true };
+      return { ch: '·', fg: '#bfbfbf', bg: '#242424', bold: true, plain: true };
     case 'minimap:cliff':
       return { ch: '▲', fg: '#8a8070', bg: '#1a1714', bold: false, plain: true };
     case 'minimap:roof':
       return { ch: '▀', fg: '#d05848', bg: '#2a1814', bold: false, plain: true };
     case 'minimap:door':
       return { ch: '▯', fg: '#ffb050', bg: '#2a1810', bold: true, plain: true };
+    case 'minimap:exit':
+      return { ch, fg: '#00ffff', bg: '#0e1822', bold: true, plain: true };
+    case 'minimap:pin':
+      return { ch, fg: '#ff00ff', bg: '#221026', bold: true, plain: true };
     case 'minimap:npc':
       return { ch: '●', fg: '#00ffff', bg: '#0e1822', bold: true, plain: true };
     case 'minimap:player': {
@@ -1522,7 +1532,7 @@ export function computeFrame(
         const k = tag.k || '';
         uiCell = true;
         if (k in BOX) o = { ch: BOX[k], fg: pal(cell[1]), bg: pal(cell[2], '#000000'), bold: false };
-        else if (k.startsWith('minimap:')) o = styleMinimapCell(k, F.t);
+        else if (k.startsWith('minimap:')) o = styleMinimapCell(k, cell[0], F.t);
         else if (k === 'bar') o = { ch: '█', fg: pal(cell[1]), bg: '#0c0c11', bold: false };
         else if (k === 'bar:empty') o = { ch: '░', fg: '#2c2c36', bg: '#0c0c11', bold: false };
         else if (k === 'hud:fence') o = { ch: cell[0], fg: cell[0] === '+' ? FENCE_POST : FENCE_RAIL, bg: '#000000', bold: false };
@@ -3284,7 +3294,7 @@ function decorateBoxes(out: OutCell[][], boxes: Screen['boxes'], W: number, H: n
           const border = y === b.y || y === b.y + b.h - 1 || x === b.x || x === b.x + b.w - 1;
           const cardBg = b.fillBoard ? SIGN_BOARD : HUD_PANEL_BG;
           if (border) {
-            if ('─│╭╮╰╯'.includes(o.ch)) {
+            if ('─│╭╮╰╯┬┴├┤'.includes(o.ch)) {
               const isCorner = '╭╮╰╯'.includes(o.ch);
               const baseBorder = y === b.y || isCorner ? FENCE_POST : FENCE_RAIL;
               o.fg = b.fillBoard && accentHex
@@ -3691,7 +3701,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         continue;
       }
       // Seamless vector box-drawing rules & rounded modal corners (no vertical/horizontal font gaps)
-      if (o.ui && !o.label && '─│╭╮╰╯═╪╧║'.includes(o.ch)) {
+      if (o.ui && !o.label && '─│┬┴├┤╭╮╰╯═╪╧║'.includes(o.ch)) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
         const cx = px + cw / 2;
         const cy = py + ch / 2;
@@ -3703,12 +3713,15 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         g.strokeStyle = o.fg;
         g.lineWidth = Math.max(1.25, Math.round(fontPx / 11));
         g.beginPath();
-        if (o.ch === '─') {
-          g.moveTo(xL, cy);
-          g.lineTo(xR, cy);
-        } else if (o.ch === '│') {
-          g.moveTo(cx, yT);
-          g.lineTo(cx, yB);
+        if ('─│┬┴├┤'.includes(o.ch)) {
+          if (o.ch !== '│') {
+            g.moveTo(o.ch === '├' ? cx : xL, cy);
+            g.lineTo(o.ch === '┤' ? cx : xR, cy);
+          }
+          if (o.ch !== '─') {
+            g.moveTo(cx, o.ch === '┬' ? cy : yT);
+            g.lineTo(cx, o.ch === '┴' ? cy : yB);
+          }
         } else if (o.ch === '╭') {
           g.moveTo(cx, yB);
           g.arcTo(cx, cy, xR, cy, rad);

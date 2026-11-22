@@ -788,6 +788,17 @@ describe('computeFrame', () => {
     assert.ok(computeFrame(d, 0)[8][4].ui, 'a dialog over the margin stays a dialog');
   });
 
+  test('outer trees keep their silhouettes with quieter crowns at the map edge', () => {
+    const s = scene();
+    s.put(10, 5, 'T', '0B', '00', true);
+    s.tag(10, 5, { t: 'tree', wx: 0, wy: 5 });
+    const tree = computeFrame(s, 0)[5][10];
+    s.tag(10, 5, { t: 'tree', k: 'tree:edge', wx: 0, wy: 5 });
+    const edge = computeFrame(s, 0)[5][10];
+    assert.equal(edge.ch, tree.ch);
+    assert.ok(lum(edge.fg) < lum(tree.fg) * 0.65);
+  });
+
   test('sign lettering stays a plain glyph, even an apostrophe', () => {
     const s = scene();
     s.put(10, 5, "'", '07', '00');

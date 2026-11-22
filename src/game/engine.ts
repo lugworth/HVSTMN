@@ -13,6 +13,7 @@ import {
   build_interior,
   build_house_upgraded,
   build_mine,
+  edgeEntrances,
   footbridge_cells,
 } from './map';
 import {
@@ -8677,6 +8678,8 @@ export class Game {
       tag.k = 'deco';
       tag.dch = ch;
       tag.dfg = fg;
+    } else if (t === 'tree' && !m.indoor && (x === 0 || x === m.w - 1 || y === 0 || y === m.h - 1)) {
+      tag.k = 'tree:edge';
     }
     return tag;
   }
@@ -9517,9 +9520,10 @@ export class Game {
     const iw = bw - 2;
     const ox = 1 + Math.floor((W - 2 - cw * 4 + 1) / 2);
     const oy = 1;
+    const regionH = 4;
     const at = (name: string): [number, number] => {
       const [c, r] = VALLEY_GRID[name];
-      return [ox + c * cw, oy + r * 4];
+      return [ox + c * cw, oy + r * regionH];
     };
     const picked = lms[sel];
     const curRegion = OUTDOOR_MAPS.includes(this.mapname) ? this.mapname : null;
@@ -9530,24 +9534,7 @@ export class Game {
       if (glyph === '≈' || glyph === '☾') return '0C';
       return '0E';
     };
-    // connectors first, so boxes sit on top of them
     const links = this.valley_links();
-    for (const [a, bs] of Object.entries(links)) {
-      for (const b of bs) {
-        if (!(a in VALLEY_GRID) || !(b in VALLEY_GRID) || a > b) continue;
-        const [[ax, ay], [bx2, by2]] = [at(a), at(b)];
-        if (ay === by2) {
-          const lx = Math.max(ax, bx2) - 1;
-          s.put(lx, ay + 1, '═', '09');
-          s.tag(lx, ay + 1, { t: 'ui', k: 'valley:link' });
-        } else {
-          const lx = ax + Math.floor(bw / 2);
-          const ly = Math.max(ay, by2) - 1;
-          s.put(lx, ly, '║', '09');
-          s.tag(lx, ly, { t: 'ui', k: 'valley:link' });
-        }
-      }
-    }
     for (const name of Object.keys(VALLEY_GRID)) {
       const m = this.maps[name];
       if (!m) continue;
@@ -9558,14 +9545,14 @@ export class Game {
         x,
         y,
         bw,
-        3,
+        regionH,
         hot ? '0C' : name === curRegion ? '0C' : '03',
         '00',
         null,
         '07',
         { kind: 'hud', accent: hot || name === curRegion ? '0C' : undefined, fillBoard: hot },
       );
-      s.put(x + 1, y, title, hot ? '07' : name === curRegion ? '0C' : '04', '00', hot);
+      s.put(x + 1, y + 1, title, hot ? '07' : name === curRegion ? '0C' : '05', '00', hot);
       const used = new Set<number>();
       const place = (wx: number) => {
         let gx = Math.round((wx * (iw - 1)) / Math.max(1, m.w - 1));
@@ -9584,11 +9571,33 @@ export class Game {
         if (gx === null) continue;
         const isSel = lm === picked;
         const pinned = lm.id === this.map_pin;
-        s.put(x + 1 + gx, y + 1, lm.glyph, isSel ? '00' : pinned ? '0E' : glyphCol(lm.glyph), isSel ? '0D' : '00', isSel || pinned);
+        s.put(x + 1 + gx, y + 2, lm.glyph, isSel ? '00' : pinned ? '0E' : glyphCol(lm.glyph), isSel ? '0D' : '00', isSel || pinned);
       }
       if (name === curRegion) {
         const gx = place(this.px);
-        if (gx !== null) s.put(x + 1 + gx, y + 1, '@', '0C', '00', true);
+        if (gx !== null) s.put(x + 1 + gx, y + 2, '@', '0C', '00', true);
+      }
+    }
+    // Draw the trail into each card's frame, clear of the interior labels.
+    const trail = (x: number, y: number, ch: string) => {
+      s.put(x, y, ch, '09');
+      s.tag(x, y, { t: 'ui', k: 'valley:link' });
+    };
+    for (const [a, neighbors] of Object.entries(links)) {
+      for (const b of neighbors) {
+        if (!(a in VALLEY_GRID) || !(b in VALLEY_GRID) || a > b) continue;
+        const [[ax, ay], [bx, by]] = [at(a), at(b)];
+        if (ay === by) {
+          const x = Math.max(ax, bx);
+          trail(x - 2, ay + 2, '├');
+          trail(x - 1, ay + 2, '─');
+          trail(x, ay + 2, '┤');
+        } else if (ax === bx) {
+          const x = ax + Math.floor(bw / 2);
+          const y = Math.max(ay, by);
+          trail(x, y - 1, '┬');
+          trail(x, y, '┴');
+        }
       }
     }
     // Almanac detail & landmark legend
@@ -9597,7 +9606,7 @@ export class Game {
     const r = this.pin_route();
     const pinWord = picked.id === this.map_pin ? 'unpin' : 'pin';
     const hintText = isCompact(W) ? `<> pick  ^v region  Enter ${pinWord}  Esc` : `Left/Right landmark  Up/Down region  Enter ${pinWord}  Esc close`;
-    const top = oy + 4 * 4 - 1;
+    const top = oy + 4 * regionH;
     const room = H - 1 - top;
 
     if (W >= 74 && room >= 7) {
@@ -9670,16 +9679,16 @@ export class Game {
     const pinTitle = route ? `${route.arrow} ${route.short}` : 'Map';
     const title = pinTitle.length > room ? pinTitle.slice(0, room - 1) + '…' : pinTitle;
     s.box(bx, by, gw + 2, gh + 2, '0C', '00', title, '07', { accent: '0C' });
-    // Keep the map's aspect ratio and include its outer edges. Small interiors stay
-    // 1:1; large outdoor maps sample the full extent without dropping the last row/column.
-    const drawW = Math.min(gw, m.w);
-    const drawH = Math.min(gh, m.h);
+    // Shrink both axes by the same factor. Interiors that fit stay 1:1.
+    const scale = Math.min(1, gw / m.w, gh / m.h);
+    const drawW = Math.max(1, Math.round(m.w * scale));
+    const drawH = Math.max(1, Math.round(m.h * scale));
     const offX = Math.floor((gw - drawW) / 2);
     const offY = Math.floor((gh - drawH) / 2);
-    const atX = (gx: number) => (m.w <= 1 ? 0 : Math.round((gx * (m.w - 1)) / Math.max(1, drawW - 1)));
-    const atY = (gy: number) => (m.h <= 1 ? 0 : Math.round((gy * (m.h - 1)) / Math.max(1, drawH - 1)));
-    const glyph = (tx: number, ty: number, t: string | undefined): [string, string, string | null] => {
-      if (!t || t === 'void') return [' ', '00', null];
+    const isWater = (t: string) => t === 'water' || t === 'fountain' || t === 'spring' || t === 'pond';
+    const glyph = (tx: number, ty: number, t: string): [string, string, string | null] => {
+      if (t === 'void') return [' ', '00', null];
+      if (t === 'path' || t === 'bridge') return ['·', '05', 'minimap:path'];
       if (this.mapname === 'farm') {
         const pk = pkey(tx, ty);
         if (this.tilled.has(pk)) {
@@ -9692,8 +9701,7 @@ export class Game {
           return ['=', '09', 'minimap:soil'];
         }
       }
-      if (t === 'water' || t === 'fountain' || t === 'spring' || t === 'pond') return ['≈', '0A', 'minimap:water'];
-      if (t === 'path' || t === 'bridge') return ['·', '03', 'minimap:path'];
+      if (isWater(t)) return ['≈', '0A', 'minimap:water'];
       if (t === 'tree') return ['♣', '0B', 'minimap:tree'];
       if (t === 'field') return ['▒', '04', 'minimap:field'];
       if (t === 'cliff') return ['▲', '08', 'minimap:cliff'];
@@ -9702,11 +9710,28 @@ export class Game {
       if (t === 'flower') return ['*', '0A', 'minimap:ground'];
       return ['·', '02', 'minimap:ground'];
     };
+    // Sample the whole footprint so thin roads and the edges of ponds survive shrinking.
+    const terrain = (left: number, top: number, right: number, bottom: number, center: string) => {
+      let water = 0;
+      for (let y = top; y < bottom; y++) {
+        for (let x = left; x < right; x++) {
+          const t = m.t[y][x];
+          if (t === 'path' || t === 'bridge') return 'path';
+          if (isWater(t)) water++;
+        }
+      }
+      return water * 3 >= (right - left) * (bottom - top) ? 'water' : center;
+    };
     for (let gy = 0; gy < drawH; gy++) {
+      const top = Math.ceil((gy * m.h) / drawH);
+      const bottom = Math.ceil(((gy + 1) * m.h) / drawH);
+      const ty = Math.floor((top + bottom - 1) / 2);
       for (let gx = 0; gx < drawW; gx++) {
-        const tx = atX(gx);
-        const ty = atY(gy);
-        const [ch, col, mk] = glyph(tx, ty, m.t[ty]?.[tx]);
+        const left = Math.ceil((gx * m.w) / drawW);
+        const right = Math.ceil(((gx + 1) * m.w) / drawW);
+        const tx = Math.floor((left + right - 1) / 2);
+        const tile = terrain(left, top, right, bottom, m.t[ty][tx]);
+        const [ch, col, mk] = glyph(tx, ty, tile);
         const sx = bx + 1 + offX + gx;
         const sy = by + 1 + offY + gy;
         s.put(sx, sy, ch, col, '00');
@@ -9714,16 +9739,25 @@ export class Game {
       }
     }
     const mark = (wx: number, wy: number, ch: string, col: string, mk: string) => {
-      const gx = offX + Math.round((wx * (drawW - 1)) / Math.max(1, m.w - 1));
-      const gy = offY + Math.round((wy * (drawH - 1)) / Math.max(1, m.h - 1));
-      if (gx < 0 || gx >= gw || gy < 0 || gy >= gh) return;
+      if (!m.inb(wx, wy)) return;
+      const gx = offX + Math.floor((wx * drawW) / m.w);
+      const gy = offY + Math.floor((wy * drawH) / m.h);
       const sx = bx + 1 + gx;
       const sy = by + 1 + gy;
       s.put(sx, sy, ch, col, '00', true);
       s.tag(sx, sy, { t: 'ui', k: mk });
     };
+    for (const k of Object.keys(m.doors)) {
+      mark(...parseCoordKey(k), '+', '09', 'minimap:door');
+    }
     for (const [n, [x, y]] of Object.entries(this.npc_pos)) {
       if (NPCS[n]?.where?.[0] === this.mapname) mark(x, y, 'o', '0C', 'minimap:npc');
+    }
+    if (!m.indoor) {
+      for (const { mid, inward: [dx, dy] } of edgeEntrances(m)) {
+        const arrow = dx > 0 ? '<' : dx < 0 ? '>' : dy > 0 ? '^' : 'v';
+        mark(...mid, arrow, '0C', 'minimap:exit');
+      }
     }
     if (route?.cell) {
       const [ex, ey] = route.cell;

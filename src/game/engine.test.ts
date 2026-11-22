@@ -772,8 +772,11 @@ describe('labeled valley map (task 33)', () => {
     g.map_pin = 'forge';
     g.show_minimap = true;
     g.render();
-    const tags = g.scr.tags.flat().filter(Boolean).map((t: any) => t.k);
-    assert.ok(tags.includes('minimap:pin'), 'exit marked on the minimap');
+    const s: Screen = g.scr;
+    const pinY = s.tags.findIndex((row) => row.some((tag) => tag?.k === 'minimap:pin'));
+    assert.ok(pinY >= 0, 'exit marked on the minimap');
+    const pinX = s.tags[pinY].findIndex((tag) => tag?.k === 'minimap:pin');
+    assert.equal(computeFrame(s, 0)[pinY][pinX].ch, '<', 'the rendered pin keeps its direction');
     assert.ok(screenText(g).includes(' < Ironwood Grove '), 'minimap title names the next region');
     // the title stays inside the minimap's frame: its top row ends in a corner, and nothing spills past it
     const top = g.scr.buf.findIndex((r: any) => r.map((c: any) => c[0]).join('').includes('< Ironwood Grove'));
@@ -799,6 +802,24 @@ describe('labeled valley map (task 33)', () => {
     assert.ok(!rowText(g, 0).includes("Hilde's Forge"), 'no pointer without a pin');
   });
 
+  test('the minimap preserves the farm lane, pond and three exits on a compact screen', () => {
+    const g = fresh();
+    g.warp('farm', 14, 10);
+    const s = new Screen(50, 24);
+    g.scr = s;
+    g.draw_minimap(50, 20);
+    const exits = s.tags.flatMap((row, y) =>
+      row.flatMap((tag, x) => (tag?.k === 'minimap:exit' ? [s.buf[y][x][0]] : [])),
+    );
+    assert.deepEqual(exits, ['<', '>', 'v']);
+    const road = s.tags.find((row) => row.filter((tag) => tag?.k === 'minimap:exit').length === 2);
+    assert.ok(road, 'the west and east gates are on the same lane');
+    const first = road.findIndex((tag) => tag?.k === 'minimap:exit');
+    assert.equal(road[first + 15]?.k, 'minimap:exit', '64×28 farm drawn at quarter scale');
+    assert.ok(road.slice(first + 1, first + 15).every((tag) => tag?.k === 'minimap:path' || tag?.k === 'minimap:door'));
+    assert.ok(s.tags.some((row) => row.some((tag) => tag?.k === 'minimap:water')));
+  });
+
   test('G opens the map; arrows pick a landmark, Enter pins and unpins, Esc closes', async () => {
     const g = fresh();
     g.warp('farm', 14, 10);
@@ -822,6 +843,9 @@ describe('labeled valley map (task 33)', () => {
       g.draw_valley(0);
       const text = screenText(g);
       for (const lm of g.valley_landmarks()) assert.ok(text.includes(lm.glyph), `${lm.id} ${lm.glyph}`);
+      assert.ok(rowText(g, 11).includes('├─┤'), 'the east/west trail runs into both cards');
+      const join = rowText(g, 4).indexOf('┬');
+      assert.ok(join >= 0 && g.scr.buf[5][join][0] === '┴', 'the ridge and hill share a centered trail');
       assert.ok(text.includes('Forge '), 'forge status line');
       assert.ok(text.includes(w < 80 ? '<> pick  ^v region  Enter pin  Esc' : 'Left/Right landmark  Up/Down region  Enter pin  Esc close'), 'whole key hint');
       for (const row of g.scr.buf) assert.equal(row.length, w);
@@ -1186,9 +1210,9 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     const g = fresh();
     g.scr = new Screen(80, 24);
     g.warp('woods', 45, 19);
-    // with an 80-column screen the region boxes are 19 wide from x=2: the woods/beach gap is x=39, row 14
+    // At 80 columns the gap between the woods and beach cards is at x=39, row 15.
     g.draw_valley(0);
-    assert.equal(g.scr.buf[14][39][0], ' ', 'no connector while shut');
+    assert.equal(g.scr.buf[15][39][0], ' ', 'no connector while shut');
     await atLatch(g, ['enter']);
     assert.ok(g.valley_links().woods.includes('beach'));
     assert.ok(g.valley_links().beach.includes('woods'));
@@ -1199,7 +1223,8 @@ describe('Cedar Hollow hedge gate (task 34)', () => {
     assert.equal(r.cell[0], g.maps.woods.w - 1);
     g.render();
     g.draw_valley(0);
-    assert.equal(g.scr.buf[14][39][0], '═', 'connector between the woods and beach boxes');
+    const s: Screen = g.scr;
+    assert.equal(s.buf[15].slice(38, 41).map(([ch]) => ch).join(''), '├─┤', 'connector between the woods and beach boxes');
   });
 
   test('the gate stays open across a save and reload; old saves and new farms start shut', async () => {
