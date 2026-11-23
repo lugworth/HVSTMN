@@ -13,6 +13,8 @@ export class GameMap {
   warps: Record<string, [string, number, number, [number, number]]>;
   signs: Record<string, string>;
   deco: Record<string, [string, string]>;
+  /** Live tile changes laid over the stored grid (the farm's works), read by every `tile()` caller. */
+  overlay?: (x: number, y: number) => string | undefined;
 
   constructor(name: string, title: string, w: number, h: number, fill = 'grass', indoor = false) {
     this.name = name;
@@ -42,7 +44,8 @@ export class GameMap {
   }
 
   tile(x: number, y: number): string {
-    return this.inb(x, y) ? this.t[y][x] : 'void';
+    if (!this.inb(x, y)) return 'void';
+    return this.overlay?.(x, y) ?? this.t[y][x];
   }
 
   rect(x: number, y: number, w: number, h: number, t: string) {

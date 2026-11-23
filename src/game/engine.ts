@@ -73,6 +73,7 @@ import {
   RIVAL_PAIRS,
   REGION_FORAGE,
   REGION_CATCH,
+  FISH_POCKETS,
   LOOKOUT_VIEW,
   LOOKOUT_STAMINA,
   LOOKOUT_FATIGUE,
@@ -163,6 +164,11 @@ import {
 import type { ValleyLandmark, DayPace } from './constants';
 import { migrateLegacySave } from './legacy_names';
 import type { CatchOdds, MakerStep } from './rules';
+import {
+  HYBRIDS, HYBRID_CROPS, ORCHARD_SPOTS, SAPLING, SAPLING_PRICE, TREE_DAYS, FRUIT_DAYS, BARREL_SPOT, CHANNEL_CELLS, BARREL_CAP, CHANNEL_COST,
+  GLASS_SPOT, GLASS_CELLS, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage,
+} from './farm-works';
+import type { FarmWorks } from './farm-works';
 import {
   CoordSet,
   parseCoordKey,
@@ -717,6 +723,7 @@ export class Game {
   map_pin: string | null = null;
   /** Task 12: the Willow Bend footbridge (materials delivered, chosen crop, finish day, built). */
   public_works: PublicWorks = worksState();
+  farm_works: FarmWorks = emptyFarmWorks();
   /** Task 34: shortcuts opened for good (ids from SHORTCUT_IDS, e.g. 'hollow_gate'), carved after the maps are built. */
   shortcuts: string[] = [];
 
@@ -746,7 +753,7 @@ export class Game {
     'inn_scenes_seen', 'inn_evening_day',
     'stall', 'stall_last', 'stall_earned',
     'gray_quest', 'gray_note_level',
-    'map_pin', 'public_works', 'shortcuts',
+    'map_pin', 'public_works', 'shortcuts', 'farm_works',
     // player position, map, and world state
     'mapname', 'px', 'py', 'face', 'show_minimap', 'wetness',
     'mine_type', 'mine_floor', 'ladder',
@@ -759,6 +766,7 @@ export class Game {
     this.running = true;
     this.msgs = [];
     this.maps = { ...build_valley(), house: build_house() };
+    this.hook_farm();
     this.last = Date.now() / 1000;
     this.acc = 0.0;
     this.npc_acc = 0.0;
@@ -951,9 +959,10 @@ export class Game {
     this.gray_note_level = 0;
     this.map_pin = null;
     this.public_works = worksState();
+    this.farm_works = emptyFarmWorks();
     this.apply_public_works();
     // a carved shortcut lives in the maps, so a new farm gets a fresh valley
-    if (this.shortcuts.length) Object.assign(this.maps, build_valley());
+    if (this.shortcuts.length) { Object.assign(this.maps, build_valley()); this.hook_farm(); }
     this.shortcuts = [];
     this.prayed = false;
     this.fest_wins = [];
@@ -1257,6 +1266,7 @@ export class Game {
           (this as any)[k] = cloneSaveValue(d[k]);
         }
       }
+      this.farm_works = emptyFarmWorks();
       if (!(ROW_RESERVES as readonly number[]).includes(this.row_reserve)) this.row_reserve = ROW_STAMINA_RESERVE;
       this.inv = sanitizeStringRecordNumber(this.inv);
       // an older save (no checklist saved) is an experienced farm: no first-morning checklist
@@ -1293,6 +1303,7 @@ export class Game {
       } else {
         this.objs = { farm: { ...(d.objs || {}) }, mine: {} };
       }
+      this.farm_works = restoreFarmWorks(d.farm_works, (k, _p) => this.farm_can_place(k), this.absday());
       this.hp = sanitizeStringRecordNumber('hp' in d ? d.hp : this.hp);
       this.forage = { mountain: {}, beach: {}, ...sanitizeMapStringRecords(d.forage) };
       this.wetness = {
@@ -2223,7 +2234,7 @@ export class Game {
   tool_list(): string[] {
     const tools = TOOLS.filter((t) => !(this.upgrading && this.upgrading[0] === t));
     const seeds = py_sorted(Object.keys(this.inv).filter((i) => i.endsWith(' Seeds')));
-    return [...tools, ...seeds, ...((this.inv['Compost'] || 0) > 0 ? ['Compost'] : []), ...((this.inv['Plot Sign'] || 0) > 0 ? ['Plot Sign'] : [])];
+    return [...tools, ...seeds, ...((this.inv['Compost'] || 0) > 0 ? ['Compost'] : []), ...((this.inv['Plot Sign'] || 0) > 0 ? ['Plot Sign'] : []), ...[SAPLING, ...FARM_PIECE_NAMES].filter((i) => (this.inv[i] || 0) > 0)];
   }
 
   cycle_tool(d: number): void {
@@ -2379,6 +2390,14 @@ export class Game {
     }
     if (t === 'Plot Sign') {
       await this.place_plot_sign(tx, ty);
+      return;
+    }
+    if (t === SAPLING) {
+      if (!this.plant_orchard(tx, ty)) this.msg('Saplings go on the marked orchard spots north of the farm.');
+      return;
+    }
+    if (isFarmPiece(t)) {
+      this.place_farm_piece(tx, ty, t);
       return;
     }
 
@@ -3046,7 +3065,8 @@ export class Game {
       return;
     }
     const cropSeason = CROPS[crop][0];
-    if (crop !== 'Grass' && cropSeason !== this.season_name) {
+    const offSeason = crop !== 'Grass' && cropSeason !== this.season_name;
+    if (offSeason && !this.farm_works.greenhouse) {
       this.msg(`${crop} won't grow in ${this.season_name}.`, '08');
       return;
     }
@@ -3055,6 +3075,7 @@ export class Game {
     for (const dx of [-1, 0, 1]) {
       for (const dy of [-1, 0, 1]) {
         const qk = pkey(p[0] + dx, p[1] + dy);
+        if (offSeason && !GLASS_CELLS.includes(qk)) continue;
         if (this.tilled.has(qk) && !this.crops[qk]) {
           this.crops[qk] = [crop, 0];
           sowed.push(qk);
@@ -3063,7 +3084,7 @@ export class Game {
       }
     }
     if (!n) {
-      this.msg('Seeds need empty tilled soil. Use the Hoe first.');
+      this.msg(offSeason ? `${crop} only grows in ${this.season_name} under glass. Sow inside the greenhouse.` : 'Seeds need empty tilled soil. Use the Hoe first.');
       return;
     }
     this.take(bag);
@@ -3152,12 +3173,21 @@ export class Game {
     await this.spend(3);
   }
 
+  /** A recognizable pocket only applies when the faced tile is water. */
+  fish_pocket(map: string, x: number, y: number): (typeof FISH_POCKETS)[number] | undefined {
+    const tile = this.maps[map]?.tile(x, y);
+    if (tile !== 'water' && tile !== 'pond') return undefined;
+    return FISH_POCKETS.find((p) => p.map === map && p.x === x && p.y === y);
+  }
+
   /** What bites here: Willow Bend and Lighthouse Point have their own tables; elsewhere the valley-wide odds. */
   roll_catch(): string {
     const rodLvl = this.levels['Fishing Rod'] || 0;
     const table = REGION_CATCH[this.mapname];
     if (table) {
-      return rollRegionCatch(table, { season: this.season, weather: this.weather, rodLvl }, () => py_rng().random());
+      const [x, y] = this.target();
+      const favored = this.fish_pocket(this.mapname, x, y)?.fish;
+      return rollRegionCatch(table, { season: this.season, weather: this.weather, rodLvl, favored }, () => py_rng().random());
     }
     if (this.mapname === 'mine' && this.mine_type === 'lake' && this.mine_floor === 9) return 'Coelacanth';
     const odds = valleyCatchOdds({ map: this.mapname, season: this.season, rodLvl });
@@ -3239,6 +3269,7 @@ export class Game {
         await this.horse_menu();
         return;
       }
+      if (await this.farm_works_interact(tx, ty)) return;
     }
     const tile = m.tile(tx, ty);
     const here = this.objs[this.mapname]?.[pKey];
@@ -4310,6 +4341,8 @@ export class Game {
       lines.push(head('Observations', `${this.notebook.length} noted`), { kind: 'fence' });
       if (!this.notebook.length) para('Nothing noted yet. The first time you catch each kind of fish, it is written down here.', '04');
       for (const o of [...this.notebook].reverse()) para(this.notebook_line(o), '05');
+      lines.push({ kind: 'fence' }, head('Reading the water', 'pockets'), { kind: 'fence' });
+      for (const p of FISH_POCKETS) para(`${p.glyph} ${p.habitat} at ${this.maps[p.map]?.title || p.map}: ${p.fish} bite more often here.`, '0C');
       const hints = this.notebook_hints();
       lines.push({ kind: 'fence' }, head('Still to find', `${hints.length}`), { kind: 'fence' });
       if (!hints.length) para('Every fish in the valley is in the notebook.', '0B');
@@ -5638,6 +5671,8 @@ export class Game {
         ['Buy Lumber (50G)', () => this.buy('Lumber', 50)],
         ['Buy Golden Lumber (100,000G)', () => this.buy('Golden Lumber', 100000)],
         ['Order a House / Farm Expansion', () => this.order_expansion()],
+        [`Buy Orchard Sapling (${SAPLING_PRICE}G)`, () => this.buy(SAPLING, SAPLING_PRICE, 3)],
+        ...FARM_PIECE_NAMES.map((n) => [`Buy ${n} (${FARM_PIECES[n].price}G)`, () => this.buy(n, FARM_PIECES[n].price, 10)] as [string, () => Promise<void>]),
       ];
     }
     if (bid === 'poultry') {
@@ -5674,7 +5709,10 @@ export class Game {
       ];
     }
     if (bid === 'library') {
-      return [['Read a Farming Book', () => this.say(py_rng().choice(BOOKS), 'Book')]];
+      return [
+        ['Read a Farming Book', () => this.say(py_rng().choice(BOOKS), 'Book')],
+        ['Silas: seed crossing', () => this.hybrid_menu()],
+      ];
     }
     if (bid === 'museum') {
       return [
@@ -5854,6 +5892,227 @@ export class Game {
     }
   }
 
+  // ---------------------------------------------------------------- farm works (fields task)
+  /** Farm pieces, orchard trees and the barrel/greenhouse frames are drawn over the stored farm tiles. */
+  hook_farm(): void {
+    this.maps.farm.overlay = (x, y) => this.farm_overlay(x, y);
+  }
+
+  farm_overlay(x: number, y: number): string | undefined {
+    const k = pkey(x, y);
+    const fw = this.farm_works;
+    const piece = fw.pieces[k];
+    if (piece) return FARM_PIECES[piece].tile;
+    if (fw.orchard[k]) return 'orchard_tree';
+    if (x === BARREL_SPOT[0] && y === BARREL_SPOT[1]) return 'rain_barrel';
+    if (x === GLASS_SPOT[0] && y === GLASS_SPOT[1]) return 'greenhouse_frame';
+    return undefined;
+  }
+
+  farm_tile(x: number, y: number, base: string): string {
+    return this.farm_overlay(x, y) ?? base;
+  }
+
+  /** Open, untouched base soil: the only ground a piece may stand on. */
+  private farm_can_place(key: string): boolean {
+    const [x, y] = key.split(',').map(Number);
+    const m = this.maps.farm;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || !m.inside(x, y) || m.t[y][x] !== 'field') return false;
+    return !this.tilled.has(key) && !this.crops[key] && !this.objs.farm?.[key] && !GLASS_CELLS.includes(key) && !CHANNEL_CELLS.includes(key) &&
+      !ORCHARD_SPOTS.includes(key) && key !== pkey(...BARREL_SPOT) && key !== pkey(...GLASS_SPOT);
+  }
+
+  place_farm_piece(x: number, y: number, name: string): boolean {
+    const k = pkey(x, y);
+    const fw = this.farm_works;
+    if (this.mapname !== 'farm' || !isFarmPiece(name) || !(this.inv[name] > 0)) return false;
+    if (!this.farm_can_place(k) || this.farm_overlay(x, y)) {
+      this.msg('Pieces need open, untilled farm ground (not the greenhouse, channel or orchard).', '08');
+      return false;
+    }
+    if (Object.keys(fw.pieces).length >= PIECE_LIMIT) {
+      this.msg(`The farm already holds ${PIECE_LIMIT} pieces.`, '08');
+      return false;
+    }
+    if (name === 'Auto-Feeder' && Object.values(fw.pieces).includes(name)) {
+      this.msg('One Auto-Feeder is enough for the farm.', '08');
+      return false;
+    }
+    this.take(name);
+    fw.pieces[k] = name;
+    this.msg(`Placed the ${name}. Face it and press X to pick it up.`, '0B');
+    return true;
+  }
+
+  plant_orchard(x: number, y: number): boolean {
+    const k = pkey(x, y);
+    if (this.mapname !== 'farm' || !(this.inv[SAPLING] > 0) || !ORCHARD_SPOTS.includes(k) || this.farm_works.orchard[k]) return false;
+    if (this.objs.farm?.[k]) {
+      this.msg('Clear the spot first.', '08');
+      return false;
+    }
+    this.take(SAPLING);
+    this.farm_works.orchard[k] = { planted: this.absday(), picked: -1 };
+    this.msg(`You planted an Orchard Pear sapling. It bears fruit after ${TREE_DAYS} days, each Fall.`, '0B');
+    return true;
+  }
+
+  /** The first fruit day this Fall that is ripe and not yet picked, else null. */
+  orchard_due(key: string): number | null {
+    const tree = this.farm_works.orchard[key];
+    const today = this.absday();
+    if (!tree || today - tree.planted < TREE_DAYS || (this.season !== 2 && this.season !== 3)) return null;
+    for (const d of FRUIT_DAYS) {
+      const when = this.absday(this.year, 2, d);
+      if (when > tree.picked && when <= today) return when;
+    }
+    return null;
+  }
+
+  async farm_works_interact(x: number, y: number): Promise<boolean> {
+    const k = pkey(x, y);
+    const fw = this.farm_works;
+    if (fw.orchard[k]) {
+      const due = this.orchard_due(k);
+      if (due === null) {
+        const age = this.absday() - fw.orchard[k].planted;
+        this.msg(age < TREE_DAYS ? `The sapling is still settling in (${TREE_DAYS - age} more days).` : 'No ripe pears. They come in Fall (days 5, 15 and 25).');
+        return true;
+      }
+      fw.orchard[k].picked = due;
+      this.give('Orchard Pear');
+      this.msg('You picked a ripe Orchard Pear.', '0A');
+      return true;
+    }
+    const piece = fw.pieces[k];
+    if (piece) {
+      if ((await this.menu(piece, ['Pick it up', 'Leave it'], 0, [`  ${FARM_PIECES[piece].info}`])) === 0) {
+        delete fw.pieces[k];
+        this.give(piece);
+        this.msg(`Picked up the ${piece}.`);
+      }
+      return true;
+    }
+    if (x === BARREL_SPOT[0] && y === BARREL_SPOT[1]) {
+      await this.channel_menu();
+      return true;
+    }
+    if (x === GLASS_SPOT[0] && y === GLASS_SPOT[1]) {
+      await this.greenhouse_menu();
+      return true;
+    }
+    return false;
+  }
+
+  /** Charge gold and lumber together, or nothing at all. */
+  private pay_works(cost: { gold: number; lumber: number }): boolean {
+    if (this.gold < cost.gold || (this.inv.Lumber || 0) < cost.lumber) {
+      this.msg(`You need ${cost.gold}G and ${cost.lumber} Lumber.`, '08');
+      return false;
+    }
+    this.gold -= cost.gold;
+    this.take('Lumber', cost.lumber);
+    return true;
+  }
+
+  async channel_menu(): Promise<void> {
+    const fw = this.farm_works;
+    if (fw.channel) {
+      await this.say(`The rain barrel holds ${fw.water}/${BARREL_CAP} days of rain. On a dry morning it waters the channel soil to its south.`, 'Rain Barrel');
+      return;
+    }
+    const sel = await this.menu('Rain Barrel', [`Repair it (${CHANNEL_COST.gold}G + ${CHANNEL_COST.lumber} Lumber)`, 'Leave it'], 0, ['  A cracked barrel and a stone channel. Mended, it stores rain for dry mornings.']);
+    if (sel === 0 && this.pay_works(CHANNEL_COST)) {
+      fw.channel = true;
+      this.msg('The barrel is mended. It will store up to 3 days of rain.', '0A');
+    }
+  }
+
+  async greenhouse_menu(): Promise<void> {
+    const fw = this.farm_works;
+    if (fw.greenhouse) {
+      await this.say('Your greenhouse keeps the glass-covered soil warm: sow any seed there, and crops survive the turn of the season and typhoons.', 'Greenhouse');
+      return;
+    }
+    const sel = await this.menu('Greenhouse Frame', [`Build it (${GLASS_COST.gold}G + ${GLASS_COST.lumber} Lumber)`, 'Leave it'], 0, ['  Covers the 4x3 plot beside it: off-season seeds grow, and storms pass over.']);
+    if (sel === 0 && this.pay_works(GLASS_COST)) {
+      fw.greenhouse = true;
+      this.msg('The greenhouse is glazed! Sow any season in the marked plot.', '0A');
+    }
+  }
+
+  async hybrid_menu(): Promise<void> {
+    const fw = this.farm_works;
+    const sel = await this.menu(
+      'Silas: seed crossing',
+      HYBRIDS.map((h) => `${h.crop}: ${h.parents.join(' + ')} (${h.season})${fw.hybrids.includes(h.crop) ? ' - known' : ''}`),
+      0,
+      (i) => [`  Trade one ${HYBRIDS[i].parents[0]} Seeds and one ${HYBRIDS[i].parents[1]} Seeds for one ${HYBRIDS[i].crop} Seeds.`, `  Grows in ${HYBRIDS[i].season}, ${HYBRIDS[i].grow} days, ships for ${HYBRIDS[i].value}G.`],
+    );
+    if (sel === null) return;
+    const h = HYBRIDS[sel];
+    if (fw.hybrids.includes(h.crop)) {
+      this.msg(`Silas has already crossed ${h.crop} for you; save seed from your harvest to grow more.`, '08');
+      return;
+    }
+    const [a, b] = h.parents.map((p) => `${p} Seeds`);
+    if (!(this.inv[a] > 0) || !(this.inv[b] > 0)) {
+      this.msg(`Silas needs one ${a} and one ${b}.`, '08');
+      return;
+    }
+    this.take(a);
+    this.take(b);
+    this.give(`${h.crop} Seeds`);
+    fw.hybrids.push(h.crop);
+    this.msg(`Silas crossed a new seed: ${h.crop} Seeds!`, '0A');
+  }
+
+  /** Morning work: sprinklers, the rain channel, then typhoon damage. */
+  farm_works_morning(report: string[]): void {
+    const fw = this.farm_works;
+    const stormy = this.weather === 'Typhoon';
+    for (const [k, piece] of Object.entries(fw.pieces)) {
+      if (piece === 'Sprinkler') for (const c of fixtureCoverage(k, false)) if (this.tilled.has(c)) this.wet.add(c);
+    }
+    if (fw.channel) {
+      const dry = CHANNEL_CELLS.filter((c) => this.tilled.has(c));
+      if (this.weather === 'Rain' || stormy) fw.water = BARREL_CAP;
+      else if (fw.water > 0 && dry.some((c) => !this.wet.has(c))) {
+        fw.water -= 1;
+        for (const c of dry) this.wet.add(c);
+        report.push('The rain barrel watered the channel rows.');
+      }
+    }
+    if (!stormy) return;
+    const guarded = new Set<string>();
+    for (const [k, piece] of Object.entries(fw.pieces)) {
+      if (piece === 'Scarecrow') fixtureCoverage(k, true).forEach((c) => guarded.add(c));
+    }
+    let lost = 0;
+    for (const k of Object.keys(this.crops)) {
+      const [x, y] = k.split(',').map(Number);
+      if ((x * 17 + y * 31 + this.absday() * 13) % 4 !== 0 || guarded.has(k) || (fw.greenhouse && GLASS_CELLS.includes(k))) continue;
+      delete this.crops[k];
+      lost += 1;
+    }
+    if (lost) report.push(`The typhoon flattened ${lost} crop${lost > 1 ? 's' : ''}. A Scarecrow or the greenhouse shelters nearby plants.`);
+  }
+
+  farm_auto_feed(report: string[]): void {
+    if (!Object.values(this.farm_works.pieces).includes('Auto-Feeder')) return;
+    const feed = Math.min(Math.max(0, this.chickens - this.fed), this.inv['Chicken Feed'] || 0);
+    if (feed > 0) {
+      this.take('Chicken Feed', feed);
+      this.fed += feed;
+    }
+    const hungry = this.animals.filter((a) => !a.fed).slice(0, this.inv['Fodder'] || 0);
+    if (hungry.length) {
+      this.take('Fodder', hungry.length);
+      hungry.forEach((a) => (a.fed = true));
+    }
+    if (feed || hungry.length) report.push(`The Auto-Feeder filled the troughs (${feed} chickens, ${hungry.length} barn animals).`);
+  }
+
   async buy(item: string, price: number, limit: number = 99): Promise<void> {
     const maxq = Math.min(limit, Math.floor(this.gold / price));
     if (maxq <= 0) {
@@ -5870,7 +6129,7 @@ export class Game {
 
   async buy_seeds(): Promise<void> {
     const crops = Object.entries(CROPS)
-      .filter(([c, d]) => (d[0] === this.season_name || d[0] === 'All') && !WON_EXCLUSIVE_CROPS.has(c))
+      .filter(([c, d]) => (d[0] === this.season_name || d[0] === 'All') && !WON_EXCLUSIVE_CROPS.has(c) && !HYBRID_CROPS.has(c))
       .map(([c]) => c);
     if (!crops.length) {
       await this.say('Nothing grows outdoors in Winter, dear. Come back in Spring!', 'Hollis');
@@ -6795,10 +7054,15 @@ export class Game {
       }
     }
     if (tile.startsWith('pocket_')) return { label: 'LOOK', summary: 'Look at the sealed side chamber' };
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
-    if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return withTarget('Cast', 'your line', 'CAST');
+    if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) {
+      const pocket = this.fish_pocket(this.mapname, tx, ty);
+      return pocket
+        ? { label: 'CAST', summary: `Cast · ${pocket.glyph} ${pocket.fish} water${stamina}` }
+        : withTarget('Cast', 'your line', 'CAST');
+    }
     if (this.mapname === 'river' && tile === 'water' && this.tool !== 'Watering Can') return { label: 'SKIP', summary: 'Skip the water' };
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     const pairing = this.companion_preview(this.tool, tx, ty);
@@ -6857,7 +7121,7 @@ export class Game {
       }
     }
     if (tile.startsWith('pocket_')) return { key: 'x', label: 'LOOK' };
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign'].includes(tile)) {
+    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
@@ -8390,7 +8654,7 @@ export class Game {
       // Keep perennial Grass in Spring/Summer/Fall; wither seasonal crops
       const surviving: Record<string, [string, number]> = {};
       for (const [k, [crop, age]] of Object.entries(this.crops)) {
-        if (crop === 'Grass' && this.season !== 3) {
+        if ((crop === 'Grass' && this.season !== 3) || (this.farm_works.greenhouse && GLASS_CELLS.includes(k))) {
           surviving[k] = [crop, age];
         }
       }
@@ -8434,6 +8698,7 @@ export class Game {
     if (this.weather === 'Typhoon' || this.weather === 'Blizzard') {
       report.push(`A fierce ${this.weather} sweeps through Brackenford! Stay safe!`);
     }
+    this.farm_works_morning(report);
     if (reason === 'sleep') this.night_surprise(report);
 
     // Incubator & Chickens
@@ -8451,6 +8716,7 @@ export class Game {
     this.fed = 0;
 
     this.barn_new_day(report);
+    this.farm_auto_feed(report);
     report.push(...this.contest_close());
     this.favor_morning(report);
 
@@ -8740,7 +9006,7 @@ export class Game {
     const rng = py_rng();
     const r = rng.random();
     const seeds = Object.keys(CROPS)
-      .filter((c) => CROPS[c][0] === this.season_name && `${c} Seeds` in ITEMS)
+      .filter((c) => CROPS[c][0] === this.season_name && `${c} Seeds` in ITEMS && !HYBRID_CROPS.has(c))
       .map((c) => `${c} Seeds`);
     let found: string;
     if (r < 0.12) {
@@ -8808,6 +9074,13 @@ export class Game {
     const name = m.name;
     const tag: CellTag = { t, wx: x, wy: y, hl };
     if (hlArea) tag.hlArea = true;
+    if (name === 'farm') {
+      if (this.farm_works.greenhouse && GLASS_CELLS.includes(pKey)) tag.greenhouse = true;
+      if (this.farm_overlay(x, y)) {
+        const [ch, fg] = this.glyph(m, x, y, t);
+        tag.fixture = { ch, fg };
+      }
+    }
     const obj = this.objs[name]?.[pKey];
     if (obj && OBJ_GLYPH[obj]) {
       tag.k = `obj:${obj}`;
@@ -8833,6 +9106,10 @@ export class Game {
       if (this.composted.includes(pKey)) tag.compost = true;
       return tag;
     }
+    if ((t === 'water' || t === 'pond') && (name === 'river' || name === 'point')) {
+      const pocket = this.fish_pocket(name, x, y);
+      if (pocket) tag.fishPocket = pocket.glyph;
+    }
     if (name === TRAP_SPOT[0] && x === TRAP_SPOT[1] && y === TRAP_SPOT[2]) {
       tag.trap = this.trap_state();
       return tag;
@@ -8855,6 +9132,13 @@ export class Game {
   glyph(m: GameMap, x: number, y: number, t: string): [string, string, string, boolean] {
     const pKey = pkey(x, y);
     const name = m.name;
+    const fishPocket = (t === 'water' || t === 'pond') ? this.fish_pocket(name, x, y) : undefined;
+    if (fishPocket) return [fishPocket.glyph, '0C', '00', true];
+    if (t === 'orchard_tree') {
+      const age = this.absday() - (this.farm_works.orchard[pKey]?.planted ?? 0);
+      if (age < TREE_DAYS) return ['!', '0A', '00', false];
+      return ['♣', this.orchard_due(pKey) !== null ? '09' : '0A', '00', this.orchard_due(pKey) !== null];
+    }
     if (t === 'stall') {
       // grey when shut, orange while it can be stocked, green while it is trading
       const st = this.stall_state();
@@ -9426,7 +9710,10 @@ export class Game {
             aoeSet.add(pkey(tx + dx, ty + dy));
           }
         }
+      } else if (this.tool === SAPLING) {
+        ORCHARD_SPOTS.forEach((k) => aoeSet.add(k));
       }
+      if (tx === BARREL_SPOT[0] && ty === BARREL_SPOT[1]) CHANNEL_CELLS.forEach((k) => aoeSet.add(k));
     }
 
     // A planned row (task 54) lights its tiles like a tool area, until the player moves or switches tools.
@@ -9436,10 +9723,10 @@ export class Game {
 
     for (let sy = 0; sy < Math.min(vh, m.h); sy++) {
       const y = cy + sy;
-      const row = m.t[y];
       for (let sx = 0; sx < Math.min(vw, m.w); sx++) {
         const x = cx + sx;
-        let [ch, fg, bg, bold] = this.glyph(m, x, y, row[x]);
+        const tile = m.tile(x, y);
+        let [ch, fg, bg, bold] = this.glyph(m, x, y, tile);
         if (night && fg !== '00' && fg !== '01') {
           fg = fg === '0D' || fg === '0C' ? '0F' : fg === '02' || fg === '03' ? '02' : '03';
         } else if (dusk && fg === '0B') {
@@ -9449,7 +9736,7 @@ export class Game {
         if (hl) {
           bg = bg === '01' ? '02' : '01';
         }
-        const tag = this.cell_tag(m, x, y, row[x], hl, hl && !(x === tx && y === ty));
+        const tag = this.cell_tag(m, x, y, tile, hl, hl && !(x === tx && y === ty));
         if (actionReticle && x === tx && y === ty) tag.actionTarget = true;
         if (companion.has(pkey(x, y))) tag.companion = true;
         const px = ox + sx;

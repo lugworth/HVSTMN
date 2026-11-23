@@ -1,3 +1,4 @@
+import { HYBRIDS, FARM_PIECES, SAPLING, SAPLING_PRICE } from './farm-works';
 // Auto-generated exact constants from hrvstmn.py
 
 export const PALETTE: Record<string, string> = {
@@ -3355,6 +3356,14 @@ export const REGION_CATCH: Record<string, CatchTable> = {
   },
 };
 
+/** Distinct, permanent fishing pockets. The mark is visible on water and names a fish
+ * already in the regional table; it increases that fish's weight, not the rare roll. */
+export const FISH_POCKETS = [
+  { map: 'river', x: 35, y: 19, glyph: '◎', fish: 'Willow Chub', habitat: 'slow river eddy' },
+  { map: 'point', x: 30, y: 17, glyph: '≋', fish: 'Rockfish', habitat: 'rocky sea water' },
+] as const;
+export const FISH_POCKET_WEIGHT = 2;
+
 /** Skyline Ridge lookout: what tomorrow's weather looks like from the top. */
 export const LOOKOUT_VIEW: Record<string, string> = {
   Sunny: "The sky is clear all the way to the sea. Tomorrow looks fine.",
@@ -3900,3 +3909,26 @@ export const PANTRY_STAPLES = ['Egg', 'Potato', 'Turnip', 'Cabbage', 'Onion', 'C
 export const MARKET_FLOWERS: string[][] = [['Pinwheel Daisy', 'Duskbell Flower'], ['Rosecap Flower', 'Edelweiss'], ['Emberbloom Flower'], []];
 export const STALL_SIGN =
   'Saturday Market — On Saturdays this stall is yours. Put out up to three goods before noon; folk stop by on the hour until 5 PM and pay a little over the shipping price, more for the things they love.';
+
+// ---------------------------------------------------------------- farm works
+// Silas's crossed crops, the orchard's pear, and the placeable farm pieces. The numbers live in
+// farm-works.ts; this block only registers them with the shared item, crop, recipe and tile tables.
+const HYBRID_GLYPH: Record<string, string> = { 'Rose Turnip': 'o', Sunstripe: '8', 'Amber Root': 'v', Snowheart: '*' };
+for (const h of HYBRIDS) {
+  CROPS[h.crop] = [h.season, 0, h.grow, 0, h.value, HYBRID_GLYPH[h.crop] ?? 'o', h.color];
+  ITEMS[h.crop] = [h.value, 8, 'crop'];
+  ITEMS[`${h.crop} Seeds`] = [0, 0, 'seed'];
+  ITEMS[h.dish] = [h.value * 3, 18, 'dish'];
+  RECIPES[h.dish] = [[[h.crop, 2]], null, 18, h.value * 3];
+}
+ITEMS['Orchard Pear'] = [110, 10, 'crop'];
+ITEMS['Pear Preserve'] = [360, 16, 'dish'];
+RECIPES['Pear Preserve'] = [[['Orchard Pear', 2]], null, 16, 360];
+ITEMS[SAPLING] = [SAPLING_PRICE, 0, 'special'];
+for (const [name, p] of Object.entries(FARM_PIECES)) {
+  ITEMS[name] = [Math.floor(p.price / 2), 0, 'special'];
+  TILES[p.tile] = [p.glyph, p.color, '00', p.walk];
+}
+TILES['orchard_tree'] = ['♣', '0A', '00', false];
+TILES['rain_barrel'] = ['▥', '0C', '00', false];
+TILES['greenhouse_frame'] = ['▦', '0B', '00', false];

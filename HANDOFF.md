@@ -1,5 +1,19 @@
 # Handoff: FURROW
 
+## Farm works, 2026-11-22
+
+- `src/game/farm-works.ts` holds the data and save sanitiser; the engine (`farm_works` field, saved, restored after
+  tilled/crops/objs) owns the behaviour. `GameMap.overlay` draws pieces, orchard trees, the rain barrel and the
+  greenhouse frame over stored tiles (`Game.farm_overlay`); `farm_works` is the only source of truth.
+- Silas (library, "seed crossing") trades one of each parent Seeds for a hybrid seed (`hybrid_menu`); hybrids are
+  never sold or dug up. Orchard Saplings (carpenter, equip and plant on the three marked spots) fruit each Fall
+  on days 5/15/25 after 16 days (`orchard_due`).
+- Rain barrel at (60,8): repair for 250G + 6 Lumber, stores 3 rain days, waters tilled channel cells on dry mornings.
+  Greenhouse at (42,8): 2500G + 20 Lumber; the 4x3 glass plot takes off-season seeds and survives season change and typhoons.
+- Farm pieces (path, lamp, bench, fence, Sprinkler, Scarecrow, Auto-Feeder) are bought at the carpenter, placed with the
+  tool bar on open untilled field, and picked up with X. Typhoons now flatten some crops unless a Scarecrow or the glass covers them.
+- `CellTag.fixture` / `greenhouse` drive the enhanced renderer (plain full-size glyph, green tint). Tests: `furrow-fields.test.ts`.
+
 ## Farm symbols, 2026-11-22
 
 - The canvas uses `public/fonts/FurrowFarmSymbols.woff` for one-cell farm drawings.

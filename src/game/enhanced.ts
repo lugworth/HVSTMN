@@ -1516,6 +1516,14 @@ export function computeFrame(
         } else if (tag.hlArea) {
           o.bg = mix(o.bg, '#c8d4ff', 0.05);
         }
+        // A marked fishing pocket remains a full-size glyph in either detail mode.
+        if (tag.fishPocket && !tag.ent) {
+          o = { ...o, ch: tag.fishPocket, fg: '#00ffff', bold: true, plain: true, accent: true, textureGlyph: undefined, texture: undefined };
+        }
+        if (tag.greenhouse) o.bg = mix(o.bg, '#9fe8d0', 0.1);
+        if (tag.fixture && !tag.ent) {
+          o = { ...o, ch: tag.fixture.ch, fg: pal(tag.fixture.fg), bold: true, plain: true, accent: true, textureGlyph: undefined, texture: undefined };
+        }
         // a seed bag's aim marks the tiles in a companion pairing with a small blossom (task 17)
         if (tag.companion) o.detail = { ch: '✿', fg: COMPANION_MARK };
         // compost-dressed soil is darker and richer, with a few warm crumbs if nothing else is drawn (task 18)
@@ -1774,7 +1782,7 @@ export function computeFrame(
     for (let y = v.y; y < v.y + v.h && y < H; y++) {
       for (let x = v.x; x < v.x + v.w && x < W; x++) {
         const tag = tags[y][x];
-        if (!tag || tag.t === 'ui' || tag.ent) continue;
+        if (!tag || tag.t === 'ui' || tag.ent || tag.fishPocket || tag.fixture) continue;
         const open = WALKABLE_OPEN.has(tag.t) || WATERY.has(tag.t) || (tag.k || '').startsWith('soil') || (tag.k || '').startsWith('crop:');
         if (!open) continue;
         const wx = tag.wx ?? x;
@@ -2202,7 +2210,7 @@ function reflections(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx[
     for (let x = v.x; x < v.x + v.w && x < W; x++) {
       const tag = tags[y][x];
       // the crab pot's float stays itself; it is not a mirror of the pier (task 39)
-      if (!tag || !WATERY.has(tag.t) || tag.ent || tag.trap) continue;
+      if (!tag || !WATERY.has(tag.t) || tag.ent || tag.trap || tag.fishPocket) continue;
       let k = 0;
       for (let d = 1; d <= 4; d++) {
         const n = tags[y - d]?.[x];
@@ -2459,7 +2467,7 @@ function waterLife(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['v
   for (let y = v.y; y < v.y + v.h && y < tags.length; y++) {
     for (let x = v.x; x < v.x + v.w && x < tags[y].length; x++) {
       const tg = tags[y][x];
-      if (!tg || tg.t === 'ui' || tg.ent) continue;
+      if (!tg || tg.t === 'ui' || tg.ent || tg.fishPocket) continue;
       const wx = tg.wx ?? x;
       const wy = tg.wy ?? y;
       if (WATERY.has(tg.t)) {
