@@ -2703,7 +2703,7 @@ describe('first-morning checklist (task 50)', () => {
     g.tool = 'Hoe';
     await g.handle('space');
     assert.equal(g.first_steps.till, true);
-    assert.equal(g.msgs.at(-1)[0], '✓ Tilled the soil. Next: sow your turnip seeds.');
+    assert.equal(g.msgs.at(-1)[0], '✓ Tilled the soil. Next: sow your turnip seeds (Tab selects the seeds).');
     assert.ok(g.today_lines().includes('  First morning  [✓] Till  [ ] Sow  [ ] Water'));
 
     g.tool = 'Turnip Seeds';

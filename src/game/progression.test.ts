@@ -42,7 +42,7 @@ describe('progression, discovery, luck, assist modes & farm-works polish (G3, G6
     g.contracts = [];
     g.bin = { Turnip: 10 };
     const expected = Math.round(ITEMS['Turnip'][0] * 1.15) * 10;
-    const paid = g.process_zack_pickup();
+    const paid = g.process_zack_pickup().total;
     assert.equal(paid, expected);
   });
 
