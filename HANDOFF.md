@@ -657,3 +657,10 @@ Newest first.
 - `docs/ascii-art-pack.md`: title plate, crop/animal/tool/building ASCII art and a farm vignette with Isotope colour maps.
 - `src/game/enhanced.test.ts`: precise spec of the visual behaviour.
 - `git log`: commit bodies and merged PRs describe each player-visible change.
+
+## Map layout wayfinding (P2)
+
+- New roads: a Brackenford Beach shore road (pier, lodge stub, Lighthouse Point exit), a lake-side ridge road on Beacon Hill, a trail on to the tarn at Skyline Ridge, and approach paths to the Willow Bend footbridge sign and east-bank dock.
+- Wellkeeper Pond moved one row south so the carpenter-to-mine road is unbroken. The Farm gets a cart track and signpost toward Cedar Hollow; Ranch Lane's dead-end alley is closed with a tree.
+- The Town compass sign moved from the far west corner to the south road (34,22), with two benches; Ferreira's anchor is now town (22,12).
+- `src/game/layout.test.ts` checks every warp, door and sign on those maps is reachable on foot. Hilde's forge is unchanged (tests pin it).

@@ -2972,7 +2972,7 @@ Object.assign(NPCS, {
     col: "09",
     home: "zack",
     out: [11, 16],
-    where: ["town", 24, 15],
+    where: ["town", 22, 12],
     rain: false,
     bach: false,
     loves: ["Gold", "Starsteel", "Diamond", "Pink Diamond", "Alexandrite", "SUGDW Apple"],
