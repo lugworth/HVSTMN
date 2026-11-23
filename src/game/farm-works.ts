@@ -60,7 +60,7 @@ export function restoreFarmWorks(raw: unknown, canPlace: (key: string, piece: Fa
     for (const key of ORCHARD_SPOTS) {
       const tree = data.orchard[key];
       if (!tree || !Number.isSafeInteger(tree.planted) || tree.planted < 0 || tree.planted > today) continue;
-      const picked = Number.isSafeInteger(tree.picked) && tree.picked >= tree.planted && tree.picked <= today ? tree.picked : -1;
+      const picked = Number.isSafeInteger(tree.picked) && tree.picked >= 0 && tree.picked <= today ? tree.picked : -1;
       state.orchard[key] = { planted: tree.planted, picked };
     }
   }
