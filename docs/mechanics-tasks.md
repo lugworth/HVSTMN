@@ -1,4 +1,4 @@
-# FURROW mechanics task list
+# GLADE mechanics task list
 
 Pick an unchecked task that fits the current assignment. Keep its number stable and use it in the PR description so other agents can find the work. Each task has its own PR.
 
@@ -100,7 +100,7 @@ Pick an unchecked task that fits the current assignment. Keep its number stable 
 
 ## Mechanics from other games
 
-| Game | Published mechanic | What it suggests for FURROW |
+| Game | Published mechanic | What it suggests for GLADE |
 | --- | --- | --- |
 | Fields of Mistria | Friday inn storylines, town repairs such as a bell tower, and rare animal coat colors. | Give villagers something to do together, make contributions visible, and let ranchers collect variants. [Developer patch notes](https://www.fieldsofmistria.com/post/fields-of-mistria-s-1-0-update-patch-notes-are-here) · [Game features](https://www.fieldsofmistria.com/) |
 | Stardew Valley | A visiting bookseller, a summer environmental event, new neighbors tied to quests, and dialogue that reacts to what happened. | Put surprises on a readable schedule, and let NPCs remember things that change. [ConcernedApe’s changelog](https://www.stardewvalley.net/stardew-valley-1-6-update-full-changelog/) |

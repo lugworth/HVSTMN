@@ -108,7 +108,8 @@ export const LEGACY_NAMES: readonly (readonly [string, string])[] = [
   ['Mythic', 'Heirloom'],
   ['Blue Feather', 'Promise Ribbon'],
   ['Teleport Stone', 'Waystone'],
-  ['HRVSTMN', 'FURROW'],
+  ['HRVSTMN', 'GLADE'],
+  ['FURROW', 'GLADE'],
 ];
 
 /** Whole-word match: no letter right before or after, so "Ann" leaves "Anniversary" alone. */

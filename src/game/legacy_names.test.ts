@@ -53,5 +53,6 @@ describe('the Brackenford rename keeps old saves', () => {
   test('ordinary words that share a name are left alone', () => {
     assert.equal(renameLegacy('May the Wellkeeper bless you. Ann & May!'), 'May the Wellkeeper bless you. Tess & Pip!');
     assert.equal(renameLegacy('Anniversary at the Grayling Cliffside'), 'Anniversary at the Grayling Cliffside');
+    assert.equal(renameLegacy('HRVSTMN and FURROW'), 'GLADE and GLADE');
   });
 });

@@ -1,4 +1,4 @@
-// Social, family, outing, dinner, tea counter, winter stamp-printing and reactive NPC helpers for FURROW
+// Social, family, outing, dinner, tea counter, winter stamp-printing and reactive NPC helpers for GLADE
 // Covers mechanics tasks 02, 06, 08, 43, 47, 48 and feature G11 (reactive dialogue & winter coats).
 
 // ---------------------------------------------------------------- Task 02: Short outings with villagers

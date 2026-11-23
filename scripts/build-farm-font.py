@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the original FURROW glyphs with Python 3 and fontTools.
+"""Build the original GLADE glyphs with Python 3 and fontTools.
 
 Run python3 scripts/build-farm-font.py after editing or appending a drawing.
 """
@@ -10,9 +10,9 @@ from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "public/fonts/FurrowFarmSymbols.woff"
+OUT = ROOT / "public/fonts/GladeFarmSymbols.woff"
 TS_OUT = ROOT / "src/game/farm-symbols.ts"
-FAMILY = "FURROW Farm Symbols"
+FAMILY = "GLADE Farm Symbols"
 EM, ADVANCE, PIXEL_W, PIXEL_H = 2048, 1233, 156, 168
 
 # Each entry holds a fallback character and an original 7×9 drawing.
@@ -168,7 +168,7 @@ def main():
         "styleName": "Regular",
         "uniqueFontIdentifier": f"{FAMILY} 1.0",
         "fullName": FAMILY,
-        "psName": "FurrowFarmSymbols-Regular",
+        "psName": "GladeFarmSymbols-Regular",
         "version": "Version 1.000",
     })
     fb.setupOS2(sTypoAscender=1556, sTypoDescender=-492, sTypoLineGap=410,

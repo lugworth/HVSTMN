@@ -1,4 +1,4 @@
-// Ranching systems for FURROW:
+// Ranching systems for GLADE:
 // Task 25 (Animal personalities), Task 26 + G8 (Coat colors, genetics & family records),
 // Task 27 (Rotating pasture), Task 28 (Animal enrichment), G15 (Multiple pets: Farm Cat & pet gifts).
 

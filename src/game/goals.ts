@@ -1,4 +1,4 @@
-// New-player guidance for FURROW: the First Fortnight ladder (follows the first-morning checklist),
+// New-player guidance for GLADE: the First Fortnight ladder (follows the first-morning checklist),
 // achievement announcements, and the shipping-bin payout wording. Pure data and helpers; the engine owns state.
 
 // ---------------------------------------------------------------- First Fortnight ladder

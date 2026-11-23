@@ -1,4 +1,4 @@
-// Progression, mastery perks, recipe discovery, food buffs, daily luck, mine checkpoints & assist modes for FURROW
+// Progression, mastery perks, recipe discovery, food buffs, daily luck, mine checkpoints & assist modes for GLADE
 // Covers features G3, G6, G7, G13, G18.
 
 // ---------------------------------------------------------------- G3: Mastery Perks

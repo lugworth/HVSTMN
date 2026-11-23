@@ -1,4 +1,4 @@
-// Procedural Web Audio chiptune synthesizer for FURROW (Feature V16)
+// Procedural Web Audio chiptune synthesizer for GLADE (Feature V16)
 // Zero external audio assets; safe no-op in headless/SSR/Node environments.
 
 export type SfxKind =

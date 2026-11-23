@@ -1,4 +1,4 @@
-// FURROW — a farming tale in ASCII: the complete engine
+// GLADE — a farming tale in ASCII: the complete engine
 
 import { Screen, CellTag, FxExtra, FxKind, BoxStyle, EmoteKind, PaletteMode, type RenderCtx } from './screen';
 import { COMPACT_MIN_COLS, MIN_ROWS, isCompact, fitMessages, fitText, reflowPages, wrapLine, wrapLines } from './compact';
@@ -1457,7 +1457,7 @@ export class Game {
     try {
       const d = JSON.parse(await file.text());
       if (!isValidSavePayload(d)) {
-        throw new Error('That does not look like an FURROW save file.');
+        throw new Error('That does not look like a GLADE save file.');
       }
       this.applySaveData(d);
       this.save(1);
@@ -10411,7 +10411,7 @@ export class Game {
     };
 
     const titleH = compact ? 1 : 2;
-    label(y, 'FURROW', compact ? 1 : 1.45, w, titleH);
+    label(y, 'GLADE', compact ? 1 : 1.45, w, titleH);
     line(y + titleH, `${this.name} of ${this.farm} Farm`, '04');
     rail(y + titleH + 1);
     y += titleH + 1 + gap;

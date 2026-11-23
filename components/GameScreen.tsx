@@ -33,7 +33,7 @@ import {
 import { defaultAssist, readAssistSettings, type AssistSettings } from '@/src/game/progression';
 import { isSfxEnabled, loadSfxPreference } from '@/src/game/audio';
 
-const FARM_FONT = '"FURROW Farm Symbols"';
+const FARM_FONT = '"GLADE Farm Symbols"';
 const FONT = `"HRVSTMN Mono", ${FARM_FONT}, "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
 /** Pixelify Sans, for the large HUD headings (the same face as the toolbar and menu). */
 const DISPLAY_FONT = `"HRVSTMN Display", ${FONT}`;
@@ -1201,7 +1201,7 @@ export default function GameScreen() {
         <canvas
           ref={canvasRef}
           id="term"
-          aria-label="FURROW game screen"
+          aria-label="GLADE game screen"
           aria-description="Move with WASD or arrow keys. Space uses the tool. X interacts. Question mark opens keyboard help."
           aria-busy={!ready}
           tabIndex={0}

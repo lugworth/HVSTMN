@@ -246,7 +246,7 @@ describe('compact engine layout', () => {
     const { s } = farm(80, 24);
     assert.equal(s.ctx?.view.y, 0);
     assert.equal(s.buf[5][s.ctx!.divX][0], '|');
-    assert.ok(s.tags[1].some((tag, x) => x > s.ctx!.divX && tag?.label?.text === 'FURROW'));
+    assert.ok(s.tags[1].some((tag, x) => x > s.ctx!.divX && tag?.label?.text === 'GLADE'));
     const classic = farm(80, 24);
     classic.s.style = 'classic';
     classic.g.render();

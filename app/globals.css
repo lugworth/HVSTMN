@@ -15,8 +15,8 @@
   font-display: swap;
 }
 @font-face {
-  font-family: "FURROW Farm Symbols";
-  src: url("/fonts/FurrowFarmSymbols.woff") format("woff");
+  font-family: "GLADE Farm Symbols";
+  src: url("/fonts/GladeFarmSymbols.woff") format("woff");
   font-weight: 400 700;
   unicode-range: U+E9??;
 }

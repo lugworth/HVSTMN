@@ -2539,11 +2539,11 @@ export const SPOUSE_POS: [number, number] = [11, 3];
 export const HOUSE_WAKE: [number, number] = [1, 2];
 
 export const LOGO = [
-  String.raw` _____ _   _ ____  ____   _____        __`,
-  String.raw`|  ___| | | |  _ \|  _ \ / _ \ \      / /`,
-  String.raw`| |_  | | | | |_) | |_) | | | \ \ /\ / / `,
-  String.raw`|  _| | |_| |  _ <|  _ <| |_| |\ V  V /  `,
-  String.raw`|_|    \___/|_| \_\_| \_\\___/  \_/\_/   `,
+  String.raw`  ____ _         _    ____  _____ `,
+  String.raw` / ___| |       / \  |  _ \| ____|`,
+  String.raw`| |  _| |      / _ \ | | | |  _|  `,
+  String.raw`| |_| | |___  / ___ \| |_| | |___ `,
+  String.raw` \____|_____|/_/   \_\____/|_____|`,
 ];
 
 export function pkey(x: number, y: number): string {

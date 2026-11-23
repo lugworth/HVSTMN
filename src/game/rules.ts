@@ -1,4 +1,4 @@
-// Pure game rules and mechanics for FURROW
+// Pure game rules and mechanics for GLADE
 import { fmt_hour, SEASONS, FISH_POCKET_WEIGHT } from './constants';
 
 import type { CatchEntry, CatchTable } from './constants';

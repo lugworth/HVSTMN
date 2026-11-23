@@ -1,6 +1,6 @@
 {
-  "name": "FURROW",
-  "description": "FURROW: a farming tale set in the valley town of Brackenford, drawn in ASCII in the base16 Isotope Dark palette.",
+  "name": "GLADE",
+  "description": "GLADE: a farming tale set in the valley town of Brackenford, drawn in ASCII in the base16 Isotope Dark palette.",
   "requestFramePermissions": [],
   "permissions": [],
   "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

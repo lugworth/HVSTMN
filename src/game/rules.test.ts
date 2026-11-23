@@ -41,7 +41,7 @@ import {
 } from './rules';
 import { REGION_CATCH, UPGRADE, CAN_CAP, CROPS, SEASONS, FORAGE, REGION_FORAGE, MARKET_FLOWERS, PANTRY_STAPLES, MARKET_SHOPPERS } from './constants';
 
-describe('FURROW rules & mechanics', () => {
+describe('GLADE rules & mechanics', () => {
   test('Heartseeds scale max stamina from 150 to 250 (+10 each)', () => {
     assert.equal(getMaxStamina(0), 150);
     assert.equal(getMaxStamina(5), 200);

@@ -1,4 +1,4 @@
-// Enhanced ASCII renderer for FURROW.
+// Enhanced ASCII renderer for GLADE.
 //
 // The engine writes plain (glyph, fg, bg) cells plus semantic CellTags (tile
 // name, world position, deco, entity). This module turns that into a richer

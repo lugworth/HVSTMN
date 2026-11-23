@@ -1,4 +1,4 @@
-// Accessibility, text scaling, map symbol/name pairing & key rebinding for FURROW
+// Accessibility, text scaling, map symbol/name pairing & key rebinding for GLADE
 // Covers Task 56 (Readable prompts at small sizes) and feature G17 (Key rebinding & UI scale).
 
 export type TextScale = 'normal' | 'large' | 'xlarge';

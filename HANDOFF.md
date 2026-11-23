@@ -1,4 +1,4 @@
-# Handoff: FURROW
+# Handoff: GLADE
 
 ## UI and touch fixes, 2026-11-22
 
@@ -37,11 +37,11 @@
   Greenhouse at (42,8): 2500G + 20 Lumber; the 4x3 glass plot takes off-season seeds and survives season change and typhoons.
 - Farm pieces (path, lamp, bench, fence, Sprinkler, Scarecrow, Auto-Feeder) are bought at the carpenter, placed with the
   tool bar on open untilled field, and picked up with X. Typhoons now flatten some crops unless a Scarecrow or the glass covers them.
-- `CellTag.fixture` / `greenhouse` drive the enhanced renderer (plain full-size glyph, green tint). Tests: `furrow-fields.test.ts`.
+- `CellTag.fixture` / `greenhouse` drive the enhanced renderer (plain full-size glyph, green tint). Tests: `glade-fields.test.ts`.
 
 ## Farm symbols, 2026-11-22
 
-- The canvas uses `public/fonts/FurrowFarmSymbols.woff` for one-cell farm drawings.
+- The canvas uses `public/fonts/GladeFarmSymbols.woff` for one-cell farm drawings.
   Edit the drawings in `scripts/build-farm-font.py` and run it with Python 3 and
   FontTools to regenerate the font and its TypeScript glyph map. The canvas paints
   standard character substitutes while the font loads.
@@ -462,7 +462,7 @@ The main-branch reference below retains gameplay architecture and history.
 ## Kickoff prompt
 
 ```
-You're picking up FURROW, an ASCII farming sim (Next.js 15 + TypeScript, HTML canvas):
+You're picking up GLADE, an ASCII farming sim (Next.js 15 + TypeScript, HTML canvas):
 github.com/lugworth/hrvstmn, live at https://hrvstmn.vercel.app (Vercel deploys main).
 
 Read HANDOFF.md fully before changing anything. Enhanced is the only visible visual style;
@@ -565,7 +565,7 @@ Inside `computeFrame`: style each tagged cell -> Isotope neon-on-black pass -> g
 ## Decisions and constraints
 
 - **Style simplification (#18):** Enhanced is the only style shown; Classic is retained in code and tests; Large and the style switcher were removed. Do not add a URL/localStorage style override back.
-- **Original setting only.** FURROW was a Harvest Moon tribute until the Brackenford rework (docs/originality-rework.md). Don't bring back that game's names, characters, places, items or events, or another game's. Old saves are migrated by `src/game/legacy_names.ts`; add to that table when renaming anything stored in a save.
+- **Original setting only.** GLADE was a Harvest Moon tribute until the Brackenford rework (docs/originality-rework.md). Don't bring back that game's names, characters, places, items or events, or another game's. Old saves are migrated by `src/game/legacy_names.ts`; add to that table when renaming anything stored in a save.
 - **Next.js pinned to `15.5.28`.** Vercel blocked 15.2.1 for CVE-2025-66478; don't downgrade without checking advisories.
 - **High-res thresholds:** `HIRES_MIN_FONT = 12` for 2x2 texture glyphs; 3x3 needs font >= 14 and font x DPR >= 28, drawn one row per call.
 - **`next.config.ts`** disables build-time type-checking and linting, keeps `reactStrictMode: false` for the canvas loop, and uses `output: "standalone"`.

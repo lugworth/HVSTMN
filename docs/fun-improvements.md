@@ -1,4 +1,4 @@
-# FURROW — Fun & Excitement Improvements Proposal
+# GLADE — Fun & Excitement Improvements Proposal
 
 **Status**: All 16 user-requested focus areas already implemented (598 tests pass). This proposal outlines the *next tier* of improvements to deepen dynamic events, reward loops, progression, and UI cues — inspired by Stardew Valley, Story of Seasons, Palia, and A Short Hike.
 

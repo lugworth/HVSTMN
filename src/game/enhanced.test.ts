@@ -257,9 +257,9 @@ describe('computeFrame', () => {
 
   test('frames without a scene context (title, menus) pass through', () => {
     const s = new Screen(80, 24);
-    s.put(1, 1, 'FURROW', '0A');
+    s.put(1, 1, 'GLADE', '0A');
     const out = computeFrame(s, 0);
-    assert.equal(out[1][1].ch, 'F');
+    assert.equal(out[1][1].ch, 'G');
   });
 
   test('ground right below a building is shaded', () => {
@@ -339,12 +339,12 @@ describe('computeFrame', () => {
   test('title screen gets a night sky, stars and a gradient logo', () => {
     const s = new Screen(100, 30);
     s.scene = 'title';
-    s.put(10, 2, 'FURROW', '0A', '00', true);
-    for (let i = 0; i < 7; i++) s.tag(10 + i, 2, { t: 'ui', k: 'logo' });
+    s.put(10, 2, 'GLADE', '0A', '00', true);
+    for (let i = 0; i < 5; i++) s.tag(10 + i, 2, { t: 'ui', k: 'logo' });
     const out = computeFrame(s, 0);
     assert.notEqual(out[10][50].bg, '#000000');
     assert.ok(out.flat().some((o) => o.ch === '·' || o.ch === '✦'));
-    assert.notEqual(out[2][10].fg, out[2][16].fg);
+    assert.notEqual(out[2][10].fg, out[2][14].fg);
   });
 
   test('borders between grass and field are softened', () => {
@@ -1573,7 +1573,7 @@ describe('late-season blending, hot-spring steam, hearth embers and CRT scanline
       const s = new Screen(80, 24);
       s.scene = 'title';
       s.reducedMotion = reduced;
-      s.put(30, 3, 'FURROW', '07', '00', true);
+      s.put(30, 3, 'GLADE', '07', '00', true);
       return s;
     };
     const stars = (s: Screen, t: number) => computeFrame(s, t).flat().filter((o) => o.ch === '★').length;
@@ -1584,7 +1584,7 @@ describe('late-season blending, hot-spring steam, hearth embers and CRT scanline
     assert.equal(stars(title(), 0), 0);
     for (const t of ts) {
       const out = computeFrame(title(), t);
-      for (let x = 30; x < 37; x++) assert.notEqual(out[3][x].ch, '★', 'never over the title text');
+      for (let x = 30; x < 35; x++) assert.notEqual(out[3][x].ch, '★', 'never over the title text');
     }
   });
 
@@ -1992,18 +1992,18 @@ describe('display font for HUD headings', () => {
     return calls;
   };
   const frame: OutCell[][] = [[
-    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'FURROW', scale: 1.45, w: 9, h: 2 } },
+    { ch: 'H', fg: '#ffffff', bg: '#000000', bold: true, ui: true, label: { text: 'GLADE', scale: 1.45, w: 9, h: 2 } },
     { ch: 'x', fg: '#ffffff', bg: '#000000', bold: false },
   ]];
 
   test('large headings use the display face; every other glyph stays in the grid font', () => {
     const calls = fontsUsed(frame, 'DisplayFace');
-    assert.deepEqual(calls.find((c) => c.text === 'FURROW'), { text: 'FURROW', font: 'bold 23.2px DisplayFace' });
+    assert.deepEqual(calls.find((c) => c.text === 'GLADE'), { text: 'GLADE', font: 'bold 23.2px DisplayFace' });
     assert.equal(calls.find((c) => c.text === 'x')?.font, '16px GridMono');
   });
 
   test('without a display face the headings fall back to the grid font', () => {
-    assert.equal(fontsUsed(frame).find((c) => c.text === 'FURROW')?.font, 'bold 23.2px GridMono');
+    assert.equal(fontsUsed(frame).find((c) => c.text === 'GLADE')?.font, 'bold 23.2px GridMono');
   });
 });
 

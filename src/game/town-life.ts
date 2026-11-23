@@ -1,4 +1,4 @@
-// Town life systems for FURROW:
+// Town life systems for GLADE:
 // Task 11 (Guest vendors who become regulars), Task 13 + G10 (Festival roles & yearly variants),
 // Task 15 (Community pantry), Task 36 (People you meet along the trail), G16 (Otto shipping contracts).
 

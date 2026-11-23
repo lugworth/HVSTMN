@@ -1,4 +1,4 @@
-# FURROW
+# GLADE
 
 A farming tale set in the valley town of Brackenford, drawn in ASCII, rendered in the base16 Isotope Dark palette and rewritten as a high-performance **Next.js 15+ (App Router)** web application with React 19 and HTML5 Canvas.
 
@@ -85,7 +85,7 @@ The bundled grid font is a subset of DejaVu Sans Mono (`public/fonts`, see `LICE
 block and symbol glyphs look the same on every device. The map, dialogs and all body text use it.
 
 A second, display face, Pixelify Sans (`public/fonts`, see `LICENSE-PixelifySans.txt`, SIL OFL 1.1),
-sets the large HUD headings on the canvas (FURROW, the day number) and the controls around the map:
+sets the large HUD headings on the canvas (GLADE, the day number) and the controls around the map:
 the desktop toolbar, the F10 menu and the touch buttons. It is `"HRVSTMN Display"` /
 `--font-display` in `app/globals.css` and `DISPLAY_FONT` in `GameScreen.tsx`, and falls back to the
 grid font for glyphs it lacks (the touch arrows).

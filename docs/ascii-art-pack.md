@@ -1,6 +1,6 @@
-# FURROW ASCII Art Pack
+# GLADE ASCII Art Pack
 
-Terminal-safe art for FURROW. Every
+Terminal-safe art for GLADE. Every
 block below is plain text: no emoji, no double-width
 symbols, no font-dependent ligatures. Rows are aligned for
 a 1:2 character cell and every colour reference is an

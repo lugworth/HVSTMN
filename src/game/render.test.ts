@@ -444,7 +444,7 @@ describe('right-side Contour Farm HUD', () => {
         assert.ok(y + label.h <= s.ctx!.divY);
         labels.push(label.text);
       }
-      assert.deepEqual(labels, ['FURROW', '01']);
+      assert.deepEqual(labels, ['GLADE', '01']);
       const panel = s.buf.slice(0, s.ctx!.divY).map((row) => row.slice(s.ctx!.divX + 1).map((c) => c[0]).join('')).join('\n');
       for (const text of ['EQUIPPED', 'STAMINA', 'FATIGUE', 'GOLD', 'BIN', 'HELD', '987654321G']) assert.ok(panel.includes(text), `${width}x${height}: ${text}`);
       const meter = computeFrame(s, 0).map((row) => row.slice(s.ctx!.divX + 1).map((o) => o.ch).join(''));
