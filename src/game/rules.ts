@@ -1,5 +1,5 @@
 // Pure game rules and mechanics for FURROW
-import { fmt_hour, SEASONS } from './constants';
+import { fmt_hour, SEASONS, FISH_POCKET_WEIGHT } from './constants';
 
 import type { CatchEntry, CatchTable } from './constants';
 
@@ -393,10 +393,14 @@ export function getBasketTotal(basket: Record<string, number>): number {
 
 // ---------------------------------------------------------------- outer regions
 
+type RegionFishingContext = { season: number; weather: string; rodLvl: number; favored?: string };
+const regionalFishWeight = (fish: CatchEntry, ctx: RegionFishingContext) =>
+  (fish.w + (fish.rod ?? 0) * ctx.rodLvl) * (fish.item === ctx.favored ? FISH_POCKET_WEIGHT : 1);
+
 /** What bites in a region's waters: the rod-gated rare catch first, then a weighted draw of what is in season. */
 export function rollRegionCatch(
   table: CatchTable,
-  ctx: { season: number; weather: string; rodLvl: number },
+  ctx: RegionFishingContext,
   rand: () => number
 ): string {
   if (ctx.rodLvl >= table.rareRod) {
@@ -405,7 +409,7 @@ export function rollRegionCatch(
     if (rand() < chance) return table.rare;
   }
   const pool = table.fish.filter((f) => !f.seasons || f.seasons.includes(ctx.season));
-  const weight = (f: CatchEntry) => f.w + (f.rod ?? 0) * ctx.rodLvl;
+  const weight = (f: CatchEntry) => regionalFishWeight(f, ctx);
   let r = rand() * pool.reduce((sum, f) => sum + weight(f), 0);
   for (const f of pool) {
     r -= weight(f);
@@ -418,14 +422,14 @@ export function rollRegionCatch(
 export type CatchOdds = [item: string, chance: number][];
 
 /** The same draw as `rollRegionCatch`, written out as odds, so the game can say what bites where. */
-export function regionCatchOdds(table: CatchTable, ctx: { season: number; weather: string; rodLvl: number }): CatchOdds {
+export function regionCatchOdds(table: CatchTable, ctx: RegionFishingContext): CatchOdds {
   let rare = 0;
   if (ctx.rodLvl >= table.rareRod) {
     const stormy = ctx.weather === 'Rain' || ctx.weather === 'Typhoon';
     rare = Math.min(1, (table.rareChance + 0.01 * (ctx.rodLvl - table.rareRod)) * (stormy ? table.stormBoost ?? 1 : 1));
   }
   const pool = table.fish.filter((f) => !f.seasons || f.seasons.includes(ctx.season));
-  const weight = (f: CatchEntry) => f.w + (f.rod ?? 0) * ctx.rodLvl;
+  const weight = (f: CatchEntry) => regionalFishWeight(f, ctx);
   const total = pool.reduce((sum, f) => sum + weight(f), 0);
   const odds: CatchOdds = rare > 0 ? [[table.rare, rare]] : [];
   for (const f of pool) odds.push([f.item, ((1 - rare) * weight(f)) / total]);

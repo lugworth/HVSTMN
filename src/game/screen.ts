@@ -48,6 +48,12 @@ export type CellTag = {
   companion?: boolean;
   /** Tilled soil dressed with compost (task 18). */
   compost?: boolean;
+  /** A distinctive fish habitat on this water cell (task 38). */
+  fishPocket?: string;
+  /** A farm-works fixture (lamp, orchard tree, barrel...): drawn as a plain full-size glyph. */
+  fixture?: { ch: string; fg: string };
+  /** Soil under the greenhouse glass. */
+  greenhouse?: boolean;
   /** The crab pot's float off the beach pier (task 39). */
   trap?: 'up' | 'set' | 'ready';
   /** Faced cell has a meaningful context action (interaction or WATER/DIG/CRACK/CAST). */

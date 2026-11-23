@@ -4422,7 +4422,7 @@ describe('work a row (task 54)', () => {
     assert.equal(h.msgs.at(-1)[0], 'Rows are worked on your farm, with the Hoe or the Watering Can.');
   });
 
-  test('a power berry message on the last tile is not hidden by row completion', async () => {
+  test('a Heartseed message on the last tile is not hidden by row completion', async () => {
     const g = strip();
     g.berry_sources = [];
     g.first_steps = null;
@@ -4430,7 +4430,7 @@ describe('work a row (task 54)', () => {
     await g.handle('c');
     await pinned(0, () => g.handle('row-repeat'));
     assert.equal(g.power_berries, 1);
-    assert.match(g.msgs.at(-1)[0], /Power Berry/);
+    assert.match(g.msgs.at(-1)[0], /Heartseed/);
     assert.deepEqual([g.px, g.py], [21, 15]);
   });
 
@@ -4511,6 +4511,9 @@ describe('work a row (task 54)', () => {
     const g = strip();
     g.row = { map: 'farm', tool: 'Hoe', dir: [1, 0], tiles: [[21, 15]] };
     assert.ok(!('row' in g.snapshot()));
+  });
+});
+
 describe('museum exhibits that tell a story (task 16)', () => {
   const donate = async (g: any, item: string) => {
     g.inv[item] = 1;
