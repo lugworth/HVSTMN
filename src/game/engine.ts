@@ -284,6 +284,19 @@ import {
   defaultAssist, readAssistSettings, writeAssistSettings, type AssistSettings,
 } from './progression';
 import {
+  FORTNIGHT_GOALS,
+  FORTNIGHT_KEEPSAKE,
+  achNewly,
+  fortnightNewly,
+  newFortnight,
+  payoutLine,
+  sanitizeAchSeen,
+  sanitizeFortnight,
+  type FortnightCtx,
+  type FortnightState,
+  type Payout,
+} from './goals';
+import {
   TEXT_SCALES, readTextScale, writeTextScale, readHighContrast, writeHighContrast,
   KEY_ACTION_SPECS, readKeyBindings, writeKeyBindings, keyLabelFor, mapSymbolLegend,
   type TextScale, type KeyBindings,
@@ -588,6 +601,9 @@ export class Game {
   favorite_seed: string | null = null;
   /** The first-morning checklist (task 50): which steps are done, or null once it is finished or hidden. */
   first_steps: { till: boolean; sow: boolean; water: boolean } | null = null;
+  fortnight: FortnightState = newFortnight();
+  ach_seen: string[] = [];
+  ach_unread = false;
   /** The tool active before the current seed-bag shortcut toggled in. */
   previous_tool: string | null = null;
   /** A row being worked (task 54), set by the first C press and not saved: the tiles still ahead, each walked onto in turn. */
@@ -817,7 +833,7 @@ export class Game {
   SAVE_FIELDS = [
     'name', 'farm', 'year', 'season', 'day', 'minutes', 'weather', 'tomorrow', 'gold',
     'stamina', 'max_stamina', 'fatigue', 'power_berries', 'berry_sources', 'has_mystic_berry',
-    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'row_reserve', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses', 'confessed_day',
+    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'fortnight', 'ach_seen', 'ach_unread', 'previous_tool', 'row_reserve', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses', 'confessed_day',
     'water', 'upgrading', 'bin', 'basket', 'shipped_counts', 'chickens', 'chicken_aff', 'chicken_fest_won',
     'outdoor_hours', 'animals_grazing', 'incubator_days', 'fed', 'eggs', 'dog_aff', 'dog_frisbee_dist',
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
@@ -1005,6 +1021,9 @@ export class Game {
     this.tool = 'Hoe';
     this.favorite_seed = null;
     this.first_steps = { till: false, sow: false, water: false };
+    this.fortnight = newFortnight();
+    this.ach_seen = [];
+    this.ach_unread = false;
     this.previous_tool = null;
     this.row = null;
     this.row_reserve = ROW_STAMINA_RESERVE;
@@ -1459,6 +1478,9 @@ export class Game {
       // an older save (no checklist saved) is an experienced farm: no first-morning checklist
       const fs = 'first_steps' in d ? d.first_steps : null;
       this.first_steps = fs && typeof fs === 'object' ? { till: !!fs.till, sow: !!fs.sow, water: !!fs.water } : null;
+      this.fortnight = sanitizeFortnight(this.fortnight);
+      if (this.first_steps) this.fortnight.active = false; // the ladder follows the checklist
+      this.ach_unread = !!this.ach_unread;
       this.bin = sanitizeStringRecordNumber(this.bin);
       this.basket = sanitizeStringRecordNumber(this.basket);
       this.shipped_counts = sanitizeStringRecordNumber(this.shipped_counts);
@@ -1603,6 +1625,8 @@ export class Game {
       const tr: any = this.trap;
       this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
+      // an older farm has no announced list: its finished achievements are not news
+      this.ach_seen = 'ach_seen' in d ? sanitizeAchSeen(this.ach_seen) : this.achievement_list().filter((a) => a.done).map((a) => a.name);
       this.recompute_max_stamina();
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
@@ -1744,18 +1768,25 @@ export class Game {
     }
   }
 
-  process_zack_pickup(): number {
+  /** What Otto pays for one of `item` today (mastery perks included). */
+  bin_price(item: string): number {
+    let price = ITEMS[item] ? ITEMS[item][0] : 0;
+    const cat = ITEMS[item]?.[2];
+    if (cat === 'crop' && this.has_perk('farm_value')) price = Math.round(price * 1.15);
+    else if (cat === 'fish' && this.has_perk('fish_rare')) price = Math.round(price * 1.15);
+    else if ((cat === 'animal' || item.includes('Mayonnaise') || item.includes('Cheese') || item.includes('Yarn')) && this.has_perk('ranch_value')) {
+      price = Math.round(price * 1.15);
+    }
+    return price;
+  }
+
+  process_zack_pickup(): Payout {
     let total = 0;
     let contractBonus = 0;
+    const items: [string, number][] = [];
     for (const [item, qty] of Object.entries(this.bin)) {
-      let price = ITEMS[item] ? ITEMS[item][0] : 0;
-      const cat = ITEMS[item]?.[2];
-      if (cat === 'crop' && this.has_perk('farm_value')) price = Math.round(price * 1.15);
-      else if (cat === 'fish' && this.has_perk('fish_rare')) price = Math.round(price * 1.15);
-      else if ((cat === 'animal' || item.includes('Mayonnaise') || item.includes('Cheese') || item.includes('Yarn')) && this.has_perk('ranch_value')) {
-        price = Math.round(price * 1.15);
-      }
-      total += price * qty;
+      total += this.bin_price(item) * qty;
+      if (qty > 0) items.push([item, qty]);
       this.shipped_counts[item] = (this.shipped_counts[item] || 0) + qty;
       // Credit weekly Otto shipping contracts (G16)
       for (const c of this.contracts) {
@@ -1778,7 +1809,19 @@ export class Game {
       playSfx('coin');
       this.markDirty(false);
     }
-    return total;
+    return { total, items, bonus: contractBonus };
+  }
+
+  /** 4:30 PM nudge: goods still in the bin (or the Basket) are about to be collected. Nothing is taken. */
+  bin_warning(): void {
+    const waiting = Object.entries(this.bin).reduce((n, [i, q]) => n + this.bin_price(i) * q, 0);
+    if (waiting > 0) {
+      this.msg(`4:30 PM: Otto will be along at 5 PM, ${waiting.toLocaleString('en-US')}G waiting in the bin.`, '09');
+      playSfx('menu');
+    } else if (getBasketTotal(this.basket) > 0) {
+      this.msg('4:30 PM: your Basket still holds goods. Empty it into the bin before Otto comes at 5 PM.', '09');
+      playSfx('menu');
+    }
   }
 
   async advance(mins: number): Promise<void> {
@@ -1798,11 +1841,10 @@ export class Game {
     // 5:00 PM (17:00) Otto shipping pickup
     if (before < 17 * 60 && this.minutes >= 17 * 60 && !this.zack_paid_today) {
       this.zack_paid_today = true;
-      const earned = this.process_zack_pickup();
-      if (earned > 0) {
-        this.msg(`5:00 PM: Otto picked up your shipment! +${earned}G.`, '09');
-      }
+      const pay = this.process_zack_pickup();
+      if (pay.total > 0) this.msg(`5:00 PM: ${payoutLine(pay)}`, '09');
     }
+    if (before < 16 * 60 + 30 && this.minutes >= 16 * 60 + 30) this.bin_warning();
 
     if (before < 18 * 60 && 18 * 60 <= this.minutes) {
       this.msg('The sun is setting. Shops are closing soon.', '09');
@@ -1817,6 +1859,7 @@ export class Game {
       this.fatigue = Math.min(100, this.fatigue + 10);
       this.msg("It's midnight. Staying up late builds Fatigue!", '08');
     }
+    this.goals_tick();
     if (this.minutes >= 26 * 60) {
       await this.pass_out("It's 2:00 AM... you collapse from exhaustion where you stand.");
       return;
@@ -1881,8 +1924,10 @@ export class Game {
     } else if (k === 'space' || k === 'z') {
       await this.use_tool();
       this.first_steps_update();
+      this.goals_tick();
     } else if (k === 'x' || k === 'e' || k === 'enter') {
       await this.interact();
+      this.goals_tick();
     } else if (k === 'tab') {
       this.cycle_tool(1);
     } else if (k === 'btab') {
@@ -2024,7 +2069,7 @@ export class Game {
         label: 'Achievements & Journal',
         icon: '✦',
         iconCol: '09',
-        right: `${achDone}/${achList.length}`,
+        right: `${this.ach_unread ? '★ ' : ''}${achDone}/${achList.length}`,
         rightCol: achDone > 0 ? '0B' : '04',
       },
       { key: 'mastery', raw: 'Farm Mastery', label: 'Farm Mastery', icon: '★', iconCol: '0B', right: 'Ranks', rightCol: '04' },
@@ -2150,7 +2195,7 @@ export class Game {
     } else if (key === 'import') {
       await this.import_save();
     } else if (key === 'firststeps') {
-      this.first_steps = null;
+      this.end_first_steps();
       this.msg('First-morning checklist hidden.', '0C');
     } else if (key === 'pace') {
       const all = Object.keys(DAY_PACES) as DayPace[];
@@ -2626,12 +2671,57 @@ export class Game {
     Object.assign(f, now);
     const next = this.first_steps_rows().find((r) => !r.done);
     if (!next) {
-      this.first_steps = null;
+      this.end_first_steps();
       this.msg('✓ First morning done! Water them daily; turnips are ready in 4 days. Otto ships the bin at 5 PM.', '0B');
       return;
     }
     const did = { till: 'Tilled the soil', sow: 'Sowed your first seeds', water: 'Watered them' }[newly[newly.length - 1]];
-    this.msg(`✓ ${did}. Next: ${next.label.toLowerCase()}.`, '0B');
+    this.msg(`✓ ${did}. Next: ${next.label.toLowerCase()}${next.key === 'sow' ? ' (Tab selects the seeds)' : ''}.`, '0B');
+  }
+
+  /** The checklist is over (done or hidden): the First Fortnight ladder takes its place. */
+  end_first_steps(): void {
+    this.first_steps = null;
+    if (!this.fortnight.done.length) this.fortnight.active = true;
+  }
+
+  fortnight_ctx(): FortnightCtx {
+    return { state: this.fortnight, shipped_total: this.shipped_total, talked: this.talked.size, museum: this.museum.length };
+  }
+
+  /** Reward each First Fortnight goal as it is met; the last one puts a keepsake on the mantel. */
+  fortnight_update(): void {
+    for (const g of fortnightNewly(this.fortnight_ctx())) {
+      this.fortnight.done.push(g.id);
+      if (g.gold) this.gold += g.gold;
+      if (g.seeds) this.give(g.seeds[0], g.seeds[1]);
+      const prize = [g.gold ? `+${g.gold}G` : '', g.seeds ? `+${g.seeds[1]} ${g.seeds[0]}` : ''].filter(Boolean).join(' ');
+      this.msg(`✓ Fortnight ${this.fortnight.done.length}/${FORTNIGHT_GOALS.length}: ${g.label} ${prize}`, '0B');
+      this.fx_add('sparkle', this.px, this.py, 0.9);
+      playSfx('coin');
+    }
+    if (this.fortnight.active && this.fortnight.done.length >= FORTNIGHT_GOALS.length) {
+      this.fortnight.active = false;
+      this.keepsake(FORTNIGHT_KEEPSAKE.key, FORTNIGHT_KEEPSAKE.name, FORTNIGHT_KEEPSAKE.text);
+      this.msg(`★ First Fortnight complete! The ${FORTNIGHT_KEEPSAKE.name} is on your mantel.`, '0E');
+    }
+  }
+
+  /** Announce achievements earned since the last check (once each). */
+  ach_check(): void {
+    for (const a of achNewly(this.achievement_list(), this.ach_seen)) {
+      this.ach_seen.push(a.name);
+      this.ach_unread = true;
+      this.msg(`Achievement: ${a.name}`, '0E');
+      this.msg(`  - ${a.desc}`, '0E');
+      this.fx_add('sparkle', this.px, this.py, 0.9);
+      playSfx('fanfare');
+    }
+  }
+
+  goals_tick(): void {
+    this.fortnight_update();
+    this.ach_check();
   }
 
   /** Pin a seed bag for fast planting and return to the previous tool with one action. */
@@ -3799,6 +3889,7 @@ export class Game {
           delete this.crops[pKey];
         }
         this.mastery_add('farming');
+        if (crop === 'Turnip') this.fortnight.picked = true;
         playSfx('harvest');
         this.fx_add('sparkle', tx, ty, 0.7);
       } else {
@@ -3929,6 +4020,7 @@ export class Game {
       if (text === 'farm') {
         text = `${this.farm.toUpperCase()} FARM — Owner: ${this.name}`;
       } else if (text === 'request_board') {
+        this.fortnight.board = true;
         await this.request_menu();
         return;
       } else if (text === 'footbridge') {
@@ -6994,6 +7086,13 @@ export class Game {
       lines.push('         (Hide this list in the Diary.)');
       lines.push('');
     }
+    if (this.fortnight.active) {
+      lines.push(`  First fortnight  ${this.fortnight.done.length}/${FORTNIGHT_GOALS.length}`);
+      for (const g of FORTNIGHT_GOALS) lines.push(`    [${this.fortnight.done.includes(g.id) ? '✓' : ' '}] ${g.label}`);
+      const next = FORTNIGHT_GOALS.find((g) => !this.fortnight.done.includes(g.id));
+      if (next) lines.push(`    ${next.hint}`);
+      lines.push('');
+    }
     const soon = this.reminders.filter((r) => r.day - this.absday() <= 7);
     for (const r of soon.slice(0, 3)) {
       const when = this.day_from_now(r.day);
@@ -7576,6 +7675,7 @@ export class Game {
       const [px, py] = [this.px, this.py];
       await this.use_tool([x, y]);
       this.first_steps_update();
+      this.goals_tick();
       if (this.mapname !== row.map || this.px !== px || this.py !== py) {
         this.row = null;
         return;
@@ -7866,6 +7966,7 @@ export class Game {
     this.take(item, 1);
     this.museum.push(item);
     this.msg(`${item} added to the museum collection! (${this.museum.length}/${this.museum_total()})`, '0B');
+    this.goals_tick();
     await this.museum_reward_check();
     await this.exhibit_check();
   }
@@ -8456,6 +8557,7 @@ export class Game {
   async achievements_page(): Promise<void> {
     const list = this.achievement_list();
     const done = list.filter((a) => a.done).length;
+    this.ach_unread = false;
     const pages: string[][] = [];
     let page = [`  ${done}/${list.length} unlocked`];
     for (const a of list) {
@@ -9357,11 +9459,10 @@ export class Game {
     const report: string[] = [];
 
     // Collect any remaining items in shipping bin
-    const total = this.process_zack_pickup();
-    if (total > 0) {
-      report.push(`Otto settled your remaining shipment: +${total}G.`);
-    }
+    const pay = this.process_zack_pickup();
+    if (pay.total > 0) report.push(payoutLine(pay, 'Otto settled your shipment:'));
     this.zack_paid_today = false;
+    this.goals_tick();
     this.honey_picked = false;
     // Turned in before closing time: the stall packs up with whatever it sold.
     if (this.stall) report.push('You packed up your stall early.', ...this.stall_close().map((l) => l.trim()).filter(Boolean));
@@ -10306,6 +10407,13 @@ export class Game {
         cx += seg.length;
       }
       y++;
+    }
+    if (this.fortnight.active && !this.first_steps && y + 2 < end - 1) {
+      // two rows: the heading with the count, then the next goal
+      y += 1;
+      const next = FORTNIGHT_GOALS.find((g) => !this.fortnight.done.includes(g.id));
+      line(y++, `FORTNIGHT ${this.fortnight.done.length}/${FORTNIGHT_GOALS.length}`, '0C');
+      if (next) line(y++, `○ ${next.short}`, '04');
     }
     const locFull = this.map.title + (this.map.indoor ? ' / Indoors' : '');
     if (y + 1 < end) {

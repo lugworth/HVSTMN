@@ -675,6 +675,13 @@ No player-visible change: frames are byte-identical (md5 of `frameSignature(comp
 - `draw_map` builds `pkey(x, y)` once per cell and passes it to `map.tile(x, y, key)`, `glyph`, `cell_tag` and `farm_overlay`. `GLASS_SET` / `compost_has()` give Set lookups; `composted` stays an array for saves.
 - `GameScreen.renderEnhanced` no longer builds the full-frame signature string each frame; it checks the mode (hires/palette/crt/contrast) and relies on `frameDirtyRect`. `frameSignature` remains for tests.
 
+## New-player guidance (`src/game/goals.ts`)
+
+- First Fortnight ladder: when the first-morning checklist ends (done or hidden) a five-goal list (pick a turnip, ship it, greet 3 villagers, read the Market Cross board, donate to the museum) shows in Today's Plan and the side panel (`FORTNIGHT n/5`). Each goal pays a little gold or seeds; the last leaves the Hearthfolk Hearth-Knot on the mantel. Saved as `fortnight`; old farms load with it hidden.
+- Achievements are announced once (gold two-line message, sparkle, fanfare) via `ach_check()`; `ach_seen`/`ach_unread` are saved, a star shows by the Achievements entry in the pause menu until opened, and old farms seed `ach_seen` silently on load.
+- 4:30 PM bin warning (bin value, or a Basket reminder; nothing is taken). `process_zack_pickup()` now returns `{ total, items, bonus }`; the 5 PM message reads "Otto took 9 Turnip, 2 Egg: +1,260G".
+- The tilling message now says Tab selects the seeds. Tests: `src/game/goals.test.ts`.
+
 ## Where to look for more
 
 - `README.md`: feature list, controls, colour rules and renderer overview.
