@@ -10,6 +10,7 @@ import { FARM_SYMBOLS } from '@/src/game/farm-symbols';
 import { isCompact } from '@/src/game/compact';
 import {
   chooseGrid,
+  wantsTouchLayout,
   dirToward,
   dpadDirection,
   firstStep,
@@ -671,7 +672,8 @@ export default function GameScreen() {
       window.matchMedia('(pointer: coarse)').matches ||
       'ontouchstart' in window ||
       navigator.maxTouchPoints > 0;
-    setInputMode(hasTouch ? 'touch' : 'desktop');
+    const touchLayout = wantsTouchLayout(hasTouch, window.innerWidth);
+    setInputMode(touchLayout ? 'touch' : 'desktop');
     setCanFullscreen(Boolean(document.fullscreenEnabled));
     try {
       hapticsRef.current = window.localStorage.getItem('hrvstmn-haptics') !== 'off';
@@ -791,7 +793,7 @@ export default function GameScreen() {
       if (!stage) return;
       const W = stage.clientWidth || 800;
       const H = stage.clientHeight || 500;
-      const g = chooseGrid(W, H, measureCell, hasTouch, textScaleRef.current);
+      const g = chooseGrid(W, H, measureCell, touchLayout, textScaleRef.current);
       fontPx = g.fontPx;
       cw = measureCell(fontPx);
       ch = lineHeight(fontPx);
@@ -1025,7 +1027,7 @@ export default function GameScreen() {
     const noDefault = (e: Event) => {
       if (!inField(e)) e.preventDefault();
     };
-    if (hasTouch) {
+    if (touchLayout) {
       document.addEventListener('gesturestart', noDefault);
       document.addEventListener('touchmove', noDefault, { passive: false });
       document.addEventListener('contextmenu', noDefault);

@@ -98,6 +98,8 @@ html, body {
 .game-toolbar {
   position: relative; /* the game menu hangs above it */
   font-family: var(--font-display);
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -240,6 +242,8 @@ html, body {
 .game-menu {
   z-index: 40;
   font-family: var(--font-display);
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -340,6 +344,11 @@ html, body {
   z-index: 30;
   max-height: calc(100% - 16px);
   font-size: 13px;
+}
+.game-menu-sheet,
+.game-root {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0;
 }
 .game-menu-sheet .menu-sections {
   grid-template-columns: 1fr;
@@ -575,7 +584,7 @@ html, body {
 
 .type-bar {
   position: absolute;
-  top: 8px;
+  top: 42%; /* below the title logo, above the soft keyboard */
   left: 8px;
   right: 8px;
   z-index: 30;

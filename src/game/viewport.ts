@@ -4,6 +4,8 @@ import { TEXT_SCALES, type TextScale } from './accessibility';
 
 export const MAX_COLS = 160;
 export const MAX_ROWS = 50;
+/** Phone (compact) grids stop growing taller than this, so small rooms and the status strip stay near the map. */
+export const TOUCH_COMPACT_MAX_ROWS = 32;
 /** Baseline font size; touch screens cap here and desktop can grow to 26px. */
 export const BASE_FONT = 16;
 /** Touch screens never shrink the full 80-column layout below this. */
@@ -45,8 +47,10 @@ export function chooseGrid(
     width / measure(px) >= minCols && height / lineHeight(px) >= MIN_ROWS;
   const grid = (px: number, minCols: number): Grid => {
     const cols = clamp(Math.floor(width / measure(px)), minCols, MAX_COLS);
-    const rows = clamp(Math.floor(height / lineHeight(px)), MIN_ROWS, MAX_ROWS);
-    return { fontPx: px, cols, rows, compact: cols < FULL_MIN_COLS };
+    const compact = cols < FULL_MIN_COLS;
+    const maxRows = touch && compact ? TOUCH_COMPACT_MAX_ROWS : MAX_ROWS;
+    const rows = clamp(Math.floor(height / lineHeight(px)), MIN_ROWS, maxRows);
+    return { fontPx: px, cols, rows, compact };
   };
   const shrinkTo = (minCols: number) =>
     Math.max(
@@ -142,3 +146,8 @@ export function dpadDirection(dx: number, dy: number, dead: number, current: Dir
   if (horizontal) return dx > 0 ? 'right' : 'left';
   return dy > 0 ? 'down' : 'up';
 }
+
+/** Viewports narrower than this get the phone layout even without a touch signal. */
+export const NARROW_VIEWPORT_PX = 600;
+export const wantsTouchLayout = (hasTouch: boolean, viewportWidth: number): boolean =>
+  hasTouch || viewportWidth < NARROW_VIEWPORT_PX;

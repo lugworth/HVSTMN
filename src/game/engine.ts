@@ -10983,14 +10983,15 @@ export class Game {
     }
     if (preview.cost > 0) seg(`-${preview.cost}st${preview.faint ? '!' : ''} `, preview.faint ? '08' : '03');
     const compactFacing = facing.summary.length > 13 ? action.label : facing.summary;
-    if (compactFacing && !this.modal_depth && x + compactFacing.length + 1 < W) {
+    const num = ` ${this.stamina}/${this.max_stamina}`;
+    // the stamina read-out has priority: the facing hint only gets what is left of the row
+    if (compactFacing && !this.modal_depth && x + compactFacing.length + 1 + num.length + 9 < W) {
       seg(` ${compactFacing} `, '0E');
     }
     x += 1;
     const frac = this.stamina / this.max_stamina;
     const col = frac > 0.5 ? '0B' : frac > 0.2 ? '09' : '08';
-    const num = ` ${this.stamina}`;
-    const bw = Math.max(4, Math.min(10, W - x - num.length - 4));
+    const bw = Math.max(4, Math.min(10, W - x - num.length - 9));
     const filled = Math.round(frac * bw);
     s.ctx?.icons.push({ x, y, icon: 'stamina' });
     seg(' ', '02');
@@ -11227,7 +11228,9 @@ export class Game {
 
   async say(text: string, who: string | null = null): Promise<void> {
     const [W, H] = [this.scr.w, this.scr.h];
-    const bw = Math.min(W - 4, 74);
+    const divX = this.scr.ctx?.divX ?? W;
+    const mapW = !isCompact(W) && divX < W && divX >= 40 ? divX : W; // keep the box over the map, off the side panel
+    const bw = Math.min(mapW - 4, 74);
     const lines: string[] = [];
     for (const para of String(text).split('\n')) {
       lines.push(...(py_wrap(para, bw - 4) || ['']));
@@ -11263,7 +11266,7 @@ export class Game {
     }
     for (const page of pages) {
       const draw = () => {
-        const [bx, by] = [Math.floor((W - bw) / 2), H - 8];
+        const [bx, by] = [Math.floor((mapW - bw) / 2), H - 8];
         this.scr.box(bx, by, bw, 6, '0D', '00', title || undefined, tcol, boxStyle);
         if (hearts && title) {
           const hx = bx + title.length + 5;
