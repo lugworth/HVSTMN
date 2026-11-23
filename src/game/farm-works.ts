@@ -7,6 +7,8 @@ export const HYBRIDS = [
   { crop: 'Snowheart', parents: ['Cabbage', 'Green Pepper'], season: 'Winter', dish: 'Snowheart Relish', grow: 7, value: 130, color: '0C' },
 ] as const;
 
+/** Silas's fee to re-cross a hybrid once every seed, plant and harvest of it is gone. */
+export const HYBRID_RECROSS_FEE = 200;
 export const HYBRID_CROPS = new Set<string>(HYBRIDS.map((h) => h.crop));
 export const ORCHARD_SPOTS = ['45,6', '47,6', '49,6'];
 export const SAPLING = 'Orchard Sapling';

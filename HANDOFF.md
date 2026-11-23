@@ -657,3 +657,10 @@ Newest first.
 - `docs/ascii-art-pack.md`: title plate, crop/animal/tool/building ASCII art and a farm vignette with Isotope colour maps.
 - `src/game/enhanced.test.ts`: precise spec of the visual behaviour.
 - `git log`: commit bodies and merged PRs describe each player-visible change.
+
+## P1 bug fixes (player-visible)
+
+- Ferreira sells the Jewel of Truth once; a repeat purchase shows "owned" and charges nothing.
+- Max stamina is computed in one place (`recompute_max_stamina`), so Heartseeds keep the Big Bed +20.
+- Winter: the Hoe and row work till glass cells once the greenhouse is built. A Fey tool blocks the seed pouch shortcut; Lucan will not "remove" a Fey Hoe/Watering Can (bless it instead).
+- Festival NPC positions no longer leak between Game instances; Silas re-crosses a fully lost hybrid for 200G; chickens use `add_chicken()` and a hatching egg waits in the incubator when the coop is full.
