@@ -39,14 +39,31 @@ describe('chooseGrid', () => {
   test('desktop keeps a readable grid, grows on large screens, and shrinks to fit 80x24', () => {
     const g = chooseGrid(1272, 600, mono, false);
     assert.deepEqual(g, { fontPx: 16, cols: Math.floor(1272 / mono(16)), rows: Math.floor(600 / lineHeight(16)), compact: false });
-    const small = chooseGrid(500, 400, mono, false);
+    const small = chooseGrid(640, 400, mono, false);
     assert.ok(small.fontPx < 16);
-    assert.ok(small.cols >= FULL_MIN_COLS && small.cols * mono(small.fontPx) <= 500);
-    assert.equal(small.compact, false, 'desktop never switches to the compact layout');
+    assert.ok(small.cols >= FULL_MIN_COLS && small.cols * mono(small.fontPx) <= 640);
+    assert.equal(small.compact, false, 'a desktop window of 600px or more keeps the full layout');
     const large = chooseGrid(1536, 950, mono, false);
     assert.ok(large.fontPx > 16 && large.fontPx <= 26);
     assert.ok(large.cols >= 96 && large.rows >= 30, 'larger glyphs retain a farm-sized view');
     assert.ok(large.cols * mono(large.fontPx) <= 1536 && large.rows * lineHeight(large.fontPx) <= 950);
+  });
+
+  test('a narrow desktop window (under 600px) switches to the compact layout', () => {
+    const g = chooseGrid(500, 400, mono, false);
+    assert.equal(g.compact, true);
+    assert.ok(g.cols >= COMPACT_MIN_COLS && g.cols < FULL_MIN_COLS);
+    assert.ok(g.cols * mono(g.fontPx) <= 500);
+    assert.equal(chooseGrid(600, 400, mono, false).compact, false);
+  });
+
+  test('a phone draws a small room larger; without a room the grid is unchanged', () => {
+    const plain = chooseGrid(386, 434, mono, true);
+    const room = chooseGrid(386, 434, mono, true, 'normal', [16, 10]);
+    assert.ok(room.fontPx > plain.fontPx, `${room.fontPx} vs ${plain.fontPx}`);
+    assert.ok(room.cols >= 46 && room.compact);
+    assert.ok(16 * mono(room.fontPx) <= 386 && 10 * lineHeight(room.fontPx) <= 434);
+    assert.deepEqual(chooseGrid(1272, 600, mono, false, 'normal', [16, 10]), chooseGrid(1272, 600, mono, false), 'desktop ignores it');
   });
 
   test('a portrait phone gets the compact layout at a readable size instead of a tiny 80-column grid', () => {

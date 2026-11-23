@@ -1145,7 +1145,7 @@ export class Game {
     this.mapname = 'house';
     this.show_minimap = false;
     [this.px, this.py] = HOUSE_WAKE;
-    this.face = [0, -1];
+    this.face = [0, 1]; // not toward the bed
     this.cam_x = null;
     this.cam_y = null;
 
@@ -2708,6 +2708,12 @@ export class Game {
     }
   }
 
+  /** Field tools do nothing inside a building (the mine is the exception), so a swing there is free. */
+  tool_can_work_here(t: string, obj?: string): boolean {
+    if (!this.map.indoor || this.mapname === 'mine' || obj) return true;
+    return !['Hoe', 'Axe', 'Hammer', 'Sickle', 'Watering Can'].includes(t);
+  }
+
   async use_tool(rowTarget?: [number, number]): Promise<void> {
     const t = this.tool;
     if (!this.tool_list().includes(t)) {
@@ -2742,6 +2748,10 @@ export class Game {
       return;
     }
 
+    if (!this.tool_can_work_here(t, obj)) {
+      this.msg(`Nothing here for the ${t}. Use it outdoors on the farm.`);
+      return;
+    }
     this.record_tool_use(t);
     playSfx('tool');
     if (t === 'Watering Can') this.fx_add('splash', tx, ty);
@@ -2798,8 +2808,10 @@ export class Game {
       }
       if (this.mapname !== 'farm') {
         this.msg('You can only till soil on your farm (or dig in the mines).');
+        return;
       } else if (this.season === 3) {
         this.msg('The ground is frozen solid in Winter.');
+        return;
       } else {
         let n = 0;
         for (const [qx, qy] of rowTarget ? [rowTarget] : this.area()) {
@@ -2816,8 +2828,9 @@ export class Game {
             }
           }
         }
-        if (!n && obj) {
-          this.msg(`There's a ${obj} in the way.`);
+        if (!n) {
+          this.msg(obj ? `There's a ${obj} in the way.` : "Can't till there.");
+          return;
         }
       }
       await this.spend(2);
@@ -3844,7 +3857,8 @@ export class Game {
     if (tile === 'bin') {
       await this.ship();
     } else if (tile === 'bed') {
-      if (await this.confirm('Go to sleep for the night? (Saves to Slot 1)')) {
+      // Until the first-steps checklist is done, a stray press on the bed answers No.
+      if (await this.confirm('Go to sleep for the night? (Saves to Slot 1)', this.first_steps !== null)) {
         await this.new_day('sleep');
       }
     } else if (tile === 'tv') {
@@ -7717,6 +7731,7 @@ export class Game {
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
     if (this.mapname === 'river' && tile === 'water' && this.tool !== 'Watering Can') return { key: 'x', label: 'SKIP' };
     if (this.tool === 'Compost') return { key: 'space', label: 'SPREAD' };
+    if (!this.tool_can_work_here(this.tool, obj)) return { key: 'x', label: 'LOOK' };
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     return { key: 'space', label: short.length > 7 ? 'USE' : `USE ${short.toUpperCase()}` };
   }
@@ -11263,7 +11278,9 @@ export class Game {
 
   async say(text: string, who: string | null = null): Promise<void> {
     const [W, H] = [this.scr.w, this.scr.h];
-    const bw = Math.min(W - 4, 74);
+    const divX = this.scr.ctx?.divX ?? W;
+    const paneW = !isCompact(W) && divX < W ? divX : W; // keep the side panel visible
+    const bw = Math.min(paneW - 4, 74);
     const lines: string[] = [];
     for (const para of String(text).split('\n')) {
       lines.push(...(py_wrap(para, bw - 4) || ['']));
@@ -11279,7 +11296,7 @@ export class Game {
     if (who && who in NPCS) {
       title = `● ${who}`;
       tcol = NPCS[who].col;
-      hearts = this.hearts(who);
+      hearts = [getHeartInfo(this.friend[who] || 0).bar, getHeartInfo(this.friend[who] || 0).color];
       boxStyle = { kind: 'npc', accent: NPCS[who].col };
     } else if (who && /(TV|Channel|Cooking Show|Variety|Life on the Farm)/i.test(who)) {
       title = `▣ ${who}`;
@@ -11299,7 +11316,7 @@ export class Game {
     }
     for (const page of pages) {
       const draw = () => {
-        const [bx, by] = [Math.floor((W - bw) / 2), H - 8];
+        const [bx, by] = [Math.floor((paneW - bw) / 2), H - 8];
         this.scr.box(bx, by, bw, 6, '0D', '00', title || undefined, tcol, boxStyle);
         if (hearts && title) {
           const hx = bx + title.length + 5;
@@ -11591,8 +11608,8 @@ export class Game {
     }
   }
 
-  async confirm(question: string): Promise<boolean> {
-    return (await this.menu(question, ['Yes', 'No'])) === 0;
+  async confirm(question: string, defaultNo = false): Promise<boolean> {
+    return (await this.menu(question, ['Yes', 'No'], defaultNo ? 1 : 0)) === 0;
   }
 
   async ask_qty(prompt: string, maxq: number, price: number | null = null, label: string = 'Total'): Promise<number> {

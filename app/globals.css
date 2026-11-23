@@ -280,6 +280,8 @@ html, body {
   right: min(25%, 350px);
   bottom: calc(100% + 52px);
   max-height: calc(100dvh - 150px);
+  /* stay left of the HUD column (EQUIPPED, STAMINA, GOLD, FACING stay readable) */
+  max-width: calc(100% - min(25%, 350px) - 8px);
   font-size: 14px;
 }
 .menu-group { display: flex; flex-direction: column; min-width: 0; }
@@ -327,10 +329,10 @@ html, body {
 .menu-item:focus .menu-mark { color: var(--base0B); }
 .menu-item:focus .menu-key { color: var(--base0C); }
 @media (max-width: 1080px) {
-  .game-menu-pop { right: 16px; bottom: calc(100% + 46px); }
+  .game-menu-pop { right: 16px; bottom: calc(100% + 46px); max-width: calc(100% - 32px); }
 }
 @media (max-width: 760px) {
-  .game-menu-pop { left: 6px; right: 6px; bottom: calc(100% + 6px); font-size: 13px; }
+  .game-menu-pop { left: 6px; right: 6px; bottom: calc(100% + 6px); max-width: none; font-size: 13px; }
   .menu-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

@@ -787,11 +787,15 @@ export default function GameScreen() {
 
     // Desktop: readable Contour grid, shrunk to fit 80x24. Touch: the full layout down to 12px, else the compact
     // phone layout (no side panel, >= 50 columns) at the largest readable size. See viewport.ts.
+    let lastRoom = '';
     function layout() {
       if (!stage) return;
       const W = stage.clientWidth || 800;
       const H = stage.clientHeight || 500;
-      const g = chooseGrid(W, H, measureCell, hasTouch, textScaleRef.current);
+      const gm = gameRef.current?.started ? gameRef.current.map : null;
+      const room: [number, number] | null = gm && gm.indoor && gm.name !== 'mine' ? [gm.w, gm.h] : null;
+      lastRoom = room ? gm!.name : '';
+      const g = chooseGrid(W, H, measureCell, hasTouch, textScaleRef.current, room);
       fontPx = g.fontPx;
       cw = measureCell(fontPx);
       ch = lineHeight(fontPx);
@@ -1068,6 +1072,12 @@ export default function GameScreen() {
     const hudTimer = setInterval(() => {
       const a = game.context_action();
       const modal = game.modal_depth > 0;
+      // A phone re-sizes the grid when it enters or leaves a small room.
+      if (hasTouch && game.started && !modal) {
+        const gm = game.map;
+        const room = gm.indoor && gm.name !== 'mine' ? gm.name : '';
+        if (room !== lastRoom) relayoutRef.current?.();
+      }
       const next: Hud = { label: a.label, modal, typing: game.typing, tool: game.tool, idle: game.started && !modal, started: game.started };
       setHud((prev) => (sameHud(prev, next) ? prev : next));
       if (canvas && game.started) {
@@ -1285,9 +1295,9 @@ export default function GameScreen() {
                 className={`game-control${key === 'enter' ? ' game-control-primary' : ''}`}
                 aria-keyshortcuts={key === 'enter' ? 'Enter' : 'ArrowDown'}
               >
-                <kbd className="game-shortcut">{shortcut}</kbd>
+                <kbd className="game-shortcut">{hud.typing && key === 'down' ? 'type' : shortcut}</kbd>
                 <PixelIcon icon={defaultIcon} className={`game-icon-${key === 'enter' ? 'x' : 'tab'}`} />
-                <span className="game-label">{label}</span>
+                <span className="game-label">{hud.typing ? (key === 'down' ? 'TYPE' : 'DONE') : label}</span>
               </button>
             ))
           )}

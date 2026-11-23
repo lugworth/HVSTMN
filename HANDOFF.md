@@ -1,5 +1,16 @@
 # Handoff: FURROW
 
+## UI and touch fixes, 2026-11-22
+
+- Dialogue boxes (`say`) are clamped to the map pane so the HUD column stays visible; the speaker bar shows the heart
+  bar only (the colour word "Black" is gone). `Screen.box` clips long titles so they never cover the top-right corner.
+- The F10 menu pop-up is capped to the area left of the HUD column (`.game-menu-pop` max-width).
+- Day 1: you wake facing away from the bed, and "Go to sleep?" defaults to No until the first-steps checklist is done.
+- Field tools (Hoe, Axe, Hammer, Sickle, Watering Can) indoors do nothing and cost no stamina; the A button reads LOOK
+  there. A failed hoe on the farm is free too. Narrow non-touch windows (< 600px) use the compact layout; phones in a
+  small room use larger cells (`chooseGrid` `mapSize`, 46 columns minimum). `app/icon.svg` is the favicon.
+- Tests: `src/game/ui-layout.test.ts`, plus new cases in `mobile.test.ts`.
+
 ## Farm works, 2026-11-22
 
 - `src/game/farm-works.ts` holds the data and save sanitiser; the engine (`farm_works` field, saved, restored after
