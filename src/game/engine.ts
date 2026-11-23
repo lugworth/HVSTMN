@@ -586,6 +586,7 @@ export class Game {
   row_reserve: number = ROW_STAMINA_RESERVE;
   levels: Record<string, number> = {};
   tool_exp: Record<string, number> = {};
+  confessed_day = -1;
   cursed_uses: Record<string, number> = {};
   cursed_days: Record<string, number> = {};
   cursed_blesses: Record<string, number> = {};
@@ -804,7 +805,7 @@ export class Game {
   SAVE_FIELDS = [
     'name', 'farm', 'year', 'season', 'day', 'minutes', 'weather', 'tomorrow', 'gold',
     'stamina', 'max_stamina', 'fatigue', 'power_berries', 'berry_sources', 'has_mystic_berry',
-    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'row_reserve', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses',
+    'inv', 'held', 'tool', 'favorite_seed', 'first_steps', 'previous_tool', 'row_reserve', 'levels', 'tool_exp', 'cursed_uses', 'cursed_days', 'cursed_blesses', 'confessed_day',
     'water', 'upgrading', 'bin', 'basket', 'shipped_counts', 'chickens', 'chicken_aff', 'chicken_fest_won',
     'outdoor_hours', 'animals_grazing', 'incubator_days', 'fed', 'eggs', 'dog_aff', 'dog_frisbee_dist',
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
@@ -1000,6 +1001,7 @@ export class Game {
     this.cursed_uses = {};
     this.cursed_days = {};
     this.cursed_blesses = {};
+    this.confessed_day = -1;
     this.water = CAN_CAP[0];
     this.upgrading = null;
     this.tilled = new CoordSet();
@@ -1143,7 +1145,7 @@ export class Game {
     this.mapname = 'house';
     this.show_minimap = false;
     [this.px, this.py] = HOUSE_WAKE;
-    this.face = [0, -1];
+    this.face = [0, 1]; // not toward the bed
     this.cam_x = null;
     this.cam_y = null;
 
@@ -1243,13 +1245,17 @@ export class Game {
     this.markDirty(false);
   }
 
+  calc_max_stamina(): number {
+    return getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
+  }
+
   give_power_berry(source: string): boolean {
     if (this.berry_sources.includes(source) || this.power_berries >= 10) {
       return false;
     }
     this.berry_sources.push(source);
     this.power_berries += 1;
-    this.max_stamina = getMaxStamina(this.power_berries);
+    this.max_stamina = this.calc_max_stamina();
     this.stamina = this.max_stamina;
     this.fatigue = 0;
     this.msg(`You ate a Heartseed! Max Stamina +10 (${this.max_stamina})!`, '0A');
@@ -1430,6 +1436,7 @@ export class Game {
         }
       }
       this.farm_works = emptyFarmWorks();
+      if (!Number.isInteger(this.confessed_day)) this.confessed_day = -1;
       if (!(ROW_RESERVES as readonly number[]).includes(this.row_reserve)) this.row_reserve = ROW_STAMINA_RESERVE;
       this.inv = sanitizeStringRecordNumber(this.inv);
       // an older save (no checklist saved) is an experienced farm: no first-morning checklist
@@ -1579,7 +1586,7 @@ export class Game {
       const tr: any = this.trap;
       this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
-      this.max_stamina = getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
+      this.max_stamina = this.calc_max_stamina();
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
       if (this.mapname === 'mine') {
@@ -2510,7 +2517,9 @@ export class Game {
       );
       if (sel !== null) {
         const target = floors[sel];
+        const [map, mins] = [this.mapname, this.minutes];
         if (target > 1 && fee > 0) await this.spend(fee);
+        if (this.passing_out || this.mapname !== map || this.minutes < mins) return;
         this.enter_mine(target, mineType);
       }
     } else {
@@ -2662,10 +2671,16 @@ export class Game {
     }
   }
 
-  async spend(n: number): Promise<void> {
+  /** Stamina a swing of base cost n really takes, after food buffs and mastery perks. */
+  swing_cost(n: number): number {
     let cost = n;
     if (this.active_buff()?.kind === 'stamina' && cost > 1) cost -= 1;
     if (this.mapname === 'mine' && this.has_perk('mine_stamina') && cost > 1 && this.steps % 2 === 0) cost -= 1;
+    return cost;
+  }
+
+  async spend(n: number): Promise<void> {
+    const cost = this.swing_cost(n);
     const isCursed = this.levels[this.tool] === 5;
     const res = calculateStaminaSpend(this.stamina, this.fatigue, cost, {
       weather: this.map.indoor ? 'Sunny' : this.weather,
@@ -2691,6 +2706,12 @@ export class Game {
     } else if (res.warning === 'tired' && prevStam > 30 && this.stamina <= 30) {
       this.msg("You're getting tired. Eat something or soak in the Hot Spring.", '09');
     }
+  }
+
+  /** Field tools do nothing inside a building (the mine is the exception), so a swing there is free. */
+  tool_can_work_here(t: string, obj?: string): boolean {
+    if (!this.map.indoor || this.mapname === 'mine' || obj) return true;
+    return !['Hoe', 'Axe', 'Hammer', 'Sickle', 'Watering Can'].includes(t);
   }
 
   async use_tool(rowTarget?: [number, number]): Promise<void> {
@@ -2727,6 +2748,10 @@ export class Game {
       return;
     }
 
+    if (!this.tool_can_work_here(t, obj)) {
+      this.msg(`Nothing here for the ${t}. Use it outdoors on the farm.`);
+      return;
+    }
     this.record_tool_use(t);
     playSfx('tool');
     if (t === 'Watering Can') this.fx_add('splash', tx, ty);
@@ -2783,8 +2808,10 @@ export class Game {
       }
       if (this.mapname !== 'farm') {
         this.msg('You can only till soil on your farm (or dig in the mines).');
+        return;
       } else if (this.season === 3) {
         this.msg('The ground is frozen solid in Winter.');
+        return;
       } else {
         let n = 0;
         for (const [qx, qy] of rowTarget ? [rowTarget] : this.area()) {
@@ -2801,8 +2828,9 @@ export class Game {
             }
           }
         }
-        if (!n && obj) {
-          this.msg(`There's a ${obj} in the way.`);
+        if (!n) {
+          this.msg(obj ? `There's a ${obj} in the way.` : "Can't till there.");
+          return;
         }
       }
       await this.spend(2);
@@ -3829,7 +3857,8 @@ export class Game {
     if (tile === 'bin') {
       await this.ship();
     } else if (tile === 'bed') {
-      if (await this.confirm('Go to sleep for the night? (Saves to Slot 1)')) {
+      // Until the first-steps checklist is done, a stray press on the bed answers No.
+      if (await this.confirm('Go to sleep for the night? (Saves to Slot 1)', this.first_steps !== null)) {
         await this.new_day('sleep');
       }
     } else if (tile === 'tv') {
@@ -6162,7 +6191,7 @@ export class Game {
         ...(!this.enrichment.perch ? ([[`Build Chicken Perch (${PERCH_COST.gold}G + ${PERCH_COST.lumber} Lumber)`, () => this.build_enrichment('perch')]] as [string, () => Promise<void>][]) : []),
         ...(!this.enrichment.shadeTree ? ([[`Plant Pasture Shade Tree (${SHADE_TREE_COST.gold}G + ${SHADE_TREE_COST.lumber} Lumber)`, () => this.build_enrichment('shadeTree')]] as [string, () => Promise<void>][]) : []),
         [`Buy Orchard Sapling (${SAPLING_PRICE}G)`, () => this.buy(SAPLING, SAPLING_PRICE, 3)],
-        ...FARM_PIECE_NAMES.map((n) => [`Buy ${n} (${FARM_PIECES[n].price}G)`, () => this.buy(n, FARM_PIECES[n].price, 10)] as [string, () => Promise<void>]),
+        ...FARM_PIECE_NAMES.map((n) => [`Buy ${n} (${FARM_PIECES[n].price}G)`, () => this.buy_piece(n)] as [string, () => Promise<void>]),
       ];
     }
     if (bid === 'poultry') {
@@ -6355,7 +6384,7 @@ export class Game {
         await this.say('A 1000G donation is required to lift the binding curse.', 'Lucan');
       } else {
         this.gold -= 1000;
-        this.tool = 'Hoe';
+        this.tool = TOOLS.find((t) => this.levels[t] !== 5) || 'Hoe';
         await this.say('May the Wellkeeper cleanse this curse! You can freely switch tools again.', 'Lucan');
       }
     } else if (sel === 1) {
@@ -6374,12 +6403,16 @@ export class Game {
           await this.say(`I have prayed over your ${cursedTarget} (${this.cursed_blesses[cursedTarget]}/10 blessings). Bless it once more to complete the ritual!`, 'Lucan');
         }
       }
+    } else if ((sel === 2 || sel === 3) && this.confessed_day === this.absday()) {
+      await this.say('You have already confessed today. Come back tomorrow.', 'Lucan');
     } else if (sel === 2) {
+      this.confessed_day = this.absday();
       for (const n of Object.keys(this.friend)) {
         this.friend[n] = clamp(this.friend[n] + 2, 0, 100);
       }
       await this.say('The Wellkeeper forgives you. (+2 Villager Friendship!)', 'Lucan');
     } else if (sel === 3) {
+      this.confessed_day = this.absday();
       this.friend['Wellkeeper'] = clamp((this.friend['Wellkeeper'] || 0) + 10, 0, 100);
       await this.say('You have my blessing! Present the Promise Ribbon at the Wellkeeper Pond when her heart is Red!', 'Lucan');
     }
@@ -6413,6 +6446,7 @@ export class Game {
     const [x, y] = key.split(',').map(Number);
     const m = this.maps.farm;
     if (!Number.isInteger(x) || !Number.isInteger(y) || !m.inside(x, y) || m.t[y][x] !== 'field') return false;
+    if (Object.keys(m.warps).some((w) => { const [wx, wy] = w.split(',').map(Number); return Math.abs(wx - x) <= 1 && Math.abs(wy - y) <= 1; })) return false;
     return !this.tilled.has(key) && !this.crops[key] && !this.objs.farm?.[key] && !GLASS_CELLS.includes(key) && !CHANNEL_CELLS.includes(key) &&
       !ORCHARD_SPOTS.includes(key) && key !== pkey(...BARREL_SPOT) && key !== pkey(...GLASS_SPOT);
   }
@@ -6439,6 +6473,15 @@ export class Game {
     return true;
   }
 
+  /** One Auto-Feeder per farm: owned or already placed means no second purchase. */
+  async buy_piece(name: string): Promise<void> {
+    if (name === 'Auto-Feeder' && ((this.inv[name] || 0) > 0 || Object.values(this.farm_works.pieces).includes(name))) {
+      await this.say('One Auto-Feeder is enough for the farm.', 'Ingrid');
+      return;
+    }
+    await this.buy(name, FARM_PIECES[name as keyof typeof FARM_PIECES].price, name === 'Auto-Feeder' ? 1 : 10);
+  }
+
   plant_orchard(x: number, y: number): boolean {
     const k = pkey(x, y);
     if (this.mapname !== 'farm' || !(this.inv[SAPLING] > 0) || !ORCHARD_SPOTS.includes(k) || this.farm_works.orchard[k]) return false;
@@ -6459,7 +6502,7 @@ export class Game {
     if (!tree || today - tree.planted < TREE_DAYS || (this.season !== 2 && this.season !== 3)) return null;
     for (const d of FRUIT_DAYS) {
       const when = this.absday(this.year, 2, d);
-      if (when > tree.picked && when <= today) return when;
+      if (when >= tree.planted + TREE_DAYS && when > tree.picked && when <= today) return when;
     }
     return null;
   }
@@ -7364,9 +7407,9 @@ export class Game {
 
   /** Predict the same cost and weather penalties as a normal swing, without allowing collapse. */
   row_cost(stamina: number, fatigue: number): { stamina: number; fatigue: number } | null {
-    const actualCost = ROW_STEP_STAMINA * (this.levels[this.tool] === 5 ? 3 : 1);
-    if (stamina - actualCost < this.row_reserve) return null;
-    const result = calculateStaminaSpend(stamina, fatigue, ROW_STEP_STAMINA, {
+    const step = this.swing_cost(ROW_STEP_STAMINA);
+    if (stamina - step * (this.levels[this.tool] === 5 ? 3 : 1) < this.row_reserve) return null;
+    const result = calculateStaminaSpend(stamina, fatigue, step, {
       weather: this.weather, minutes: this.minutes, hasMysticBerry: this.has_mystic_berry,
       isCursedTool: this.levels[this.tool] === 5,
     });
@@ -7688,6 +7731,7 @@ export class Game {
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
     if (this.mapname === 'river' && tile === 'water' && this.tool !== 'Watering Can') return { key: 'x', label: 'SKIP' };
     if (this.tool === 'Compost') return { key: 'space', label: 'SPREAD' };
+    if (!this.tool_can_work_here(this.tool, obj)) return { key: 'x', label: 'LOOK' };
     const short = this.tool.endsWith(' Seeds') ? this.tool.slice(0, -6) : this.tool;
     return { key: 'space', label: short.length > 7 ? 'USE' : `USE ${short.toUpperCase()}` };
   }
@@ -9194,7 +9238,7 @@ export class Game {
     this.passing_out = false;
   }
 
-  run_sprites_work(report: string[]): void {
+  run_sprites_work(report: string[]): boolean {
     let watered = 0;
     let harvested = 0;
     let animalsCared = 0;
@@ -9225,12 +9269,7 @@ export class Game {
           }
         }
       } else if (job.task === 'Animals') {
-        this.fed = this.chickens;
-        for (const a of this.animals) {
-          a.fed = true;
-          a.aff = Math.min(100, a.aff + 1);
-          animalsCared += 1;
-        }
+        animalsCared += 1;
       }
       if (job.days === 0) {
         report.push(`${s.name} finished their ${job.task} contract.`);
@@ -9239,7 +9278,17 @@ export class Game {
     }
     if (watered > 0) report.push(`Hearthfolk watered your tilled field!`);
     if (harvested > 0) report.push(`Hearthfolk harvested ${harvested} ripe crop(s) into the Shipping Bin!`);
-    if (animalsCared > 0) report.push(`Hearthfolk fed and brushed your livestock!`);
+    return animalsCared > 0;
+  }
+
+  /** Hired Animals sprites feed after the barn/egg night step, so the fed state survives into the day. */
+  sprite_feed_animals(report: string[]): void {
+    this.fed = this.chickens;
+    for (const a of this.animals) {
+      a.fed = true;
+      a.aff = Math.min(100, a.aff + 1);
+    }
+    report.push(`Hearthfolk fed and brushed your livestock!`);
   }
 
   async new_day(reason: string): Promise<void> {
@@ -9288,11 +9337,12 @@ export class Game {
     }
 
     // Fey Sickle / Hammer 10-day blessing progression
-    if (this.levels[this.tool] === 5 && (this.tool === 'Sickle' || this.tool === 'Hammer')) {
-      this.cursed_days[this.tool] = (this.cursed_days[this.tool] || 0) + 1;
-      if (this.cursed_days[this.tool] >= 10) {
-        this.levels[this.tool] = 6;
-        report.push(`Miracle! Carrying the Fey ${this.tool} for 10 days turned it into a HALLOWED ${this.tool}!`);
+    for (const t of ['Sickle', 'Hammer']) {
+      if (this.levels[t] !== 5) continue;
+      this.cursed_days[t] = (this.cursed_days[t] || 0) + 1;
+      if (this.cursed_days[t] >= 10) {
+        this.levels[t] = 6;
+        report.push(`Miracle! Keeping the Fey ${t} for 10 days turned it into a HALLOWED ${t}!`);
       }
     }
 
@@ -9310,7 +9360,7 @@ export class Game {
     this.tomorrow = this.roll_weather(ns, nd);
 
     // Run hired Hearthfolk
-    this.run_sprites_work(report);
+    const spritesFeed = this.run_sprites_work(report);
 
     if (this.weather === 'Rain' || this.weather === 'Typhoon') {
       for (const k of this.tilled) {
@@ -9347,6 +9397,7 @@ export class Game {
     this.fed = 0;
 
     this.barn_new_day(report);
+    if (spritesFeed) this.sprite_feed_animals(report);
     this.farm_auto_feed(report);
     const pastureMsg = pastureMorning(this.pasture, this.season);
     if (pastureMsg) report.push(pastureMsg);
@@ -11227,7 +11278,9 @@ export class Game {
 
   async say(text: string, who: string | null = null): Promise<void> {
     const [W, H] = [this.scr.w, this.scr.h];
-    const bw = Math.min(W - 4, 74);
+    const divX = this.scr.ctx?.divX ?? W;
+    const paneW = !isCompact(W) && divX < W ? divX : W; // keep the side panel visible
+    const bw = Math.min(paneW - 4, 74);
     const lines: string[] = [];
     for (const para of String(text).split('\n')) {
       lines.push(...(py_wrap(para, bw - 4) || ['']));
@@ -11243,7 +11296,7 @@ export class Game {
     if (who && who in NPCS) {
       title = `● ${who}`;
       tcol = NPCS[who].col;
-      hearts = this.hearts(who);
+      hearts = [getHeartInfo(this.friend[who] || 0).bar, getHeartInfo(this.friend[who] || 0).color];
       boxStyle = { kind: 'npc', accent: NPCS[who].col };
     } else if (who && /(TV|Channel|Cooking Show|Variety|Life on the Farm)/i.test(who)) {
       title = `▣ ${who}`;
@@ -11263,7 +11316,7 @@ export class Game {
     }
     for (const page of pages) {
       const draw = () => {
-        const [bx, by] = [Math.floor((W - bw) / 2), H - 8];
+        const [bx, by] = [Math.floor((paneW - bw) / 2), H - 8];
         this.scr.box(bx, by, bw, 6, '0D', '00', title || undefined, tcol, boxStyle);
         if (hearts && title) {
           const hx = bx + title.length + 5;
@@ -11555,8 +11608,8 @@ export class Game {
     }
   }
 
-  async confirm(question: string): Promise<boolean> {
-    return (await this.menu(question, ['Yes', 'No'])) === 0;
+  async confirm(question: string, defaultNo = false): Promise<boolean> {
+    return (await this.menu(question, ['Yes', 'No'], defaultNo ? 1 : 0)) === 0;
   }
 
   async ask_qty(prompt: string, maxq: number, price: number | null = null, label: string = 'Total'): Promise<number> {
@@ -11788,7 +11841,7 @@ export class Game {
       this.house_flags.push(name);
     }
     if (name === 'Big Bed') {
-      this.max_stamina += 20;
+      this.max_stamina = this.calc_max_stamina();
     }
     this.rebuild_house();
     return [`Ingrid finished building your ${name}! ${EXPANSIONS[name]?.[3] || ''}`];

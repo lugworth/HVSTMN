@@ -50,8 +50,10 @@ describe('progression, discovery, luck, assist modes & farm-works polish (G3, G6
     assert.deepEqual(mineElevatorFloors(5, false), [1]);
     const floors60 = mineElevatorFloors(60, false);
     assert.ok(floors60.includes(25) && floors60.includes(50) && !floors60.includes(75));
-    const blessed = mineElevatorFloors(5, true);
-    assert.ok(blessed.includes(100) && blessed.includes(255));
+    // the blessing waives the fee but never offers unreached floors
+    assert.deepEqual(mineElevatorFloors(5, true), [1]);
+    assert.ok(!mineElevatorFloors(60, true).includes(255) && !mineElevatorFloors(60, true).includes(100));
+    assert.ok(mineElevatorFloors(255, false).includes(255));
 
     const g = fresh();
     g.max_spring_floor = 50;

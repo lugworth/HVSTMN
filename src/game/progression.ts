@@ -42,17 +42,15 @@ export function sanitizeMasteryPerks(raw: unknown): Record<string, string> {
 export const ELEVATOR_STEP = 25;
 export const ELEVATOR_STAMINA_FEE = 5;
 
-export function mineElevatorFloors(maxFloor: number, wellkeeperBlessed: boolean): number[] {
+/** Floors the elevator offers: only depths the player has actually reached. The blessing waives the fee, never the depth. */
+export function mineElevatorFloors(maxFloor: number, _wellkeeperBlessed = false): number[] {
   const set = new Set<number>([1]);
-  if (maxFloor >= 10 || wellkeeperBlessed) {
-    for (const f of [10, 29, 50, 100, 200, 255]) {
-      if (wellkeeperBlessed || f <= maxFloor + 20) set.add(f);
-    }
+  for (const f of [10, 29, 50, 100, 200, 255]) {
+    if (f <= maxFloor) set.add(f);
   }
   for (let f = ELEVATOR_STEP; f <= Math.min(250, maxFloor); f += ELEVATOR_STEP) {
     set.add(f);
   }
-  if (maxFloor >= 255) set.add(255);
   return [...set].sort((a, b) => a - b);
 }
 
