@@ -112,16 +112,31 @@ export function hexToRgb(h: string): RGB {
   const n = parseInt(h.charCodeAt(0) === 35 ? h.slice(1) : h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+/** True when (x, y) lies inside any dialog box (allocation-free). */
+export function inAnyBox(boxes: Screen['boxes'], x: number, y: number): boolean {
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return true;
+  }
+  return false;
+}
 const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
 export function rgbToHex(c: RGB): string {
   return '#' + ((1 << 24) | (clamp255(c[0]) << 16) | (clamp255(c[1]) << 8) | clamp255(c[2])).toString(16).slice(1);
 }
+const hexInt = (h: string) => parseInt(h.charCodeAt(0) === 35 ? h.slice(1) : h, 16);
 export function mix(a: string, b: string, t: number): string {
   if (t <= 0) return a;
   if (t >= 1) return b;
-  const A = hexToRgb(a);
-  const B = hexToRgb(b);
-  return rgbToHex([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t]);
+  const na = hexInt(a);
+  const nb = hexInt(b);
+  const ar = (na >> 16) & 255;
+  const ag = (na >> 8) & 255;
+  const ab = na & 255;
+  const r = clamp255(ar + (((nb >> 16) & 255) - ar) * t);
+  const g = clamp255(ag + (((nb >> 8) & 255) - ag) * t);
+  const bl = clamp255(ab + ((nb & 255) - ab) * t);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
 }
 // ---------------------------------------------------------------- Isotope ramps
 //
@@ -337,7 +352,7 @@ type Tone = { warm: number; cool: number; light: Float32Array | null; tags: (Cel
  * keep their hue, pushed to a clear Isotope neon, over a toned background.
  */
 function monochrome(out: OutCell[][], boxes: Screen['boxes'], tone?: Tone) {
-  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
   const W = out[0]?.length ?? 0;
   for (let y = 0; y < out.length; y++) {
     for (let x = 0; x < out[y].length; x++) {
@@ -1627,7 +1642,7 @@ export function computeFrame(
     if (scr.scene === 'title') {
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
-          if (boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h)) {
+          if (inAnyBox(boxes, x, y)) {
             out[y][x].ui = true; // prompts stay plain text
           }
         }
@@ -1672,7 +1687,7 @@ export function computeFrame(
   for (const ic of ctx.icons) {
     if (ic.y < 0 || ic.y >= H || ic.x < 0 || ic.x >= W) continue;
     if (buf[ic.y][ic.x][0] !== ' ' || tags[ic.y][ic.x]) continue;
-    if (boxes.some((b) => ic.x >= b.x && ic.x < b.x + b.w && ic.y >= b.y && ic.y < b.y + b.h)) continue; // under a dialog
+    if (inAnyBox(boxes, ic.x, ic.y)) continue; // under a dialog
     const clearNight = ctx.weather === 'Sunny' && sky.amb < 0.5 && !ctx.indoor;
     const [ch, col] =
       ic.icon === 'weather' ? (clearNight ? ['☾', '#d8e0ff'] : WEATHER_ICON[ctx.weather] || ['☀', '#ffcc33'])
@@ -2147,7 +2162,7 @@ function worldMargin(out: OutCell[][], tags: (CellTag | null)[][], buf: Cell[][]
   if (v.w < 2 || v.h < 2) return;
   const x1 = v.x + v.w - 1;
   const y1 = v.y + v.h - 1;
-  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
   for (let y = 1; y < Math.min(divY, out.length); y++) {
     for (let x = 0; x < Math.min(divX, out[y].length); x++) {
       if (x >= v.x && x <= x1 && y >= v.y && y <= y1) continue;
@@ -2193,7 +2208,7 @@ function indoorFrame(
   const maxX = Math.min(divX, out[0]?.length ?? 0);
   const maxY = Math.min(divY, out.length);
   if (v.w >= maxX - 3 && v.h >= maxY - 2) return;
-  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
   const x0 = v.x;
   const y0 = v.y;
   const x1 = v.x + v.w - 1;
@@ -2348,18 +2363,22 @@ export function edgeGlyph(occ: boolean[][]): string {
   return best;
 }
 
+// A 16-colour palette has no in-between hues, so where two grounds meet, the softer one
+// (grass over soil, soil over path) reaches into its neighbour as a shape-matched block glyph
+// in its own colour: straight edges get half blocks, corners get quadrants or diagonals.
+const GROUND_RANK: Record<string, number> = { grass: 3, flower: 3, field: 2, sand: 1, path: 0 };
+const EDGE_OCC: boolean[][] = [[false, false, false], [false, false, false], [false, false, false]];
+
 function blendGroundEdges(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['view'], W: number, H: number) {
-  // A 16-colour palette has no in-between hues, so where two grounds meet, the softer one
-  // (grass over soil, soil over path) reaches into its neighbour as a shape-matched block glyph
-  // in its own colour: straight edges get half blocks, corners get quadrants or diagonals.
-  const rank: Record<string, number> = { grass: 3, flower: 3, field: 2, sand: 1, path: 0 };
-  const base = out.map((r) => r.map((o) => o.bg));
+  const rank = GROUND_RANK;
+  const occ = EDGE_OCC;
+  // Neighbour bg is read straight from `out`: this pass only rewrites ch/fg, never bg.
   for (let y = v.y; y < v.y + v.h && y < H; y++) {
     for (let x = v.x; x < v.x + v.w && x < W; x++) {
       const tag = tags[y][x];
       if (!tag || tag.t === 'ui' || !GROUND.has(tag.t) || tag.k || out[y][x].ch !== ' ') continue;
       if (hash((tag.wx ?? x) * 2, tag.wy ?? y, 61) > 0.7) continue; // ragged, not a solid band
-      const occ = [[false, false, false], [false, false, false], [false, false, false]];
+      for (let i = 0; i < 3; i++) occ[i][0] = occ[i][1] = occ[i][2] = false;
       let fg = '';
       let fgRank = -1;
       for (let dy = -1; dy <= 1; dy++) {
@@ -2371,7 +2390,7 @@ function blendGroundEdges(out: OutCell[][], tags: (CellTag | null)[][], v: Rende
           const r = rank[n.t] + (dx && dy ? 0 : 0.5);
           if (r > fgRank) {
             fgRank = r;
-            fg = base[y + dy][x + dx];
+            fg = out[y + dy][x + dx].bg;
           }
         }
       }
@@ -2387,12 +2406,14 @@ function chimneys(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
   if (weather === 'Typhoon') return;
   for (let y = v.y + 1; y < v.y + v.h && y < H; y++) {
     let x = v.x;
+    const rowTags = tags[y];
+    const upTags = tags[y - 1];
+    const top = (xx: number) => {
+      const tg = rowTags[xx];
+      const up = upTags?.[xx];
+      return !!tg && tg.t === 'roof' && (!tg.dch || tg.dch === '^') && !(up && up.t === 'roof');
+    };
     while (x < v.x + v.w && x < W) {
-      const top = (xx: number) => {
-        const tg = tags[y][xx];
-        const up = tags[y - 1]?.[xx];
-        return !!tg && tg.t === 'roof' && (!tg.dch || tg.dch === '^') && !(up && up.t === 'roof');
-      };
       if (!top(x)) {
         x++;
         continue;
@@ -2615,7 +2636,7 @@ function hotSpringSteam(out: OutCell[][], tags: (CellTag | null)[][], v: RenderC
 
 /** Night-sky backdrop, hills and a gradient logo for the title screen. */
 function titleScene(out: OutCell[][], buf: Cell[][], tags: (CellTag | null)[][], boxes: Screen['boxes'], t: number, W: number, H: number) {
-  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
   const ft = Math.floor(t * 2);
   const near = (x: number) => 3.2 + 1.6 * Math.sin(x * 0.07 + 0.5) + 1.1 * Math.sin(x * 0.19 + 2);
   const far = (x: number) => 5.8 + 2.2 * Math.sin(x * 0.045 + 1.3) + 0.9 * Math.sin(x * 0.13);
@@ -2894,7 +2915,7 @@ function worldMicroDetail(
   season: number,
   lightMap: Float32Array | null,
 ) {
-  const inBox = (x: number, y: number) => boxes.some((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
   const Tstep = Math.floor(F.t * 3);
   const rugAt = (x: number, y: number) => {
     const tg = tags[y]?.[x];

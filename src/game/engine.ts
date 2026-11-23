@@ -166,7 +166,7 @@ import { migrateLegacySave } from './legacy_names';
 import type { CatchOdds, MakerStep } from './rules';
 import {
   HYBRIDS, HYBRID_CROPS, ORCHARD_SPOTS, SAPLING, SAPLING_PRICE, TREE_DAYS, FRUIT_DAYS, BARREL_SPOT, CHANNEL_CELLS, BARREL_CAP, CHANNEL_COST,
-  GLASS_SPOT, GLASS_CELLS, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage,
+  GLASS_SPOT, GLASS_CELLS, GLASS_SET, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage,
 } from './farm-works';
 import type { FarmWorks } from './farm-works';
 import {
@@ -428,6 +428,12 @@ const MAKER_NOUNS: Record<string, [string, string, string]> = {
 };
 
 /** 'Potato', 'Potato and Egg', 'Potato, Egg and Corn'. */
+/** True when a record has at least one key (cheaper than Object.keys on the per-cell path). */
+function anyKey(o: object): boolean {
+  for (const _ in o) return true;
+  return false;
+}
+
 function andList(items: string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
@@ -656,6 +662,9 @@ export class Game {
   /** Scraps on the compost heap, and the farm tiles dressed with compost (task 18). */
   compost_scraps: number = 0;
   composted: string[] = [];
+  private compost_arr: string[] | null = null;
+  private compost_len = -1;
+  private compost_set = new Set<string>();
   /** The crab pot off the pier (task 39): the day it was set and its bait, or null while it is up. */
   trap: { day: number; bait: string | null } | null = null;
   /** The absolute day of the last mushroom flush in Cedar Hollow, and where it came up (task 35). */
@@ -3290,9 +3299,19 @@ export class Game {
     return ready ? `heap: ${ready} Compost by morning, ${rest}/${COMPOST_SCRAPS} more` : `heap ${rest}/${COMPOST_SCRAPS}`;
   }
 
+  /** Set view of `composted` (the array stays the saved form); rebuilt when the array is replaced or grows. */
+  compost_has(k: string): boolean {
+    if (this.compost_arr !== this.composted || this.compost_len !== this.composted.length) {
+      this.compost_arr = this.composted;
+      this.compost_len = this.composted.length;
+      this.compost_set = new Set(this.composted);
+    }
+    return this.compost_set.has(k);
+  }
+
   /** Extra harvest from a composted tile (its next picking only). */
   compost_bonus(pKey: string): number {
-    return this.composted.includes(pKey) ? COMPOST_BONUS : 0;
+    return this.compost_has(pKey) ? COMPOST_BONUS : 0;
   }
 
   /** Put crops from the rucksack on the heap. Returns how many went on. */
@@ -3314,7 +3333,7 @@ export class Game {
       this.msg('Spread compost on tilled soil on your farm.', '08');
       return false;
     }
-    if (this.composted.includes(k)) {
+    if (this.compost_has(k)) {
       this.msg('That soil is already dressed with compost.', '08');
       return false;
     }
@@ -3407,7 +3426,7 @@ export class Game {
     for (const dx of [-1, 0, 1]) {
       for (const dy of [-1, 0, 1]) {
         const qk = pkey(p[0] + dx, p[1] + dy);
-        if (offSeason && !GLASS_CELLS.includes(qk)) continue;
+        if (offSeason && !GLASS_SET.has(qk)) continue;
         if (this.tilled.has(qk) && !this.crops[qk]) {
           this.crops[qk] = [crop, 0];
           sowed.push(qk);
@@ -6388,15 +6407,18 @@ export class Game {
   // ---------------------------------------------------------------- farm works (fields task)
   /** Farm pieces, orchard trees and the barrel/greenhouse frames are drawn over the stored farm tiles. */
   hook_farm(): void {
-    this.maps.farm.overlay = (x, y) => this.farm_overlay(x, y);
+    this.maps.farm.overlay = (x, y, k) => this.farm_overlay(x, y, k);
   }
 
-  farm_overlay(x: number, y: number): string | undefined {
-    const k = pkey(x, y);
+  farm_overlay(x: number, y: number, key?: string): string | undefined {
     const fw = this.farm_works;
-    const piece = fw.pieces[k];
-    if (piece) return FARM_PIECES[piece].tile;
-    if (fw.orchard[k]) return 'orchard_tree';
+    // fixed spots are tested numerically; a key is only built when pieces or orchard trees exist
+    if (anyKey(fw.pieces) || anyKey(fw.orchard)) {
+      const k = key ?? pkey(x, y);
+      const piece = fw.pieces[k];
+      if (piece) return FARM_PIECES[piece].tile;
+      if (fw.orchard[k]) return 'orchard_tree';
+    }
     if (this.enrichment.perch && x === PERCH_SPOT[0] && y === PERCH_SPOT[1]) return 'perch';
     if (this.enrichment.shadeTree && x === SHADE_TREE_SPOT[0] && y === SHADE_TREE_SPOT[1]) return 'shade_tree';
     if (x === BARREL_SPOT[0] && y === BARREL_SPOT[1]) return 'rain_barrel';
@@ -6413,7 +6435,7 @@ export class Game {
     const [x, y] = key.split(',').map(Number);
     const m = this.maps.farm;
     if (!Number.isInteger(x) || !Number.isInteger(y) || !m.inside(x, y) || m.t[y][x] !== 'field') return false;
-    return !this.tilled.has(key) && !this.crops[key] && !this.objs.farm?.[key] && !GLASS_CELLS.includes(key) && !CHANNEL_CELLS.includes(key) &&
+    return !this.tilled.has(key) && !this.crops[key] && !this.objs.farm?.[key] && !GLASS_SET.has(key) && !CHANNEL_CELLS.includes(key) &&
       !ORCHARD_SPOTS.includes(key) && key !== pkey(...BARREL_SPOT) && key !== pkey(...GLASS_SPOT);
   }
 
@@ -6586,7 +6608,7 @@ export class Game {
     let lost = 0;
     for (const k of Object.keys(this.crops)) {
       const [x, y] = k.split(',').map(Number);
-      if ((x * 17 + y * 31 + this.absday() * 13) % 4 !== 0 || guarded.has(k) || (fw.greenhouse && GLASS_CELLS.includes(k))) continue;
+      if ((x * 17 + y * 31 + this.absday() * 13) % 4 !== 0 || guarded.has(k) || (fw.greenhouse && GLASS_SET.has(k))) continue;
       delete this.crops[k];
       lost += 1;
     }
@@ -7552,7 +7574,7 @@ export class Game {
       if (age < CROPS[crop][2] && this.tool === 'Watering Can' && !this.wet.has(pKey)) {
         return withTarget('Water', name, 'WATER');
       }
-      if (this.tool === 'Compost' && !this.composted.includes(pKey)) {
+      if (this.tool === 'Compost' && !this.compost_has(pKey)) {
         return { label: 'SPREAD', summary: `Compost the ${name} · +${COMPOST_BONUS} next harvest` };
       }
       const hasCrop = age >= CROPS[crop][2];
@@ -7616,7 +7638,7 @@ export class Game {
     const pairing = this.companion_preview(this.tool, tx, ty);
     if (pairing) return { label: 'SOW', summary: `Sow ${short.toLowerCase()} · ${pairing.text}` };
     if (this.tool === 'Compost') {
-      if (this.composted.includes(pKey)) return { label: 'SPREAD', summary: 'Already composted' };
+      if (this.compost_has(pKey)) return { label: 'SPREAD', summary: 'Already composted' };
       const ok = this.mapname === 'farm' && this.tilled.has(pKey);
       return { label: 'SPREAD', summary: ok ? `Spread compost · +${COMPOST_BONUS} next harvest` : 'Spread compost on tilled soil' };
     }
@@ -7653,7 +7675,7 @@ export class Game {
     if (this.mapname === 'farm' && pKey in this.crops) {
       const [crop, age] = this.crops[pKey];
       if (age < CROPS[crop][2] && this.tool === 'Watering Can' && !this.wet.has(pKey)) return { key: 'space', label: 'WATER' };
-      if (this.tool === 'Compost' && !this.composted.includes(pKey)) return { key: 'space', label: 'SPREAD' };
+      if (this.tool === 'Compost' && !this.compost_has(pKey)) return { key: 'space', label: 'SPREAD' };
       return { key: 'x', label: age >= CROPS[crop][2] ? 'HARVEST' : 'CHECK' };
     }
     if (pKey in (this.forage[this.mapname] || {})) return { key: 'x', label: 'PICK' };
@@ -9277,7 +9299,7 @@ export class Game {
       // Keep perennial Grass in Spring/Summer/Fall; wither seasonal crops
       const surviving: Record<string, [string, number]> = {};
       for (const [k, [crop, age]] of Object.entries(this.crops)) {
-        if ((crop === 'Grass' && this.season !== 3) || (this.farm_works.greenhouse && GLASS_CELLS.includes(k))) {
+        if ((crop === 'Grass' && this.season !== 3) || (this.farm_works.greenhouse && GLASS_SET.has(k))) {
           surviving[k] = [crop, age];
         }
       }
@@ -9761,15 +9783,14 @@ export class Game {
   }
 
   /** Semantic tag for a map cell, mirroring the precedence used by glyph(). */
-  cell_tag(m: GameMap, x: number, y: number, t: string, hl: boolean, hlArea: boolean = false): CellTag {
-    const pKey = pkey(x, y);
+  cell_tag(m: GameMap, x: number, y: number, t: string, hl: boolean, hlArea: boolean = false, pKey: string = pkey(x, y)): CellTag {
     const name = m.name;
     const tag: CellTag = { t, wx: x, wy: y, hl };
     if (hlArea) tag.hlArea = true;
     if (name === 'farm') {
-      if (this.farm_works.greenhouse && GLASS_CELLS.includes(pKey)) tag.greenhouse = true;
-      if (this.farm_overlay(x, y)) {
-        const [ch, fg] = this.glyph(m, x, y, t);
+      if (this.farm_works.greenhouse && GLASS_SET.has(pKey)) tag.greenhouse = true;
+      if (this.farm_overlay(x, y, pKey)) {
+        const [ch, fg] = this.glyph(m, x, y, t, pKey);
         tag.fixture = { ch, fg };
       }
     }
@@ -9795,7 +9816,7 @@ export class Game {
         tag.k = `crop:${stage}${wet ? ':wet' : ''}`;
         tag.cropName = crop;
       }
-      if (this.composted.includes(pKey)) tag.compost = true;
+      if (this.compost_has(pKey)) tag.compost = true;
       return tag;
     }
     if ((t === 'water' || t === 'pond') && (name === 'river' || name === 'point')) {
@@ -9821,8 +9842,7 @@ export class Game {
     return tag;
   }
 
-  glyph(m: GameMap, x: number, y: number, t: string): [string, string, string, boolean] {
-    const pKey = pkey(x, y);
+  glyph(m: GameMap, x: number, y: number, t: string, pKey: string = pkey(x, y)): [string, string, string, boolean] {
     const name = m.name;
     const fishPocket = (t === 'water' || t === 'pond') ? this.fish_pocket(name, x, y) : undefined;
     if (fishPocket) return [fishPocket.glyph, '0C', '00', true];
@@ -10421,22 +10441,23 @@ export class Game {
       const y = cy + sy;
       for (let sx = 0; sx < Math.min(vw, m.w); sx++) {
         const x = cx + sx;
-        const tile = m.tile(x, y);
-        let [ch, fg, bg, bold] = this.glyph(m, x, y, tile);
+        const key = pkey(x, y);
+        const tile = m.tile(x, y, key);
+        let [ch, fg, bg, bold] = this.glyph(m, x, y, tile, key);
         if (night && fg !== '00' && fg !== '01') {
           fg = fg === '0D' || fg === '0C' ? '0F' : fg === '02' || fg === '03' ? '02' : '03';
         } else if (dusk && fg === '0B') {
           fg = '09';
         }
-        const hl = aoeSet.has(pkey(x, y));
+        const hl = aoeSet.has(key);
         if (hl) {
           bg = bg === '01' ? '02' : '01';
         }
-        const tag = this.cell_tag(m, x, y, tile, hl, hl && !(x === tx && y === ty));
+        const tag = this.cell_tag(m, x, y, tile, hl, hl && !(x === tx && y === ty), key);
         if (actionReticle && x === tx && y === ty) tag.actionTarget = true;
-        if (companion.has(pkey(x, y))) tag.companion = true;
+        if (companion.has(key)) tag.companion = true;
         // Task 41: Preview equipped placeable farm piece with its one-cell glyph on allowed ground
-        if (this.mapname === 'farm' && x === tx && y === ty && isFarmPiece(this.tool) && this.farm_can_place(pkey(x, y)) && !this.farm_overlay(x, y)) {
+        if (this.mapname === 'farm' && x === tx && y === ty && isFarmPiece(this.tool) && this.farm_can_place(key) && !this.farm_overlay(x, y, key)) {
           const piece = FARM_PIECES[this.tool];
           ch = piece.glyph;
           fg = '0C';

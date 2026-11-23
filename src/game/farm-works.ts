@@ -19,6 +19,7 @@ export const BARREL_CAP = 3;
 export const CHANNEL_COST = { gold: 250, lumber: 6 };
 export const GLASS_SPOT = [42, 8] as const;
 export const GLASS_CELLS = Array.from({ length: 3 }, (_, y) => Array.from({ length: 4 }, (_, x) => pkey(40 + x, 9 + y))).flat();
+export const GLASS_SET: ReadonlySet<string> = new Set(GLASS_CELLS);
 export const GLASS_COST = { gold: 2500, lumber: 20 };
 export const PIECE_LIMIT = 80;
 

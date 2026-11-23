@@ -145,6 +145,12 @@ export type RenderCtx = {
   wipe?: { age: number; duration: number; focus?: [number, number] };
 };
 
+/**
+ * The one blank cell every cleared position shares. Cells are replaced (`put` writes a new tuple),
+ * never mutated in place, so sharing is safe; it is frozen to keep it that way.
+ */
+export const BLANK_CELL: Cell = Object.freeze([' ', '05', '00', false]) as unknown as Cell;
+
 export class Screen {
   w: number = 80;
   h: number = 24;
@@ -195,15 +201,22 @@ export class Screen {
   }
 
   clear() {
-    const live = new Set(this.boxes.map((b) => `${b.x},${b.y},${b.w},${b.h}`));
-    for (const key of this.boxAges.keys()) {
-      if (!live.has(key)) this.boxAges.delete(key);
+    if (this.boxAges.size) {
+      const live = new Set(this.boxes.map((b) => `${b.x},${b.y},${b.w},${b.h}`));
+      for (const key of this.boxAges.keys()) {
+        if (!live.has(key)) this.boxAges.delete(key);
+      }
     }
-    const blank: Cell = [' ', '05', '00', false];
-    this.buf = Array.from({ length: this.h }, () =>
-      Array.from({ length: this.w }, () => [...blank] as Cell)
-    );
-    this.tags = Array.from({ length: this.h }, () => new Array<CellTag | null>(this.w).fill(null));
+    if (this.buf.length === this.h && this.buf[0]?.length === this.w) {
+      // same size: reuse the row arrays and the shared blank cell
+      for (let y = 0; y < this.h; y++) {
+        this.buf[y].fill(BLANK_CELL);
+        this.tags[y].fill(null);
+      }
+    } else {
+      this.buf = Array.from({ length: this.h }, () => new Array<Cell>(this.w).fill(BLANK_CELL));
+      this.tags = Array.from({ length: this.h }, () => new Array<CellTag | null>(this.w).fill(null));
+    }
     this.ctx = null;
     this.scene = null;
     this.boxes = [];
