@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Screen, Cell, type PaletteMode } from '@/src/game/screen';
 import { Game } from '@/src/game/engine';
 import { PALETTE, TOOLS, DAY_PACES, type DayPace } from '@/src/game/constants';
-import { computeFrame, drawFrame, frameSignature, shakeOffset, frameDirtyRect, stepOffset, type OutCell } from '@/src/game/enhanced';
+import { computeFrame, drawFrame, shakeOffset, frameDirtyRect, stepOffset, type OutCell } from '@/src/game/enhanced';
 import { HeldDirections, type HeldContext } from '@/src/game/held';
 import { FARM_SYMBOLS } from '@/src/game/farm-symbols';
 import { isCompact } from '@/src/game/compact';
@@ -843,7 +843,8 @@ export default function GameScreen() {
 
     let prevBuf: Cell[][] | null = null;
     let prevFrame: OutCell[][] | null = null;
-    let lastSig = '';
+    // the render-mode prefix (hires/palette/crt/contrast) of the last painted frame; '' forces a full repaint
+    let lastMode = '';
 
     let shaking = false;
     let stepFrame = 0;
@@ -860,7 +861,7 @@ export default function GameScreen() {
         sizeCanvas(screen.w, screen.h);
         prevBuf = screen.buf.map((row) => [...row]);
         prevFrame = null;
-        lastSig = '';
+        lastMode = '';
       }
       const now = performance.now() / 1000;
       const frame = computeFrame(screen, screen.reducedMotion ? 0 : now);
@@ -872,13 +873,11 @@ export default function GameScreen() {
         });
       }
       // mode changes (detail, palette, CRT, high contrast) force a full repaint
-      const prefix = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:${screen.highContrast ? 'hc' : ''}:`;
-      const sig = `${prefix}${frameSignature(frame)}`;
-      if (sig === lastSig) return;
-      const modeChanged = !lastSig.startsWith(prefix);
+      const mode = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:${screen.highContrast ? 'hc' : ''}`;
+      const modeChanged = mode !== lastMode;
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
-      lastSig = sig;
+      lastMode = mode;
       drawFrame(ctx, frame, {
         cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr,
         hires: screen.hires, crt: screen.crt, farmSymbols: farmSymbolsReady,
@@ -897,7 +896,7 @@ export default function GameScreen() {
         renderEnhanced();
         return;
       }
-      lastSig = '';
+      lastMode = '';
       prevFrame = null;
       if (!prevBuf || prevBuf.length !== screen.h || (prevBuf[0] && prevBuf[0].length !== screen.w)) {
         sizeCanvas(screen.w, screen.h);
@@ -941,7 +940,7 @@ export default function GameScreen() {
       layout();
       prevBuf = null;
       prevFrame = null;
-      lastSig = '';
+      lastMode = '';
       const game = gameRef.current;
       if (game && game.modal_depth === 0) game.render();
       if (screen.onRender) screen.onRender();
@@ -959,7 +958,7 @@ export default function GameScreen() {
           farmSymbolsReady = true;
           // The grid metrics are unchanged. Repaint any fallback glyphs now that the font is ready.
           prevFrame = null;
-          lastSig = '';
+          lastMode = '';
           screen.onRender?.();
         })
         .catch(() => {}); // The canvas keeps using the fallback glyphs.

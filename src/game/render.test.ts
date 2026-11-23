@@ -5,6 +5,7 @@ import { Screen, VisualStyle } from './screen';
 import { Game, MASTERY_DISCIPLINES } from './engine';
 import { computeFrame } from './enhanced';
 import { TILES, NPCS } from './constants';
+import { FARM_PIECES } from './farm-works';
 
 function farm(style?: VisualStyle) {
   const s = new Screen(132, 30);
@@ -516,3 +517,86 @@ describe('graphical engine integration', () => {
   });
 });
 
+
+describe('render performance guards', () => {
+  test('Screen.clear reuses its rows at the same size and shares one frozen blank cell', () => {
+    const s = new Screen(100, 30);
+    const rows = s.buf;
+    const row0 = s.buf[0];
+    s.put(3, 0, 'hi', '07', '01', true);
+    s.tag(3, 0, { t: 'ui' });
+    s.clear();
+    assert.equal(s.buf, rows);
+    assert.equal(s.buf[0], row0);
+    assert.deepEqual(s.buf[0][3], [' ', '05', '00', false]);
+    assert.equal(s.tags[0][3], null);
+    assert.equal(s.buf[0][3], s.buf[5][9], 'one shared blank cell');
+    assert.ok(Object.isFrozen(s.buf[0][3]));
+    s.setSize(90, 28);
+    assert.equal(s.buf.length, 28);
+    assert.equal(s.buf[0].length, 90);
+  });
+
+  test('put replaces cells instead of mutating them, so the shared blank never changes', () => {
+    const s = new Screen(100, 30);
+    s.put(0, 0, 'abc', '07', '01', true);
+    s.clear();
+    s.put(1, 1, 'z', '0A', '02');
+    assert.deepEqual(s.buf[0][0], [' ', '05', '00', false]);
+    assert.deepEqual(s.buf[0][1], [' ', '05', '00', false]);
+    assert.deepEqual(s.buf[1][1], ['z', '0A', '02', false]);
+  });
+
+  test('a render never mutates cells in place (the classic path shallow-copies rows)', () => {
+    const { s, g } = farm();
+    const snap = s.buf.map((row) => row.map((c) => [...c]));
+    const held = s.buf.map((row) => [...row]);
+    g.render();
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) assert.deepEqual([...held[y][x]], snap[y][x]);
+  });
+
+  test('re-rendering over reused buffers gives an identical frame', () => {
+    const { s, g } = farm();
+    const text = () => s.buf.map((row) => row.map((c) => c.join('|')).join(' ')).join('\n');
+    const tagged = () => s.tags.map((row) => row.map((t) => (t ? `${t.t}${t.k ?? ''}${t.wx},${t.wy}` : '')).join(' ')).join('\n');
+    const realNow = Date.now;
+    const frozen = realNow();
+    Date.now = () => frozen; // fx and ambient text are clock-driven
+    try {
+      g.render();
+      const a = [text(), tagged()];
+      g.render();
+      g.render();
+      assert.deepEqual([text(), tagged()], a);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('farm_overlay gives the same answer with or without a prebuilt key', () => {
+    const { g } = farm();
+    const name = Object.keys(FARM_PIECES)[0] as keyof typeof FARM_PIECES;
+    g.farm_works.pieces['30,12'] = name;
+    g.farm_works.orchard['45,6'] = { planted: 0, picked: -1 };
+    for (let y = 0; y < g.maps.farm.h; y++) {
+      for (let x = 0; x < g.maps.farm.w; x++) {
+        assert.equal(g.farm_overlay(x, y, `${x},${y}`), g.farm_overlay(x, y));
+      }
+    }
+    assert.equal(g.farm_overlay(45, 6), 'orchard_tree');
+    assert.equal(g.farm_overlay(30, 12), FARM_PIECES[name].tile);
+    assert.equal(g.maps.farm.tile(45, 6, '45,6'), 'orchard_tree');
+  });
+
+  test('compost lookups follow the composted array through pushes and replacement, and it still saves', () => {
+    const { g } = farm();
+    assert.equal(g.compost_has('21,15'), false);
+    g.composted.push('21,15');
+    assert.equal(g.compost_has('21,15'), true);
+    g.composted = g.composted.filter((k: string) => k !== '21,15');
+    assert.equal(g.compost_has('21,15'), false);
+    g.composted = ['3,4'];
+    assert.equal(g.compost_has('3,4'), true);
+    assert.ok(Array.isArray(JSON.parse(JSON.stringify(g.snapshot())).composted));
+  });
+});
