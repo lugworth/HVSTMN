@@ -190,6 +190,10 @@ export function build_farm(): GameMap {
   m.signs[pkey(35, 6)] = 'mill';
   // a bench on the farmhouse porch (mechanics task 44)
   m.set(9, 6, 'bench');
+  // cart-track mouth to the Cedar Hollow gate, with a signpost
+  m.rect(30, 22, 3, 4, 'path');
+  m.set(29, 24, 'sign');
+  m.signs[pkey(29, 24)] = 'Signpost — SOUTH: Cedar Hollow (Feathercote, Highmeadow Dairy, Thornvale Vineyard). EAST: the road to town. WEST: Ironwood Grove.';
   // rotating pasture gate between coop and barn (mechanics task 27)
   m.set(PASTURE_GATE_SPOT[0], PASTURE_GATE_SPOT[1], 'pasture_gate');
   return m;
@@ -243,6 +247,14 @@ export function build_town(): GameMap {
   m.rect(35, 21, 3, 7, 'path');
   m.rect(35, 28, 3, 2, 'bridge');
   m.rect(35, 30, 3, 2, 'path');
+  // the compass sign stands where the south road leaves the square, not in the far west corner
+  const compassText = m.signs[pkey(1, 21)];
+  delete m.signs[pkey(1, 21)];
+  m.set(1, 21, 'grass');
+  m.set(34, 22, 'sign');
+  m.signs[pkey(34, 22)] = compassText;
+  m.set(33, 24, 'bench');
+  m.set(39, 24, 'bench');
   for (const x of [35, 36, 37]) {
     m.warps[pkey(x, m.h - 1)] = ['beach', 32, 2, [0, 1]];
   }
@@ -257,9 +269,13 @@ export function build_mountain(): GameMap {
   m.signs[pkey(5, 17)] = 'Hot Spring — Step in or press X to soak (+Stamina, -Fatigue). Hold an Egg and press X to make a Spa-Boiled Egg!';
 
   // Wellkeeper Pond waterfall next to Copperseam Mine entrance
-  m.rect(45, 7, 3, 2, 'pond');
+  m.rect(45, 8, 3, 2, 'pond');
   m.set(44, 8, 'sign');
   m.signs[pkey(44, 8)] = 'Wellkeeper Pond — Hold an item and press X facing the pond to make an offering to the Wellkeeper!';
+  // the lake-side ridge road joins the Skyline Ridge exit to the town spine
+  m.rect(25, 7, 11, 1, 'path');
+  m.rect(25, 1, 1, 7, 'path');
+  m.rect(23, 1, 3, 1, 'path');
   // Copperseam Mine: deep floors west of the pond
   m.set(51, 4, 'sign');
   m.signs[pkey(51, 4)] = 'Copperseam Mine — Step down on floor tiles to delve deeper; each floor holds ore, gems and side chambers. Bring a lamp.';
@@ -293,6 +309,8 @@ export function build_beach(): GameMap {
   // Nico's Seaside Lodge
   m.building(42, 5, 10, 5, 5, 'kai_shack', 'SEASIDE', '09');
   m.rect(47, 10, 2, 3, 'path');
+  // the shore road links the pier, the lodge stub and the Lighthouse Point exit
+  m.rect(34, 11, 29, 3, 'path');
   return m;
 }
 
@@ -359,6 +377,7 @@ export function build_woods(): GameMap {
   placeBuilding(m, townBuilding('poultry'), 38, 2);
   placeBuilding(m, townBuilding('yodel'), 51, 2);
   m.rect(36, 7, 27, 2, 'path');
+  m.set(50, 6, 'tree'); // closes the dead-end alley between Feathercote and the Dairy
   for (let y = 9; y <= 10; y++) for (let x = 38; x <= 62; x++) if (layoutNoise(x, y, 8) < 0.12) m.set(x, y, 'flower');
   // Thornvale Vineyard, south of the creek on the path to the clearing, with a few rows of vines beside it.
   m.building(31, 15, 9, 4, 4, 'winery', 'WINERY', '0E');
@@ -392,6 +411,7 @@ export function build_ridge(): GameMap {
   m.rect(12, 3, 22, 2, 'path');
   // the lookout and a cold tarn
   m.rect(30, 2, 6, 4, 'path');
+  m.rect(36, 3, 8, 2, 'path'); // on to the tarn shore
   m.rect(44, 2, 8, 4, 'water');
   m.set(33, 6, 'sign');
   m.signs[pkey(33, 6)] = 'ridge_lookout';
@@ -430,6 +450,10 @@ export function build_river(): GameMap {
   for (let x = 0; x < m.w - 6; x++) {
     for (let y = 11; y < 14; y++) m.set(x, y, m.tile(x, y) === 'water' ? 'bridge' : 'path');
   }
+  // approaches to the footbridge sign and the east-bank dock (dry land only)
+  m.rect(30, 14, 1, 5, 'path');
+  m.rect(41, 14, 1, 5, 'path');
+  m.rect(37, 18, 5, 1, 'path');
   // a fishing dock on the far bank
   for (const y of FOOTBRIDGE_ROWS) {
     m.set(riverX(y) + 4, y, 'bridge');
