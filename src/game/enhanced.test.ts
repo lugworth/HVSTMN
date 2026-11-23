@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { contourPattern } from './contour';
 import { FARM_SYMBOLS, FARM_SYMBOL_FALLBACK } from './farm-symbols';
 import { Screen, RenderCtx } from './screen';
-import { grey, windowLit, blueNoise, toneFor, shakeOffset, TIER_COLOURS, edgeGlyph, SPRITE_KEEP, spritePattern, rowAlpha, hiresLevel, effectiveHiresLevel, subAlpha, subPattern, HIRES_MIN_FONT, resetTrail, computeFrame, drawFrame, frameSignature, frameDirtyRect, skyFor, mix, hexToRgb, hash, lightning, toIsotope, isotopeRamps, rgbToHex, neon, hsv, lightReach, cropFamily, themeFor, THEMES, type OutCell } from './enhanced';
+import { grey, windowLit, blueNoise, toneFor, shakeOffset, TIER_COLOURS, edgeGlyph, SPRITE_KEEP, spritePattern, rowAlpha, hiresLevel, effectiveHiresLevel, subAlpha, subPattern, HIRES_MIN_FONT, resetTrail, computeFrame, drawFrame, frameSignature, frameDirtyRect, skyFor, mix, inAnyBox, hexToRgb, hash, lightning, toIsotope, isotopeRamps, rgbToHex, neon, hsv, lightReach, cropFamily, themeFor, THEMES, type OutCell } from './enhanced';
 
 const lum = (hex: string) => {
   const [r, g, b] = hexToRgb(hex);
@@ -2004,5 +2004,37 @@ describe('display font for HUD headings', () => {
 
   test('without a display face the headings fall back to the grid font', () => {
     assert.equal(fontsUsed(frame).find((c) => c.text === 'FURROW')?.font, 'bold 23.2px GridMono');
+  });
+});
+
+describe('allocation-free helpers', () => {
+  test('mix matches the tuple-based reference across colours and weights', () => {
+    const ref = (a: string, b: string, t: number) => {
+      if (t <= 0) return a;
+      if (t >= 1) return b;
+      const A = hexToRgb(a);
+      const B = hexToRgb(b);
+      return rgbToHex([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t]);
+    };
+    const cols = ['#000000', '#ffffff', '#7a4a38', '#eeeef4', '#12a0ff', 'ff8800'];
+    for (const a of cols) for (const b of cols) for (const t of [-1, 0, 0.05, 0.33, 0.5, 0.92, 1, 2]) assert.equal(mix(a, b, t), ref(a, b, t));
+  });
+
+  test('inAnyBox is a half-open rectangle test over every box', () => {
+    const boxes = [{ x: 2, y: 3, w: 4, h: 2 }, { x: 10, y: 10, w: 1, h: 1 }];
+    assert.equal(inAnyBox(boxes, 2, 3), true);
+    assert.equal(inAnyBox(boxes, 5, 4), true);
+    assert.equal(inAnyBox(boxes, 6, 4), false);
+    assert.equal(inAnyBox(boxes, 5, 5), false);
+    assert.equal(inAnyBox(boxes, 10, 10), true);
+    assert.equal(inAnyBox([], 0, 0), false);
+  });
+
+  test('frameDirtyRect alone detects the change a repaint needs (no full-frame signature)', () => {
+    const a = computeFrame(scene(), 0);
+    const b = computeFrame(scene(), 0);
+    assert.equal(frameDirtyRect(a, b), null);
+    b[5][7] = { ...b[5][7], fg: '#123456' };
+    assert.deepEqual(frameDirtyRect(a, b), { x0: 6, y0: 4, x1: 9, y1: 7 }); // the changed cell plus one cell of overhang
   });
 });

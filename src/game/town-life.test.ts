@@ -133,7 +133,7 @@ describe('town life & events (tasks 11, 13, 15, 36 & G10, G16)', () => {
     g.bin[c.item] = c.need;
     const goldBefore = g.gold;
     const ottoBefore = g.friend['Otto'] || 0;
-    const total = g.process_zack_pickup();
+    const total = g.process_zack_pickup().total;
     assert.equal(c.done, true);
     assert.equal(c.shipped, c.need);
     assert.ok(total > c.bonusGold);

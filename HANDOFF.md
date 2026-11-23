@@ -11,6 +11,20 @@
   small room use larger cells (`chooseGrid` `mapSize`, 46 columns minimum). `app/icon.svg` is the favicon.
 - Tests: `src/game/ui-layout.test.ts`, plus new cases in `mobile.test.ts`.
 
+## Phone layout polish, 2026-11-23
+
+- Viewports under 600px wide use the touch/compact layout even without a touch signal (`wantsTouchLayout` in `viewport.ts`).
+- Compact touch grids cap at 32 rows (`TOUCH_COMPACT_MAX_ROWS`) so small rooms and the status strip sit closer together.
+- The compact status row shows stamina as `cur/max` and gives it priority over the facing hint; the name-entry bar sits below the logo.
+- `say()` centres on the map width (not the side panel) on the full layout; ligatures are off for the UI font ('fi' glitch); `app/icon.svg` ends the favicon 404.
+- Not verified in a browser: dead-space tuning, minimap/toolbar overlap (no such DOM button found) and the subset font's C glyph.
+
+## Cellar Cask Rack, 2026-11-22
+
+- New farm piece **Cask Rack** (1500G at the carpenter, place on open farm soil; logic in `src/game/cask-rack.ts`). One barrel per rack; walk up and press X.
+- Ferment 3 Wild Grape / Orchard Pear / Apple per bottle (up to 4) into Young Wine in 2 days, or age Small Cheese. Left in the rack, goods sell at 1.0x, 1.4x (7 days), 1.9x (14), 2.5x (28) as Young/Medium/Large/Golden Wine (Medium/Large/Golden Cave Cheese). Numbers are playtest starting values.
+- Rack tile uses maker colours (grey empty, orange fermenting, green ready); Today's Plan has a `Casks` line; the morning report mentions a barrel that gained a grade. Barrels save as `casks` (old saves load with none; orphans dropped). Aged goods are plain `ITEMS`, so shipping/museum/orders need no hooks. Not yet gift-preference aware.
+
 ## Farm works, 2026-11-22
 
 - `src/game/farm-works.ts` holds the data and save sanitiser; the engine (`farm_works` field, saved, restored after
@@ -660,6 +674,20 @@ Newest first.
 - `npm run build` says "Skipping validation of types / Skipping linting" by design; `npx tsc --noEmit` is the real type gate.
 - Test server is for local verification only; stop it when done. If you rebuild while `next start` is running, restart the server so the HTML and chunk files match.
 
+## Render performance pass (P4)
+
+No player-visible change: frames are byte-identical (md5 of `frameSignature(computeFrame)` matched before/after for farm noon, town noon/night, woods noon, plain and hires).
+- `mix()`, `chimneys()`, `blendGroundEdges()` and the dialog-box tests (`inAnyBox`) no longer allocate per cell. `Screen.clear()` reuses its rows and shares one frozen `BLANK_CELL`: never mutate a buffer cell in place, replace it (`put` does).
+- `draw_map` builds `pkey(x, y)` once per cell and passes it to `map.tile(x, y, key)`, `glyph`, `cell_tag` and `farm_overlay`. `GLASS_SET` / `compost_has()` give Set lookups; `composted` stays an array for saves.
+- `GameScreen.renderEnhanced` no longer builds the full-frame signature string each frame; it checks the mode (hires/palette/crt/contrast) and relies on `frameDirtyRect`. `frameSignature` remains for tests.
+
+## New-player guidance (`src/game/goals.ts`)
+
+- First Fortnight ladder: when the first-morning checklist ends (done or hidden) a five-goal list (pick a turnip, ship it, greet 3 villagers, read the Market Cross board, donate to the museum) shows in Today's Plan and the side panel (`FORTNIGHT n/5`). Each goal pays a little gold or seeds; the last leaves the Hearthfolk Hearth-Knot on the mantel. Saved as `fortnight`; old farms load with it hidden.
+- Achievements are announced once (gold two-line message, sparkle, fanfare) via `ach_check()`; `ach_seen`/`ach_unread` are saved, a star shows by the Achievements entry in the pause menu until opened, and old farms seed `ach_seen` silently on load.
+- 4:30 PM bin warning (bin value, or a Basket reminder; nothing is taken). `process_zack_pickup()` now returns `{ total, items, bonus }`; the 5 PM message reads "Otto took 9 Turnip, 2 Egg: +1,260G".
+- The tilling message now says Tab selects the seeds. Tests: `src/game/goals.test.ts`.
+
 ## Where to look for more
 
 - `README.md`: feature list, controls, colour rules and renderer overview.
@@ -668,3 +696,17 @@ Newest first.
 - `docs/ascii-art-pack.md`: title plate, crop/animal/tool/building ASCII art and a farm vignette with Isotope colour maps.
 - `src/game/enhanced.test.ts`: precise spec of the visual behaviour.
 - `git log`: commit bodies and merged PRs describe each player-visible change.
+
+## P1 bug fixes (player-visible)
+
+- Ferreira sells the Jewel of Truth once; a repeat purchase shows "owned" and charges nothing.
+- Max stamina is computed in one place (`recompute_max_stamina`), so Heartseeds keep the Big Bed +20.
+- Winter: the Hoe and row work till glass cells once the greenhouse is built. A Fey tool blocks the seed pouch shortcut; Lucan will not "remove" a Fey Hoe/Watering Can (bless it instead).
+- Festival NPC positions no longer leak between Game instances; Silas re-crosses a fully lost hybrid for 200G; chickens use `add_chicken()` and a hatching egg waits in the incubator when the coop is full.
+
+## Map layout wayfinding (P2)
+
+- New roads: a Brackenford Beach shore road (pier, lodge stub, Lighthouse Point exit), a lake-side ridge road on Beacon Hill, a trail on to the tarn at Skyline Ridge, and approach paths to the Willow Bend footbridge sign and east-bank dock.
+- Wellkeeper Pond moved one row south so the carpenter-to-mine road is unbroken. The Farm gets a cart track and signpost toward Cedar Hollow; Ranch Lane's dead-end alley is closed with a tree.
+- The Town compass sign moved from the far west corner to the south road (34,22), with two benches; Ferreira's anchor is now town (22,12).
+- `src/game/layout.test.ts` checks every warp, door and sign on those maps is reachable on foot. Hilde's forge is unchanged (tests pin it).
