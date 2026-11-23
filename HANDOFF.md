@@ -19,6 +19,12 @@
 - `say()` centres on the map width (not the side panel) on the full layout; ligatures are off for the UI font ('fi' glitch); `app/icon.svg` ends the favicon 404.
 - Not verified in a browser: dead-space tuning, minimap/toolbar overlap (no such DOM button found) and the subset font's C glyph.
 
+## Cellar Cask Rack, 2026-11-22
+
+- New farm piece **Cask Rack** (1500G at the carpenter, place on open farm soil; logic in `src/game/cask-rack.ts`). One barrel per rack; walk up and press X.
+- Ferment 3 Wild Grape / Orchard Pear / Apple per bottle (up to 4) into Young Wine in 2 days, or age Small Cheese. Left in the rack, goods sell at 1.0x, 1.4x (7 days), 1.9x (14), 2.5x (28) as Young/Medium/Large/Golden Wine (Medium/Large/Golden Cave Cheese). Numbers are playtest starting values.
+- Rack tile uses maker colours (grey empty, orange fermenting, green ready); Today's Plan has a `Casks` line; the morning report mentions a barrel that gained a grade. Barrels save as `casks` (old saves load with none; orphans dropped). Aged goods are plain `ITEMS`, so shipping/museum/orders need no hooks. Not yet gift-preference aware.
+
 ## Farm works, 2026-11-22
 
 - `src/game/farm-works.ts` holds the data and save sanitiser; the engine (`farm_works` field, saved, restored after

@@ -1,4 +1,6 @@
-const pkey = (x: number, y: number) => `${x},${y}`;
+import { CASK_RACK, CASK_PRICE } from './cask-rack';
+
+const pkey =(x: number, y: number) => `${x},${y}`;
 
 export const HYBRIDS = [
   { crop: 'Rose Turnip', parents: ['Turnip', 'Potato'], season: 'Spring', dish: 'Rose Slaw', grow: 5, value: 90, color: '0E' },
@@ -33,9 +35,10 @@ export const FARM_PIECES = {
   'Sprinkler': { tile: 'farm_sprinkler', glyph: '¤', color: '0C', walk: false, price: 900, info: 'Waters the four touching soil tiles each morning.' },
   'Scarecrow': { tile: 'farm_scarecrow', glyph: '‡', color: '09', walk: false, price: 500, info: 'Its windbreak protects the eight touching tiles from typhoons.' },
   'Auto-Feeder': { tile: 'farm_feeder', glyph: '▣', color: '0B', walk: false, price: 1800, info: 'At dawn uses Chicken Feed and Fodder from your bag to fill empty troughs. One per farm.' },
+  [CASK_RACK]: { tile: 'farm_cask', glyph: '◙', color: '08', walk: false, price: CASK_PRICE, info: 'One barrel: ferment fruit into wine, or age Small Cheese. Older goods sell for more.' },
 } as const;
 
-export const FARM_USE_TILES = ['orchard_tree', 'rain_barrel', 'greenhouse_frame', ...Object.values(FARM_PIECES).map((p) => p.tile)];
+export const FARM_USE_TILES = ['orchard_tree', 'rain_barrel', 'greenhouse_frame', 'farm_cask_work', 'farm_cask_ready', ...Object.values(FARM_PIECES).map((p) => p.tile)];
 
 export type FarmPiece = keyof typeof FARM_PIECES;
 export const FARM_PIECE_NAMES = Object.keys(FARM_PIECES) as FarmPiece[];
