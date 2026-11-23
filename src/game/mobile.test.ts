@@ -6,7 +6,7 @@ import { Screen } from './screen';
 import { Game } from './engine';
 import { computeFrame } from './enhanced';
 import { COMPACT_MIN_COLS, FULL_MIN_COLS, MIN_ROWS, fitMessages, fitText, isCompact, reflowPages, wrapLine } from './compact';
-import { chooseGrid, dirToward, dpadDirection, firstStep, lineHeight } from './viewport';
+import { chooseGrid, wantsTouchLayout, TOUCH_COMPACT_MAX_ROWS, dirToward, dpadDirection, firstStep, lineHeight } from './viewport';
 
 /** DejaVu Sans Mono advance width (0.602 em), what the canvas measures for the bundled font. */
 const mono = (px: number) => px * 0.602;
@@ -327,5 +327,42 @@ describe('touch context action', () => {
     s.pushKey('enter');
     await done;
     assert.equal(g.typing, false);
+  });
+});
+
+describe('phone layout polish', () => {
+  test('narrow viewports get the touch layout even without a touch signal', () => {
+    assert.equal(wantsTouchLayout(false, 390), true);
+    assert.equal(wantsTouchLayout(false, 1280), false);
+    assert.equal(wantsTouchLayout(true, 1280), true);
+  });
+
+  test('compact touch grids stop growing taller than the cap; desktop and full layouts are unaffected', () => {
+    const phone = chooseGrid(390, 610, mono, true);
+    assert.ok(phone.compact);
+    assert.ok(phone.rows <= TOUCH_COMPACT_MAX_ROWS && phone.rows >= MIN_ROWS);
+    assert.ok(chooseGrid(1272, 900, mono, false).rows > TOUCH_COMPACT_MAX_ROWS);
+  });
+
+  test('compact status row shows stamina as cur/max and the equipped tool from the start', () => {
+    const { s, g } = farm(54, 32);
+    const row = rowText(s, 32 - 4);
+    assert.ok(row.includes(`${g.stamina}/${g.max_stamina}`), row);
+    assert.ok(row.includes(g.tool), row);
+  });
+
+  test('intro dialog stays over the map, off the side panel, on the full layout', async () => {
+    const { s, g } = farm(100, 32);
+    const divX = g.scr.ctx.divX;
+    let box: [number, number] | null = null;
+    const orig = s.box.bind(s);
+    s.box = ((x: number, y: number, w: number, ...rest: any[]) => {
+      box ??= [x, w];
+      return (orig as any)(x, y, w, ...rest);
+    }) as any;
+    s.keyQueue.push('enter');
+    await g.say('Hello there, welcome to the valley.');
+    assert.ok(box, 'box drawn');
+    assert.ok(box![0] + box![1] <= divX, `box ends at ${box![0] + box![1]} before divider ${divX}`);
   });
 });

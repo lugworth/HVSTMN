@@ -11,6 +11,14 @@
   small room use larger cells (`chooseGrid` `mapSize`, 46 columns minimum). `app/icon.svg` is the favicon.
 - Tests: `src/game/ui-layout.test.ts`, plus new cases in `mobile.test.ts`.
 
+## Phone layout polish, 2026-11-23
+
+- Viewports under 600px wide use the touch/compact layout even without a touch signal (`wantsTouchLayout` in `viewport.ts`).
+- Compact touch grids cap at 32 rows (`TOUCH_COMPACT_MAX_ROWS`) so small rooms and the status strip sit closer together.
+- The compact status row shows stamina as `cur/max` and gives it priority over the facing hint; the name-entry bar sits below the logo.
+- `say()` centres on the map width (not the side panel) on the full layout; ligatures are off for the UI font ('fi' glitch); `app/icon.svg` ends the favicon 404.
+- Not verified in a browser: dead-space tuning, minimap/toolbar overlap (no such DOM button found) and the subset font's C glyph.
+
 ## Farm works, 2026-11-22
 
 - `src/game/farm-works.ts` holds the data and save sanitiser; the engine (`farm_works` field, saved, restored after
