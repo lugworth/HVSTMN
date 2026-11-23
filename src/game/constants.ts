@@ -1,4 +1,6 @@
-import { HYBRIDS, FARM_PIECES, SAPLING, SAPLING_PRICE } from './farm-works';
+import { CASK_KINDS, AGE_TIERS, salePrice } from './cask-rack';
+import type { CaskKind } from './cask-rack';
+import { HYBRIDS,FARM_PIECES, SAPLING, SAPLING_PRICE } from './farm-works';
 // Auto-generated exact constants from hrvstmn.py
 
 export const PALETTE: Record<string, string> = {
@@ -3942,6 +3944,12 @@ ITEMS[SAPLING] = [SAPLING_PRICE, 0, 'special'];
 for (const [name, p] of Object.entries(FARM_PIECES)) {
   ITEMS[name] = [Math.floor(p.price / 2), 0, 'special'];
   TILES[p.tile] = [p.glyph, p.color, '00', p.walk];
+}
+// Cask Rack states reuse the maker colours: grey empty (farm_cask), orange working, green ready.
+TILES['farm_cask_work'] = ['◙', '0C', '00', false];
+TILES['farm_cask_ready'] = ['◙', '0A', '00', false];
+for (const [kind, k] of Object.entries(CASK_KINDS) as [CaskKind, (typeof CASK_KINDS)[CaskKind]][]) {
+  AGE_TIERS.forEach((_, i) => { if (!ITEMS[k.items[i]]) ITEMS[k.items[i]] = [salePrice(kind, i), k.stamina, k.cat]; });
 }
 TILES['orchard_tree'] = ['♣', '0A', '00', false];
 TILES['rain_barrel'] = ['▥', '0C', '00', false];

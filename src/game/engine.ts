@@ -170,6 +170,11 @@ import {
 } from './farm-works';
 import type { FarmWorks } from './farm-works';
 import {
+  CASK_RACK, CASK_CAP, WINE_FRUIT, AGE_TIERS, caskPhase, caskItem, caskNextIn, caskMilestone,
+  wineBatch, cheeseBatch, sanitiseCasks,
+} from './cask-rack';
+import type { Cask } from './cask-rack';
+import {
   CoordSet,
   parseCoordKey,
   py_len,
@@ -762,6 +767,8 @@ export class Game {
   /** Task 12: the Willow Bend footbridge (materials delivered, chosen crop, finish day, built). */
   public_works: PublicWorks = worksState();
   farm_works: FarmWorks = emptyFarmWorks();
+  /** One barrel per placed Cask Rack, keyed by the rack's 'x,y'. */
+  casks: Record<string, Cask> = {};
   /** Task 34: shortcuts opened for good (ids from SHORTCUT_IDS, e.g. 'hollow_gate'), carved after the maps are built. */
   shortcuts: string[] = [];
 
@@ -824,7 +831,7 @@ export class Game {
     'inn_scenes_seen', 'inn_evening_day',
     'stall', 'stall_last', 'stall_earned',
     'gray_quest', 'gray_note_level',
-    'map_pin', 'public_works', 'shortcuts', 'farm_works',
+    'map_pin', 'public_works', 'shortcuts', 'farm_works', 'casks',
     'outings_done', 'dinner_day', 'child_state', 'guest_regulars', 'fest_roles_done',
     'pantry', 'chicken_personalities', 'pasture', 'enrichment', 'trail_encounter',
     'tea_progress', 'tea_last_day', 'spouse_routine', 'prints', 'wall_print',
@@ -1103,6 +1110,7 @@ export class Game {
     this.map_pin = null;
     this.public_works = worksState();
     this.farm_works = emptyFarmWorks();
+    this.casks = {};
     this.outings_done = {};
     this.dinner_day = -1;
     this.child_state = emptyChildState();
@@ -1474,6 +1482,7 @@ export class Game {
         this.objs = { farm: { ...(d.objs || {}) }, mine: {} };
       }
       this.farm_works = restoreFarmWorks(d.farm_works, (k, _p) => this.farm_can_place(k), this.absday());
+      this.casks = sanitiseCasks(d.casks, (k) => this.farm_works.pieces[k] === CASK_RACK, this.absday());
       const todayAbs = this.absday();
       this.outings_done = Object.fromEntries(
         Object.entries(this.outings_done && typeof this.outings_done === 'object' ? this.outings_done : {}).filter(
@@ -6428,6 +6437,7 @@ export class Game {
     const k = pkey(x, y);
     const fw = this.farm_works;
     const piece = fw.pieces[k];
+    if (piece === CASK_RACK) return this.cask_tile(k);
     if (piece) return FARM_PIECES[piece].tile;
     if (fw.orchard[k]) return 'orchard_tree';
     if (this.enrichment.perch && x === PERCH_SPOT[0] && y === PERCH_SPOT[1]) return 'perch';
@@ -6523,6 +6533,10 @@ export class Game {
       return true;
     }
     const piece = fw.pieces[k];
+    if (piece === CASK_RACK) {
+      await this.cask_menu(k);
+      return true;
+    }
     if (piece) {
       if ((await this.menu(piece, ['Pick it up', 'Leave it'], 0, [`  ${FARM_PIECES[piece].info}`])) === 0) {
         delete fw.pieces[k];
@@ -6634,6 +6648,96 @@ export class Game {
       lost += 1;
     }
     if (lost) report.push(`The typhoon flattened ${lost} crop${lost > 1 ? 's' : ''}. A Scarecrow or the greenhouse shelters nearby plants.`);
+  }
+
+  // ---------------------------------------------------------------- Cellar Cask Rack (cask-rack.ts)
+  /** Rack tile by state, reusing the maker colours: grey empty, orange fermenting, green ready. */
+  cask_tile(key: string): string {
+    const c = this.casks[key];
+    if (!c) return FARM_PIECES[CASK_RACK].tile;
+    return caskPhase(c, this.absday()) === 'ready' ? 'farm_cask_ready' : 'farm_cask_work';
+  }
+
+  /** What a barrel holds and when it improves, in a few words. */
+  cask_line(c: Cask): string {
+    const today = this.absday();
+    const next = caskNextIn(c, today);
+    const name = caskPhase(c, today) === 'ready' ? `${c.qty} x ${caskItem(c, today)}` : `${c.qty} Young Wine fermenting`;
+    return `${name}${next === null ? ', fully aged' : `, better in ${next}d`}`;
+  }
+
+  /** Today's Plan wording for all racks: ready barrels first, or null with none standing. */
+  cask_status(): string | null {
+    const racks = Object.keys(this.farm_works.pieces).filter((k) => this.farm_works.pieces[k] === CASK_RACK);
+    if (!racks.length) return null;
+    const held = racks.filter((k) => this.casks[k]);
+    const ready = held.filter((k) => caskPhase(this.casks[k], this.absday()) === 'ready').length;
+    return `${racks.length} rack${racks.length > 1 ? 's' : ''}: ${ready} ready, ${held.length - ready} working, ${racks.length - held.length} empty`;
+  }
+
+  /** Dawn report for barrels that finished fermenting or reached a better tier today. */
+  cask_morning(report: string[]): void {
+    const n = Object.values(this.casks).filter((c) => caskMilestone(c, this.absday())).length;
+    if (n) report.push(`${n} cask${n > 1 ? 's' : ''} in the Cask Rack ${n > 1 ? 'have' : 'has'} aged a grade. Worth a look!`);
+  }
+
+  load_cask(key: string, kind: 'wine' | 'cheese'): boolean {
+    if (this.farm_works.pieces[key] !== CASK_RACK || this.casks[key]) return false;
+    let qty: number;
+    if (kind === 'wine') {
+      const b = wineBatch(this.inv);
+      qty = b.qty;
+      if (!qty) return false;
+      for (const [f, n] of Object.entries(b.take)) this.take(f, n);
+    } else {
+      qty = cheeseBatch(this.inv);
+      if (!qty) return false;
+      this.take('Small Cheese', qty);
+    }
+    this.casks[key] = { kind, start: this.absday(), qty };
+    this.msg(`Filled the cask: ${this.cask_line(this.casks[key])}.`, '0C');
+    return true;
+  }
+
+  collect_cask(key: string): string | null {
+    const c = this.casks[key];
+    if (!c || caskPhase(c, this.absday()) !== 'ready') return null;
+    const item = caskItem(c, this.absday());
+    delete this.casks[key];
+    this.give(item, c.qty);
+    const line = `Took ${c.qty} x ${item} from the cask (${ITEMS[item][0]}G each).`;
+    this.msg(line, '0A');
+    return line;
+  }
+
+  async cask_menu(key: string): Promise<void> {
+    const c = this.casks[key];
+    const info = [`  ${FARM_PIECES[CASK_RACK].info}`];
+    const opts: string[] = [];
+    if (c) {
+      info.unshift(`  ${this.cask_line(c)}.`);
+      if (caskPhase(c, this.absday()) === 'ready') opts.push(`Take ${c.qty} ${caskItem(c, this.absday())} now`);
+      else info.push('  Fermenting: nothing to take yet.');
+      info.push(`  Ageing tiers: ${AGE_TIERS.map((t) => `${t.days}d x${t.mult}`).join(', ')}.`);
+    } else {
+      const wine = wineBatch(this.inv).qty;
+      const cheese = cheeseBatch(this.inv);
+      if (wine) opts.push(`Ferment ${wine} Young Wine (${wine * WINE_FRUIT} fruit)`);
+      if (cheese) opts.push(`Age ${cheese} Small Cheese`);
+      info.unshift(`  Empty. Needs ${WINE_FRUIT} Wild Grape/Pear/Apple per wine (up to ${CASK_CAP}), or Small Cheese.`);
+      opts.push('Pick it up');
+    }
+    opts.push('Leave');
+    const sel = await this.menu(CASK_RACK, opts, 0, info);
+    const choice = sel === null ? 'Leave' : opts[sel];
+    if (choice.startsWith('Take')) this.collect_cask(key);
+    else if (choice.startsWith('Ferment')) this.load_cask(key, 'wine');
+    else if (choice.startsWith('Age')) this.load_cask(key, 'cheese');
+    else if (choice === 'Pick it up') {
+      delete this.farm_works.pieces[key];
+      this.give(CASK_RACK);
+      this.msg(`Picked up the ${CASK_RACK}.`);
+    }
   }
 
   farm_auto_feed(report: string[]): void {
@@ -6973,6 +7077,8 @@ export class Game {
       const st = this.maker_state(mk);
       if (st !== 'idle' || makerBatch(mk, this.inv).length) lines.push(`  Makers ${this.maker_status(mk, true)}`);
     }
+    const casks = this.cask_status();
+    if (casks) lines.push(`  Casks  ${casks}`);
     lines.push(`  Museum ${this.museum.length}/${this.museum_total()} donated`);
     if (this.requests.length) {
       const r = this.requests[0];
@@ -9372,6 +9478,7 @@ export class Game {
       report.push(`A fierce ${this.weather} sweeps through Brackenford! Stay safe!`);
     }
     this.farm_works_morning(report);
+    this.cask_morning(report);
     if (reason === 'sleep') {
       this.night_surprise(report);
       this.night_sky(report); // aurora over the valley tonight, reported at dawn
