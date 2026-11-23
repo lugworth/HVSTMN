@@ -52,6 +52,10 @@ export type CellTag = {
   fishPocket?: string;
   /** A farm-works fixture (lamp, orchard tree, barrel...): drawn as a plain full-size glyph. */
   fixture?: { ch: string; fg: string };
+  /** Placement preview for an equipped placeable farm piece (task 41). */
+  piecePreview?: { ch: string; fg: string };
+  /** Outdoor villager winter cloak/scarf accent (feature G11). */
+  winterCoat?: boolean;
   /** Soil under the greenhouse glass. */
   greenhouse?: boolean;
   /** The crab pot's float off the beach pier (task 39). */
@@ -166,9 +170,12 @@ export class Screen {
   accessibleCues: boolean = false;
   /** Optional CRT scanline and phosphor bloom pass over the canvas. */
   crt: boolean = false;
+  /** High-contrast readability boost (still snapped to Isotope Dark, task 56 / G17). */
+  highContrast: boolean = false;
   onHiresChange?: (hires: boolean) => void;
   onPaletteChange?: (mode: PaletteMode) => void;
   onCrtChange?: (crt: boolean) => void;
+  onHighContrastChange?: (highContrast: boolean) => void;
   keyQueue: string[] = [];
   private keyWaiters: Array<{
     resolve: (key: string | null) => void;
@@ -229,6 +236,12 @@ export class Screen {
     if (this.crt === crt) return;
     this.crt = crt;
     this.onCrtChange?.(crt);
+  }
+
+  setHighContrast(hc: boolean) {
+    if (this.highContrast === hc) return;
+    this.highContrast = hc;
+    this.onHighContrastChange?.(hc);
   }
 
   put(x: number, y: number, text: string, fg: string = '05', bg: string = '00', bold: boolean = false) {

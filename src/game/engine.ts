@@ -254,6 +254,41 @@ import {
   sanitizeStringRecordNumber,
   writeSaveSlot,
 } from './save';
+import {
+  OUTINGS, outingFor, DINNER_MIN_FRIEND, dinnerPairLines, dinnerDishReaction,
+  CHILD_INTEREST_LABELS, emptyChildState, sanitizeChildState, classifyChildItem, childShowLine,
+  topChildInterests, childMilestoneScene, type ChildState,
+  TEA_HOURS, TEA_INGREDIENTS, matchTeaDrink, teaRegularFor,
+  rollSpouseRoutine, sanitizeSpouseRoutine, type SpouseRoutine,
+  STAMP_MARKS, STAMP_INKS, composeStampPrint, sanitizeStampPrint, type StampPrint,
+  reactiveNpcLine,
+} from './social';
+import {
+  GUEST_VENDOR_SPOT, GUEST_VENDORS, activeGuestVendor,
+  festivalVariant, festivalRoleOutcome,
+  PANTRY_SPOT, PANTRY_GOAL, PANTRY_RECIPE, PANTRY_CATEGORIES, emptyPantryState, sanitizePantryState, type PantryState,
+  TRAIL_ENCOUNTERS, rollTrailEncounter, sanitizeTrailEncounter, type ActiveTrailEncounter,
+  generateWeeklyContracts, sanitizeContracts, type ShippingContract,
+} from './town-life';
+import {
+  PERSONALITY_NOTES, pickPersonality, coatInfo, breedCoat, ensureAnimalRecord, animalYardSpot,
+  PASTURE_GATE_SPOT, PASTURE_GRAZE_COST, emptyPastureState, sanitizePastureState, pastureMorning, type PastureState,
+  PERCH_SPOT, SHADE_TREE_SPOT, PERCH_COST, SHADE_TREE_COST, emptyEnrichmentState, sanitizeEnrichmentState, type EnrichmentState,
+  CAT_SPOT, CAT_UNLOCK_DOG_AFF, emptyPetExtras, sanitizePetExtras, rollPetGift, type PetExtrasState, type AnimalPersonality,
+} from './ranch';
+import {
+  MASTERY_PERKS, perksForDiscipline, sanitizeMasteryPerks,
+  ELEVATOR_STAMINA_FEE, mineElevatorFloors,
+  FOOD_BUFF_MINUTES, STARTER_RECIPES, foodBuffForDish, sanitizeFoodBuff, matchExperimentalRecipe, type FoodBuff,
+  LUCK_LABELS, rollDailyLuck, sanitizeLuck, type LuckLevel,
+  defaultAssist, readAssistSettings, writeAssistSettings, type AssistSettings,
+} from './progression';
+import {
+  TEXT_SCALES, readTextScale, writeTextScale, readHighContrast, writeHighContrast,
+  KEY_ACTION_SPECS, readKeyBindings, writeKeyBindings, keyLabelFor, mapSymbolLegend,
+  type TextScale, type KeyBindings,
+} from './accessibility';
+import { playSfx, isSfxEnabled, setSfxEnabled, loadSfxPreference } from './audio';
 
 type HudSpan = { text: string; fg?: string; bold?: boolean };
 type HudPageLine =
@@ -625,6 +660,8 @@ export class Game {
   trap: { day: number; bait: string | null } | null = null;
   /** The absolute day of the last mushroom flush in Cedar Hollow, and where it came up (task 35). */
   flush_day: number = -1;
+  /** The absolute day the aurora last lit the sky (Fall only, one per day). */
+  aurora_day: number = -1;
   flush_spots: string[] = [];
   /** This morning's scent from the dog (task 29): what it points at, and where. */
   dog_clue: { day: number; map: string; key: string; kind: 'dig' | 'mushroom' } | null = null;
@@ -727,6 +764,39 @@ export class Game {
   /** Task 34: shortcuts opened for good (ids from SHORTCUT_IDS, e.g. 'hollow_gate'), carved after the maps are built. */
   shortcuts: string[] = [];
 
+  // Mechanics tasks 02, 06, 08, 11, 13, 15, 25-28, 36, 43, 47, 48 & features G3, G6, G7, G8, G10, G11, G13, G15, G16
+  outings_done: Record<string, number> = {};
+  dinner_day: number = -1;
+  child_state: ChildState = emptyChildState();
+  guest_regulars: string[] = [];
+  fest_roles_done: Record<string, string> = {};
+  pantry: PantryState = emptyPantryState();
+  chicken_personalities: AnimalPersonality[] = [];
+  pasture: PastureState = emptyPastureState();
+  enrichment: EnrichmentState = emptyEnrichmentState();
+  trail_encounter: ActiveTrailEncounter | null = null;
+  tea_progress: Record<string, number> = {};
+  tea_last_day: number = -1;
+  spouse_routine: SpouseRoutine | null = null;
+  prints: StampPrint[] = [];
+  wall_print: StampPrint | null = null;
+  last_loved_gift: Record<string, string> = {};
+  pet_extras: PetExtrasState = emptyPetExtras();
+  contracts: ShippingContract[] = [];
+  mastery_perks: Record<string, string> = {};
+  recipes_discovered: string[] = [...STARTER_RECIPES];
+  food_buff: FoodBuff | null = null;
+  daily_luck: LuckLevel = 0;
+
+  // Per-browser accessibility, assist & audio preferences (tasks 56, G17, G18, V16)
+  text_scale: TextScale = 'normal';
+  assist: AssistSettings = defaultAssist();
+  key_bindings: KeyBindings = {};
+  onTextScale: ((s: TextScale) => void) | null = null;
+  onAssist: ((a: AssistSettings) => void) | null = null;
+  onKeyBindings: ((b: KeyBindings) => void) | null = null;
+  onSfx: ((on: boolean) => void) | null = null;
+
   private _hydrating: boolean = false;
   private _saveDirty: boolean = false;
   private _lastAutosaveAt: number = 0;
@@ -742,7 +812,7 @@ export class Game {
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
     'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
-    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'pocket', 'pockets_read', 'postcards', 'contest', 'favor', 'favor_offered',
+    'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'aurora_day', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'pocket', 'pockets_read', 'postcards', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
     'fest_wins', 'house_flags', 'project', 'max_spring_floor', 'max_lake_floor',
     // barn animals, and today's once-per-day flags (a mid-day save/load must not reset them)
@@ -754,6 +824,11 @@ export class Game {
     'stall', 'stall_last', 'stall_earned',
     'gray_quest', 'gray_note_level',
     'map_pin', 'public_works', 'shortcuts', 'farm_works',
+    'outings_done', 'dinner_day', 'child_state', 'guest_regulars', 'fest_roles_done',
+    'pantry', 'chicken_personalities', 'pasture', 'enrichment', 'trail_encounter',
+    'tea_progress', 'tea_last_day', 'spouse_routine', 'prints', 'wall_print',
+    'last_loved_gift', 'pet_extras', 'contracts', 'mastery_perks', 'recipes_discovered',
+    'food_buff', 'daily_luck',
     // player position, map, and world state
     'mapname', 'px', 'py', 'face', 'show_minimap', 'wetness',
     'mine_type', 'mine_floor', 'ladder',
@@ -773,6 +848,12 @@ export class Game {
     this.passing_out = false;
     this.build_interiors();
     this.pace = Game.stored_pace();
+    const store = getBrowserStorage();
+    this.text_scale = readTextScale(store);
+    this.assist = readAssistSettings(store);
+    this.key_bindings = readKeyBindings(store);
+    this.scr.highContrast = readHighContrast(store);
+    loadSfxPreference(store);
   }
 
   // ---------------------------------------------------------------- day pace (mechanics task 52)
@@ -811,6 +892,66 @@ export class Game {
     }
     this.msg(`Day pace: ${DAY_PACES[p].label} (an in-game hour takes ${this.pace_hour()}).`, '0C');
     this.onPace?.(p);
+  }
+
+  set_text_scale(scale: TextScale): void {
+    if (!(scale in TEXT_SCALES)) return;
+    this.text_scale = scale;
+    writeTextScale(getBrowserStorage(), scale);
+    this.msg(`Text size: ${TEXT_SCALES[scale].label}.`, '0C');
+    this.onTextScale?.(scale);
+  }
+
+  set_high_contrast(on: boolean): void {
+    this.scr.setHighContrast(on);
+    writeHighContrast(getBrowserStorage(), on);
+    this.msg(`High-contrast mode: ${on ? 'On' : 'Off'}.`, '0C');
+  }
+
+  set_assist(next: Partial<AssistSettings>): void {
+    this.assist = { ...this.assist, ...next };
+    writeAssistSettings(getBrowserStorage(), this.assist);
+    this.onAssist?.(this.assist);
+  }
+
+  set_key_bindings(bindings: KeyBindings): void {
+    this.key_bindings = { ...bindings };
+    writeKeyBindings(getBrowserStorage(), this.key_bindings);
+    this.onKeyBindings?.(this.key_bindings);
+  }
+
+  set_sfx(on: boolean): void {
+    setSfxEnabled(on, getBrowserStorage());
+    this.msg(`Sound effects: ${on ? 'On' : 'Off'}.`, '0C');
+    this.onSfx?.(on);
+  }
+
+  has_perk(id: string): boolean {
+    return Object.values(this.mastery_perks).includes(id);
+  }
+
+  active_buff(): FoodBuff | null {
+    if (!this.food_buff) return null;
+    if (this.now_abs() >= this.food_buff.until) {
+      this.food_buff = null;
+      return null;
+    }
+    return this.food_buff;
+  }
+
+  effective_luck(): number {
+    return this.daily_luck + (this.active_buff()?.kind === 'luck' ? 1 : 0);
+  }
+
+  sync_animal_records(): void {
+    const today = this.absday();
+    if (!Array.isArray(this.chicken_personalities)) this.chicken_personalities = [];
+    while (this.chicken_personalities.length < this.chickens) {
+      this.chicken_personalities.push(pickPersonality(this.chicken_personalities.length + today));
+    }
+    if (this.chicken_personalities.length > this.chickens) {
+      this.chicken_personalities = this.chicken_personalities.slice(0, this.chickens);
+    }
   }
 
   setBodyState(state: 'title' | 'playing' | 'paused') {
@@ -960,6 +1101,28 @@ export class Game {
     this.map_pin = null;
     this.public_works = worksState();
     this.farm_works = emptyFarmWorks();
+    this.outings_done = {};
+    this.dinner_day = -1;
+    this.child_state = emptyChildState();
+    this.guest_regulars = [];
+    this.fest_roles_done = {};
+    this.pantry = emptyPantryState();
+    this.chicken_personalities = [];
+    this.pasture = emptyPastureState();
+    this.enrichment = emptyEnrichmentState();
+    this.trail_encounter = rollTrailEncounter(0);
+    this.tea_progress = {};
+    this.tea_last_day = -1;
+    this.spouse_routine = null;
+    this.prints = [];
+    this.wall_print = null;
+    this.last_loved_gift = {};
+    this.pet_extras = emptyPetExtras();
+    this.contracts = generateWeeklyContracts(0, 0);
+    this.mastery_perks = {};
+    this.recipes_discovered = [...STARTER_RECIPES];
+    this.food_buff = null;
+    this.daily_luck = rollDailyLuck(0, farm.length * 13 + name.length);
     this.apply_public_works();
     // a carved shortcut lives in the maps, so a new farm gets a fresh valley
     if (this.shortcuts.length) { Object.assign(this.maps, build_valley()); this.hook_farm(); }
@@ -1304,6 +1467,51 @@ export class Game {
         this.objs = { farm: { ...(d.objs || {}) }, mine: {} };
       }
       this.farm_works = restoreFarmWorks(d.farm_works, (k, _p) => this.farm_can_place(k), this.absday());
+      const todayAbs = this.absday();
+      this.outings_done = Object.fromEntries(
+        Object.entries(this.outings_done && typeof this.outings_done === 'object' ? this.outings_done : {}).filter(
+          ([k, v]) => OUTINGS.some((o) => o.id === k) && Number.isInteger(v),
+        ),
+      ) as Record<string, number>;
+      this.dinner_day = Number.isInteger(this.dinner_day) ? this.dinner_day : -1;
+      this.child_state = sanitizeChildState(d.child_state);
+      this.guest_regulars = Array.isArray(d.guest_regulars)
+        ? [...new Set(d.guest_regulars.filter((id: unknown): id is string => typeof id === 'string' && GUEST_VENDORS.some((v) => v.id === id)))]
+        : [];
+      this.fest_roles_done = Object.fromEntries(
+        Object.entries(this.fest_roles_done && typeof this.fest_roles_done === 'object' ? this.fest_roles_done : {}).filter(
+          ([k, v]) => typeof k === 'string' && typeof v === 'string',
+        ),
+      ) as Record<string, string>;
+      this.pantry = sanitizePantryState(d.pantry);
+      this.pasture = sanitizePastureState(d.pasture);
+      this.enrichment = sanitizeEnrichmentState(d.enrichment);
+      this.trail_encounter = sanitizeTrailEncounter(d.trail_encounter, todayAbs);
+      this.tea_progress = Object.fromEntries(
+        Object.entries(this.tea_progress && typeof this.tea_progress === 'object' ? this.tea_progress : {}).filter(
+          ([k, v]) => typeof k === 'string' && Number.isInteger(v) && (v as number) >= 0,
+        ),
+      ) as Record<string, number>;
+      this.tea_last_day = Number.isInteger(this.tea_last_day) ? this.tea_last_day : -1;
+      this.spouse_routine = sanitizeSpouseRoutine(d.spouse_routine);
+      this.prints = Array.isArray(d.prints)
+        ? d.prints.map((p: unknown) => sanitizeStampPrint(p)).filter((p: StampPrint | null): p is StampPrint => p !== null).slice(-12)
+        : [];
+      this.wall_print = sanitizeStampPrint(d.wall_print);
+      this.last_loved_gift = Object.fromEntries(
+        Object.entries(this.last_loved_gift && typeof this.last_loved_gift === 'object' ? this.last_loved_gift : {}).filter(
+          ([k, v]) => k in NPCS && typeof v === 'string',
+        ),
+      ) as Record<string, string>;
+      this.pet_extras = sanitizePetExtras(d.pet_extras);
+      this.contracts = sanitizeContracts(d.contracts, todayAbs);
+      this.mastery_perks = sanitizeMasteryPerks(d.mastery_perks);
+      this.recipes_discovered = Array.isArray(d.recipes_discovered)
+        ? [...new Set([...STARTER_RECIPES, ...d.recipes_discovered.filter((r: unknown): r is string => typeof r === 'string' && r in RECIPES)])]
+        : [...STARTER_RECIPES];
+      this.food_buff = sanitizeFoodBuff(d.food_buff, this.now_abs());
+      this.daily_luck = sanitizeLuck(d.daily_luck);
+      this.sync_animal_records();
       this.hp = sanitizeStringRecordNumber('hp' in d ? d.hp : this.hp);
       this.forage = { mountain: {}, beach: {}, ...sanitizeMapStringRecords(d.forage) };
       this.wetness = {
@@ -1514,15 +1722,36 @@ export class Game {
 
   process_zack_pickup(): number {
     let total = 0;
+    let contractBonus = 0;
     for (const [item, qty] of Object.entries(this.bin)) {
-      const price = ITEMS[item] ? ITEMS[item][0] : 0;
+      let price = ITEMS[item] ? ITEMS[item][0] : 0;
+      const cat = ITEMS[item]?.[2];
+      if (cat === 'crop' && this.has_perk('farm_value')) price = Math.round(price * 1.15);
+      else if (cat === 'fish' && this.has_perk('fish_rare')) price = Math.round(price * 1.15);
+      else if ((cat === 'animal' || item.includes('Mayonnaise') || item.includes('Cheese') || item.includes('Yarn')) && this.has_perk('ranch_value')) {
+        price = Math.round(price * 1.15);
+      }
       total += price * qty;
       this.shipped_counts[item] = (this.shipped_counts[item] || 0) + qty;
+      // Credit weekly Otto shipping contracts (G16)
+      for (const c of this.contracts) {
+        if (!c.done && c.item === item) {
+          c.shipped = Math.min(c.need, c.shipped + qty);
+          if (c.shipped >= c.need) {
+            c.done = true;
+            contractBonus += c.bonusGold;
+            this.friend['Otto'] = clamp((this.friend['Otto'] || 0) + 6, 0, 100);
+            this.remember('Otto', `Completed Otto's shipping contract (${c.need} ${c.item}) for +${c.bonusGold}G.`, `contract:${c.id}`);
+          }
+        }
+      }
     }
+    total += contractBonus;
     if (total > 0) {
       this.gold += total;
       this.shipped_total += total;
       this.bin = {};
+      playSfx('coin');
       this.markDirty(false);
     }
     return total;
@@ -1804,6 +2033,7 @@ export class Game {
         rightCol: this.scr.accessibleCues ? '0B' : '03',
       },
       { key: 'pace', raw: `Day Pace: ${DAY_PACES[this.pace].label}`, label: 'Day Pace', icon: '◷', iconCol: '0C', right: DAY_PACES[this.pace].label, rightCol: this.pace === 'normal' ? '04' : '0B' },
+      { key: 'access', raw: 'Accessibility, Assist & Keys', label: 'Accessibility & Assist', icon: '◈', iconCol: '0C', right: TEXT_SCALES[this.text_scale].label, rightCol: this.text_scale === 'normal' ? '04' : '0B' },
       { key: 'rowreserve', raw: `Row Stamina Reserve: ${this.row_reserve}`, label: 'Row Stamina Reserve', icon: '◈', iconCol: '0C', right: `${this.row_reserve}`, rightCol: '0B' },
       ...(this.first_steps
         ? [{ key: 'firststeps', raw: 'Hide First-Morning Checklist', label: 'Hide First-Morning Checklist', icon: '✓', iconCol: '0B', right: 'Hide', rightCol: '04' }]
@@ -1907,6 +2137,8 @@ export class Game {
         (i) => [`An in-game hour takes ${Math.round(DAY_PACES[all[i]].secs * 6)} s of real time.`, 'Shop hours, the 5 PM pickup and festivals keep the in-game clock.'],
       );
       if (sel !== null) this.set_pace(all[sel]);
+    } else if (key === 'access') {
+      await this.accessibility_menu();
     } else if (key === 'rowreserve') {
       const selected = await this.menu('Row Stamina Reserve', ROW_RESERVES.map((n) => `Keep ${n} stamina`), ROW_RESERVES.indexOf(this.row_reserve as typeof ROW_RESERVES[number]), () => ['Row work stops before spending below this limit.']);
       if (selected !== null && ROW_RESERVES[selected] !== undefined) {
@@ -1979,10 +2211,89 @@ export class Game {
     }
     const indoor = this.indoor_npc_at(x, y, mp);
     if (indoor) return indoor;
-    if (mp === 'house' && this.married && x === SPOUSE_POS[0] && y === SPOUSE_POS[1]) {
+    if (mp === 'house' && this.married && x === SPOUSE_POS[0] && y === SPOUSE_POS[1] && !this.spouse_is_away()) {
       return this.married;
     }
     return null;
+  }
+
+  spouse_is_away(): boolean {
+    const r = this.spouse_routine;
+    if (!this.married || !r || r.day !== this.absday() || r.kind !== 'outing' || !r.awayHours) return false;
+    return this.minutes >= r.awayHours[0] * 60 && this.minutes < r.awayHours[1] * 60;
+  }
+
+  async accessibility_menu(): Promise<void> {
+    while (true) {
+      const opts = [
+        `Text Size: ${TEXT_SCALES[this.text_scale].label}`,
+        `High-Contrast Mode: ${this.scr.highContrast ? 'ON' : 'OFF'}`,
+        `Accessible State Cues (! / ≈): ${this.scr.accessibleCues ? 'ON' : 'OFF'}`,
+        `Sound Effects: ${isSfxEnabled() ? 'ON' : 'OFF'}`,
+        `Assist — No-Faint Mode: ${this.assist.noFaint ? 'ON' : 'OFF'}`,
+        `Assist — Easier Fishing Window: ${this.assist.easyFishing ? 'ON' : 'OFF'}`,
+        `Assist — Confirm Destructive Actions: ${this.assist.confirmDestructive ? 'ON' : 'OFF'}`,
+        'Customize Key Bindings',
+        'Back',
+      ];
+      const sel = await this.menu('Accessibility, Assist & Keys', opts, 0, [
+        '  Settings apply immediately and persist on this browser.',
+        '  Text Size increases readable prompt & touch layout sizing.',
+      ]);
+      if (sel === null || sel < 0 || sel >= opts.length - 1) return;
+      if (sel === 0) {
+        const order: TextScale[] = ['normal', 'large', 'xlarge'];
+        const next = order[(order.indexOf(this.text_scale) + 1) % order.length];
+        this.set_text_scale(next);
+      } else if (sel === 1) {
+        this.set_high_contrast(!this.scr.highContrast);
+      } else if (sel === 2) {
+        this.scr.accessibleCues = !this.scr.accessibleCues;
+        this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');
+      } else if (sel === 3) {
+        this.set_sfx(!isSfxEnabled());
+      } else if (sel === 4) {
+        this.set_assist({ noFaint: !this.assist.noFaint });
+        this.msg(`No-faint mode: ${this.assist.noFaint ? 'On' : 'Off'}.`, '0C');
+      } else if (sel === 5) {
+        this.set_assist({ easyFishing: !this.assist.easyFishing });
+        this.msg(`Easier fishing window: ${this.assist.easyFishing ? 'On' : 'Off'}.`, '0C');
+      } else if (sel === 6) {
+        this.set_assist({ confirmDestructive: !this.assist.confirmDestructive });
+        this.msg(`Confirm destructive actions: ${this.assist.confirmDestructive ? 'On' : 'Off'}.`, '0C');
+      } else if (sel === 7) {
+        await this.keybinds_menu();
+      }
+    }
+  }
+
+  async keybinds_menu(): Promise<void> {
+    while (true) {
+      const opts = [
+        ...KEY_ACTION_SPECS.map((s) => `${s.label.padEnd(22)} [${keyLabelFor(s.id, this.key_bindings)}]`),
+        'Reset All to Defaults',
+        'Back',
+      ];
+      const sel = await this.menu('Key Bindings', opts, 0, [
+        '  Pick an action to assign a custom letter key (arrow keys & Enter stay fixed).',
+      ]);
+      if (sel === null || sel < 0 || sel >= opts.length - 1) return;
+      if (sel === KEY_ACTION_SPECS.length) {
+        this.set_key_bindings({});
+        this.msg('Key bindings reset to defaults.', '0C');
+        continue;
+      }
+      const spec = KEY_ACTION_SPECS[sel];
+      const typed = (await this.text_input(`New single key for ${spec.label} (blank = default):`, '', 1)).trim();
+      const next = { ...this.key_bindings };
+      if (!typed) {
+        delete next[spec.id];
+      } else {
+        next[spec.id] = typed.toLowerCase();
+      }
+      this.set_key_bindings(next);
+      this.msg(`${spec.label} bound to [${keyLabelFor(spec.id, this.key_bindings)}].`, '0C');
+    }
   }
 
   walkable(mapname: string, x: number, y: number, for_npc: boolean = false): boolean {
@@ -2187,14 +2498,20 @@ export class Game {
 
   async prompt_mine_entry(mineType: 'spring' | 'lake'): Promise<void> {
     const maxF = mineType === 'lake' ? this.max_lake_floor : this.max_spring_floor;
-    if (maxF >= 10 || this.goddess_gifts >= 30) {
-      const floors = [1, 10, 29, 50, 100, 200, 255].filter((f) => f === 1 || f <= maxF + 20 || this.goddess_gifts >= 30);
+    const blessed = this.goddess_gifts >= 20;
+    const floors = mineElevatorFloors(maxF, blessed);
+    if (floors.length > 1) {
+      const fee = blessed ? 0 : ELEVATOR_STAMINA_FEE;
       const sel = await this.menu(
         `${mineType === 'lake' ? 'Mirewater Mine' : 'Copperseam Mine'} Elevator`,
-        floors.map((f) => `Floor B${f}F`)
+        floors.map((f) => (f === 1 ? 'Floor B1F (free)' : `Floor B${f}F${fee ? ` (-${fee} stamina)` : ' (blessed)'}`)),
+        0,
+        ['  Discover every 25th floor to unlock permanent elevator checkpoints.'],
       );
       if (sel !== null) {
-        this.enter_mine(floors[sel], mineType);
+        const target = floors[sel];
+        if (target > 1 && fee > 0) await this.spend(fee);
+        this.enter_mine(target, mineType);
       }
     } else {
       this.enter_mine(1, mineType);
@@ -2346,8 +2663,11 @@ export class Game {
   }
 
   async spend(n: number): Promise<void> {
+    let cost = n;
+    if (this.active_buff()?.kind === 'stamina' && cost > 1) cost -= 1;
+    if (this.mapname === 'mine' && this.has_perk('mine_stamina') && cost > 1 && this.steps % 2 === 0) cost -= 1;
     const isCursed = this.levels[this.tool] === 5;
-    const res = calculateStaminaSpend(this.stamina, this.fatigue, n, {
+    const res = calculateStaminaSpend(this.stamina, this.fatigue, cost, {
       weather: this.map.indoor ? 'Sunny' : this.weather,
       minutes: this.minutes,
       hasMysticBerry: this.has_mystic_berry,
@@ -2355,6 +2675,12 @@ export class Game {
     });
     const prevStam = this.stamina;
     const prevFat = this.fatigue;
+    if (res.fainted && this.assist.noFaint) {
+      this.stamina = Math.max(1, res.stamina);
+      this.fatigue = Math.min(95, res.fatigue);
+      this.msg('No-faint assist: you pause to catch your breath before overdoing it.', '0C');
+      return;
+    }
     this.stamina = res.stamina;
     this.fatigue = res.fatigue;
 
@@ -2402,6 +2728,7 @@ export class Game {
     }
 
     this.record_tool_use(t);
+    playSfx('tool');
     if (t === 'Watering Can') this.fx_add('splash', tx, ty);
     else if (['Hoe', 'Hammer', 'Axe', 'Sickle'].includes(t)) {
       this.fx_add('dust', tx, ty);
@@ -2521,6 +2848,9 @@ export class Game {
           this.msg("There's a ladder hidden under the rock!", '0A');
         }
       } else if (this.mapname === 'farm' && this.tilled.has(pKey) && !this.crops[pKey]) {
+        if (this.assist.confirmDestructive && !(await this.confirm('Flatten this tilled soil tile?'))) {
+          return;
+        }
         this.tilled.delete(pKey);
         this.wet.delete(pKey);
         this.composted = this.composted.filter((k) => k !== pKey);
@@ -2554,7 +2884,7 @@ export class Game {
       }
       await this.spend(2);
     } else if (t === 'Watering Can') {
-      const cap = CAN_CAP[this.levels['Watering Can'] || 0];
+      const cap = CAN_CAP[this.levels['Watering Can'] || 0] + (this.has_perk('farm_can') ? 10 : 0);
       if (tile === 'water' || tile === 'fountain' || tile === 'pond') {
         this.water = cap;
         this.msg(`You fill the watering can. (${cap}/${cap})`, '0D');
@@ -2656,7 +2986,9 @@ export class Game {
 
   mine_drop(): string | null {
     const allBlessed = UPGRADABLE.every((t) => (this.levels[t] || 0) >= 6);
-    const rngPct = py_rng().random() * 100;
+    let rngPct = py_rng().random() * 100;
+    const luckShift = this.effective_luck() * 2 + (this.has_perk('mine_ore') ? 6 : 0) + (this.active_buff()?.kind === 'mining' ? 5 : 0);
+    rngPct = clamp(rngPct - luckShift, 0, 99.9);
     if (this.mine_type === 'lake') {
       return rollLakeMineDrop(this.mine_floor, rngPct);
     }
@@ -2782,7 +3114,7 @@ export class Game {
 
   // ---------------------------------------------------------------- seed saving (mechanics task 19)
   seed_recipe(crop: string): { crop: string; need: number; bags: number } | null {
-    return SEED_SAVING.find((r) => r.crop === crop) ?? null;
+    return SEED_SAVING.find((r) => r.crop === crop) ?? (HYBRID_CROPS.has(crop) ? { crop, need: 3, bags: 1 } : null);
   }
 
   /** What saving seeds from this crop costs and gives, in lines for the preview. */
@@ -3101,7 +3433,9 @@ export class Game {
   }
 
   async fish(): Promise<void> {
-    const wait = py_rng().uniform(1.0, 3.2);
+    const fastFactor = (this.has_perk('fish_bite') ? 0.75 : 1) * (this.active_buff()?.kind === 'fishing' ? 0.85 : 1) * (this.effective_luck() > 0 ? 0.9 : 1);
+    const wait = Math.max(0.5, py_rng().uniform(1.0, 3.2) * fastFactor);
+    const biteWindow = 0.95 + (this.assist.easyFishing ? 1.85 : 0) + (this.has_perk('fish_bite') ? 0.35 : 0) + (this.active_buff()?.kind === 'fishing' ? 0.25 : 0);
     const start = Date.now() / 1000;
     let bite: number | null = null;
     let result: string | null = null;
@@ -3112,8 +3446,9 @@ export class Game {
       const now = Date.now() / 1000;
       if (bite === null && now - start >= wait) {
         bite = now;
+        playSfx('fish_bite');
       }
-      if (bite !== null && now - bite > 0.95) {
+      if (bite !== null && now - bite > biteWindow) {
         result = 'miss';
         break;
       }
@@ -3152,6 +3487,7 @@ export class Game {
       const caught = this.roll_catch();
       const [tx, ty] = this.target();
       this.give(caught);
+      playSfx('fish_catch');
       this.fx_add('splash', tx, ty, 0.7);
       if (ITEMS[caught]?.[2] === 'fish') {
         this.note_first(caught);
@@ -3249,6 +3585,21 @@ export class Game {
       await this.talk(n);
       return;
     }
+    // Interact with your child in the farmhouse (Task 08)
+    if (this.mapname === 'house' && this.married && this.child_name && tx === SPOUSE_POS[0] + 1 && ty === SPOUSE_POS[1]) {
+      await this.child_interact();
+      return;
+    }
+    // Guest vendor in Market Cross (Task 11)
+    if (this.mapname === 'town' && tx === GUEST_VENDOR_SPOT[0] && ty === GUEST_VENDOR_SPOT[1]) {
+      const gv = this.current_guest_vendor();
+      if (gv) {
+        await this.guest_vendor_menu(gv);
+        return;
+      }
+    }
+    // People you meet along the trail & dropped scarf (Task 36)
+    if (await this.trail_interact_at(tx, ty)) return;
     if (pKey in m.doors) {
       await this.enter(m.doors[pKey]);
       return;
@@ -3259,8 +3610,12 @@ export class Game {
       this.warp(mp, wx, wy);
       return;
     }
-    // Check if interacting with outdoor Dog or Horse on the farm
+    // Check if interacting with outdoor Dog, Farm Cat, or Horse on the farm
     if (this.mapname === 'farm') {
+      if (tx === CAT_SPOT[0] && ty === CAT_SPOT[1] && this.pet_extras.cat) {
+        await this.cat_menu();
+        return;
+      }
       if (tx === 21 && ty === 6) {
         await this.dog_menu();
         return;
@@ -3384,6 +3739,7 @@ export class Game {
           delete this.crops[pKey];
         }
         this.mastery_add('farming');
+        playSfx('harvest');
         this.fx_add('sparkle', tx, ty, 0.7);
       } else {
         this.msg(
@@ -3398,11 +3754,13 @@ export class Game {
     if (pKey in fr) {
       const item = py_pop(fr, pKey);
       this.give(item);
+      playSfx('harvest');
       this.mastery_add('foraging');
-      if (this.hollow_luck_day === this.absday() && py_rng().random() < HOLLOW_LUCK_CHANCE) {
+      const bonusChance = (this.hollow_luck_day === this.absday() ? HOLLOW_LUCK_CHANCE : 0) + (this.has_perk('forage_double') ? 0.2 : 0);
+      if (bonusChance > 0 && py_rng().random() < bonusChance) {
         this.give(item);
         this.fx_add('sparkle', tx, ty, 0.7);
-        this.msg(`You picked up ${item}, and found a second one beside it! (Hollow luck)`, '0B');
+        this.msg(`You picked up ${item}, and found a second one beside it!`, '0B');
       } else {
         this.msg(`You picked up ${item}.`, '0B');
       }
@@ -3491,6 +3849,18 @@ export class Game {
       if (seat) await this.sit(seat[0]);
     } else if (tile === 'kitchen' || tile === 'bath' || tile === 'shelf' || tile === 'vase' || tile === 'fireplace') {
       await this.use_furniture(tile);
+    } else if (tile === 'table' && this.mapname === 'house') {
+      await this.house_table_menu();
+    } else if (tile === 'stamp_bench' && this.mapname === 'house') {
+      await this.stamp_bench_menu();
+    } else if (tile === 'pantry') {
+      await this.pantry_menu();
+    } else if (tile === 'pasture_gate') {
+      await this.pasture_menu();
+    } else if (tile === 'perch') {
+      await this.say('A sturdy cedar perch by the coop. Your chickens love hopping onto it on sunny days (+2 daily chicken affection).', 'Chicken Perch');
+    } else if (tile === 'shade_tree') {
+      await this.say('A leafy pasture shade tree. Your cows and sheep gather under its boughs on warm afternoons (+2 daily affection).', 'Shade Tree');
     } else if (tile === 'stall') {
       await this.stall_menu();
     } else if (tile === 'sign') {
@@ -3609,18 +3979,23 @@ export class Game {
     }
     const h = Math.floor(this.dog_aff / 10);
     const bar = `[${'#'.repeat(h)}${'.'.repeat(10 - h)}]`;
-    const opts = ['Pet & Hug Dog', 'Play Fetch with Dog Ball', 'Practice Beach Frisbee', 'Leave'];
+    const opts = ['Pet & Hug Dog', 'Play Fetch with Dog Ball', 'Practice Beach Frisbee'];
+    if (this.pet_extras.bowlGift) opts.push(`Collect Pet Bowl Gift (${this.pet_extras.bowlGift})`);
+    if (!this.pet_extras.cat && this.dog_aff >= CAT_UNLOCK_DOG_AFF) opts.push('Welcome the Stray Farm Cat!');
+    opts.push('Leave');
     const scent = this.dog_clue_live()
       ? [`  It keeps pointing its nose one way: ${this.dog_clue_text()}.`]
       : this.dog_aff < DOG_CLUE_AFF
         ? ['  A dog you spend time with will start sniffing out things in the valley.']
         : [];
     const sel = await this.menu(`Doghouse — Dog ${bar} (Max Frisbee: ${this.dog_frisbee_dist}m)`, opts, 0, scent);
-    if (sel === 0) {
+    if (sel === null || opts[sel] === 'Leave') return;
+    const choice = opts[sel];
+    if (choice === 'Pet & Hug Dog') {
       this.dog_aff = Math.min(100, this.dog_aff + 3);
       this.fx_add('emote', 21, 6, 1.0, { emote: 'heart' });
       this.msg('Woof! Your dog wags its tail happily! (+Affection)', '0B');
-    } else if (sel === 1) {
+    } else if (choice === 'Play Fetch with Dog Ball') {
       if (!this.inv['Dog Ball']) {
         await this.say('Buy a Dog Ball from Ferreira at Otto\'s Beach House to play fetch!', 'Doghouse');
       } else {
@@ -3628,7 +4003,7 @@ export class Game {
         this.fx_add('emote', 21, 6, 1.0, { emote: 'heart' });
         this.msg('Your dog chases the Dog Ball and brings it right back! Woof!', '0B');
       }
-    } else if (sel === 2) {
+    } else if (choice === 'Practice Beach Frisbee') {
       if (!this.inv['Frisbee']) {
         await this.say('Buy a Frisbee from Ferreira at Otto\'s Beach House to train for Beach Day (Summer 1)!', 'Doghouse');
       } else {
@@ -3638,6 +4013,19 @@ export class Game {
         this.fx_add('emote', 21, 6, 1.0, { emote: 'note' });
         this.msg(`Great catch! Your dog's Frisbee record is now ${this.dog_frisbee_dist}m!`, '0C');
       }
+    } else if (choice.startsWith('Collect Pet Bowl Gift')) {
+      const g = this.pet_extras.bowlGift;
+      if (g) {
+        this.pet_extras.bowlGift = null;
+        this.give(g, 1);
+        this.msg(`You collected ${g} left by your pets in the bowl!`, '0B');
+      }
+    } else if (choice.startsWith('Welcome the Stray Farm Cat')) {
+      const catName = (await this.text_input('Name your new farm cat:', this.pet_extras.catName, 12)).trim() || 'Mallow';
+      this.pet_extras.cat = true;
+      this.pet_extras.catName = catName;
+      this.pet_extras.catAff = 30;
+      await this.say(`Purrrr! ${catName} settles right beside the doghouse and keeps an eye on the farm!`, catName);
     }
   }
 
@@ -3715,9 +4103,10 @@ export class Game {
       'Turn Off',
     ]);
     if (sel === 0) {
+      const lk = LUCK_LABELS[this.daily_luck];
       await this.say(
-        `Tomorrow's weather forecast for Brackenford: ${this.tomorrow}! Plan your watering and animals accordingly.${this.flush_coming() ? " And after today's rain, look for mushrooms in Cedar Hollow tomorrow morning." : ''}`,
-        'Weather Channel',
+        `Tomorrow's weather forecast for Brackenford: ${this.tomorrow}! Today's fortune: ${lk.name} — ${lk.forecast}${this.flush_coming() ? " And after today's rain, look for mushrooms in Cedar Hollow tomorrow morning." : ''}`,
+        'Weather & Fortune',
       );
     } else if (sel === 1) {
       await this.say(`Brackenford News:${this.fest_news() || ' All is peaceful in Brackenford today.'}`, 'News Channel');
@@ -3734,8 +4123,10 @@ export class Game {
       }
       if (this.weekday === 1) {
         // Tuesday: The Delicious Hour
-        const dish = py_rng().choice(Object.keys(RECIPES));
-        await this.say(`Welcome to THE DELICIOUS HOUR! Today's featured recipe: ${this.recipe_line(dish)}! Try cooking it in your Kitchen!`, 'Cooking Show');
+        const unknown = Object.keys(RECIPES).filter((r) => !this.recipes_discovered.includes(r));
+        const dish = py_rng().choice(unknown.length ? unknown : Object.keys(RECIPES));
+        if (!this.recipes_discovered.includes(dish)) this.recipes_discovered.push(dish);
+        await this.say(`Welcome to THE DELICIOUS HOUR! Today's featured recipe: ${this.recipe_line(dish)}! (Added to your discovered recipes!)`, 'Cooking Show');
       } else if (this.weekday === 5) {
         // Saturday: TV Shopping Network
         const nextItem = TV_SHOPPING_ITEMS.find(([name]) => {
@@ -3863,7 +4254,13 @@ export class Game {
       let pref: 'love' | 'like' | 'neutral' | 'hate' = 'neutral';
       let line = `Oh, a ${item}? For me? Thanks.`;
       const honeyFans = Object.values(HONEY_FLAVOURS).find((f) => f.item === item)?.fans;
-      if (d.loves.includes(item) || honeyFans?.includes(n)) {
+      if (item === 'Block Print') {
+        pref = 'love';
+        const latest = this.prints[this.prints.length - 1];
+        line = latest
+          ? `You printed "${latest.title}" (${latest.marks}) by hand?! I'll hang this right on my wall!`
+          : `A handmade block print! What a thoughtful winter keepsake — thank you!`;
+      } else if (d.loves.includes(item) || honeyFans?.includes(n)) {
         pref = 'love';
         line = `Oh! ${item}! I love this! Thank you so much!`;
       } else if (d.likes.includes(item)) {
@@ -3874,14 +4271,18 @@ export class Game {
         line = `...A ${item}? I don't really like this.`;
       }
       const isBday = this.birthdays().includes(n);
-      const pts = calculateGiftPoints(pref, isBday, false);
+      const luckBonus = this.effective_luck() >= 2 && pref !== 'hate' ? 1 : 0;
+      const pts = calculateGiftPoints(pref, isBday, false) + luckBonus;
       if (isBday) {
         line += pts > 0 ? ' And on my birthday! You remembered! (5x Bonus!)' : ' ...On my birthday, too.';
       }
       this.friend[n] = clamp((this.friend[n] || 0) + pts, 0, 100);
       this.gifted.add(n);
+      if (pref === 'love') this.last_loved_gift[n] = item;
       if (isBday && pts > 0) this.remember(n, `${n}'s birthday: you remembered, with ${aOrAn(item)} ${item}.`, `${n}:bday:${this.year}`);
+      else if (item === 'Block Print') this.remember(n, `Gave ${n} a handmade winter block print.`, `${n}:print:${this.year}`);
       else if (pref === 'love') this.remember(n, `${n} loved the ${item} you brought.`, `${n}:love:${item}`);
+      playSfx('emote');
       emitNpcEmote(pref === 'love' ? 'heart' : pref === 'hate' ? 'cross' : 'note');
       await this.say(line, n);
       await this.check_heart_and_rival_events(n);
@@ -3896,6 +4297,18 @@ export class Game {
       emitNpcEmote('note');
       await this.check_heart_and_rival_events(n);
       return;
+    }
+
+    // Task 02: Short outings with villagers (Rowan walk / Nico or Felix fishing)
+    const outing = this.outing_available(n);
+    if (outing && !this.milestone_line(n)) {
+      const pick = await this.menu(`${n}: ${outing.title}?`, [`Join ${n} (10 min)`, 'Just chat for now'], 0, [
+        `  A short ten-minute outing (${outing.where}).`,
+      ]);
+      if (pick === 0) {
+        await this.run_outing(outing);
+        return;
+      }
     }
 
     if (n !== this.married && !this.milestone_line(n) && this.favor_available(n)) {
@@ -3930,7 +4343,14 @@ export class Game {
         }
         emitNpcEmote('heart');
       } else {
-        line = py_rng().choice(d.lines[tier]);
+        const reactive = reactiveNpcLine(n, {
+          weather: this.weather,
+          season: this.season,
+          married: this.married,
+          recentFestWin: this.fest_wins.length > 0 && !this.talked.has(n),
+          lastGift: this.last_loved_gift[n] || null,
+        });
+        line = reactive && !this.talked.has(n) ? reactive : py_rng().choice(d.lines[tier]);
         emitNpcEmote(f >= 60 ? 'heart' : 'note');
       }
     }
@@ -4708,7 +5128,10 @@ export class Game {
       const pending = py_sum(
         Object.entries(this.bin).map(([i, q]) => (ITEMS[i] ? ITEMS[i][0] : 0) * q)
       );
-      const sel = await this.menu(`Shipping Bin  (in bin: ${pending}G — pickup at 5PM)`, opts);
+      const contractInfo = this.contracts
+        .filter((c) => !c.done)
+        .map((c) => `  Otto contract: ship ${c.item} (${c.shipped}/${c.need}) for +${c.bonusGold}G by ${absdayLabel(c.deadline, false)}`);
+      const sel = await this.menu(`Shipping Bin  (in bin: ${pending}G — pickup at 5PM)`, opts, 0, contractInfo.length ? contractInfo : null);
       if (sel === null || opts[sel] === 'Done') {
         return;
       }
@@ -4853,12 +5276,21 @@ export class Game {
       if (s2 === null || sub[s2] === 'Cancel') continue;
       if (sub[s2] === 'Eat') {
         this.take(item);
-        const gain = ITEMS[item][1];
+        const baseGain = ITEMS[item][1];
+        const gain = ITEMS[item][2] === 'forage' && this.has_perk('forage_stamina') ? Math.round(baseGain * 1.25) : baseGain;
         this.stamina = clamp(this.stamina + gain, 0, this.max_stamina);
         if (item.includes('Brisk Tonic') || item === 'Hedgerow Tea' || item === 'Relaxation Tea' || item === 'Frostwort') {
           this.fatigue = Math.max(0, this.fatigue - 35);
         }
-        this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina)`, '0B');
+        let buffNote = '';
+        if (ITEMS[item][2] === 'dish' || item in RECIPES) {
+          const b = foodBuffForDish(item, gain);
+          if (b) {
+            this.food_buff = { kind: b.kind, label: b.label, until: this.now_abs() + FOOD_BUFF_MINUTES };
+            buffNote = ` · Buff: ${b.label}`;
+          }
+        }
+        this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina${buffNote})`, '0B');
       } else if (sub[s2].startsWith('Put in Basket')) {
         const space = BASKET_CAPACITY - basketTotal;
         const maxPut = Math.min(space, this.inv[item]);
@@ -4893,10 +5325,16 @@ export class Game {
   }
 
   async coop(): Promise<void> {
+    this.sync_animal_records();
     while (true) {
+      const flockSummary = this.chicken_personalities.length
+        ? `  Flock temperaments: ${this.chicken_personalities.slice(0, 6).join(', ')}`
+        : '';
       const info = [
         `  Chickens: ${this.chickens}/${this.coop_cap()}   Fed: ${this.fed}   Affection: ${this.chicken_aff}/100`,
         `  Eggs waiting: ${this.eggs}   Incubator: ${this.incubator_days > 0 ? `${this.incubator_days}d left` : 'Empty'}   Feed: ${this.inv['Chicken Feed'] || 0}`,
+        ...(flockSummary ? [flockSummary] : []),
+        ...(this.enrichment.perch ? ['  Cedar Perch installed (+2 daily affection on fair days).'] : []),
         ...(this.makers.includes('Mayonnaise Maker')
           ? [`  Mayonnaise Maker (outside, west of the door): ${this.maker_status('Mayonnaise Maker')}`]
           : []),
@@ -4930,6 +5368,7 @@ export class Game {
         if (this.eggs > 0) {
           const eggType = getEggQuality(this.chicken_aff, this.chicken_fest_won, this.outdoor_hours, py_rng().random());
           this.give(eggType, this.eggs);
+          playSfx('harvest');
           this.msg(`Collected ${this.eggs} x ${eggType}!`, '07');
           this.mastery_add('ranching');
           this.eggs = 0;
@@ -4955,10 +5394,12 @@ export class Game {
         if (this.weather !== 'Sunny') {
           await this.say('Only let chickens outside on Sunny days! Rain makes them unhappy.', null);
         } else {
+          this.animals_grazing = true;
           this.outdoor_hours += 10;
-          this.chicken_aff = Math.min(100, this.chicken_aff + 3);
+          this.chicken_aff = Math.min(100, this.chicken_aff + 3 + (this.enrichment.perch ? 1 : 0));
           this.fed = this.chickens;
-          this.msg(`Your chickens grazed happily outside! (Outdoor hours: ${this.outdoor_hours}h, all fed!)`, '0B');
+          const note = this.chicken_personalities[0] ? ` A ${this.chicken_personalities[0]} hen ${PERSONALITY_NOTES[this.chicken_personalities[0]].chicken}.` : '';
+          this.msg(`Your chickens grazed outside! (Outdoor hours: ${this.outdoor_hours}h, all fed!)${note}`, '0B');
         }
       }
     }
@@ -5136,25 +5577,33 @@ export class Game {
     if (a.kind === 'sheep' && a.wool >= WOOL_DAYS) status.push('wool ready');
     if (a.pregnantDays > 0) status.push(`pregnant (${a.pregnantDays}d)`);
     const kind = ANIMALS[a.kind][0];
-    return `${a.name} ${kind} [${'#'.repeat(h)}${'.'.repeat(10 - h)}] ${status.join(', ')}`;
+    const coat = coatInfo(a.kind, a.coat);
+    const pers = a.personality ? `, ${a.personality}` : '';
+    return `${a.name} (${coat.label}${pers}) ${kind} [${'#'.repeat(h)}${'.'.repeat(10 - h)}] ${status.join(', ')}`;
   }
 
   async barn(): Promise<void> {
+    this.sync_animal_records();
     while (true) {
       const unfed = this.animals.filter((a) => !a.fed).length;
       const tools = ['Milker', 'Clippers', 'Brush', 'Bell', 'Miracle Potion']
         .filter((t) => this.inv[t])
         .join(', ');
+      const activePatch = this.pasture.active === 'west' ? 'West' : 'East';
+      const activeGrass = this.pasture[this.pasture.active];
       const info = [
         `  Animals: ${this.animals.length}/${this.barn_cap()}   Hungry: ${unfed}   Fodder: ${this.inv['Fodder'] || 0}`,
-        `  Tools: ${tools || 'none'}`,
+        `  Pasture (${activePatch} Meadow active: ${activeGrass}% grass)   Tools: ${tools || 'none'}`,
+        ...(this.enrichment.shadeTree ? ['  Pasture Shade Tree planted (+2 daily affection on fair days).'] : []),
         ...['Cheese Maker', 'Yarn Maker']
           .filter((m) => this.makers.includes(m))
           .map((m) => `  ${m} (outside the door): ${this.maker_status(m)}`),
       ];
       const opts = [
         'Fill fodder boxes',
-        'Ring Grazing Bell (Graze Outside in Sun)',
+        'Ring Grazing Bell (Graze Active Pasture)',
+        'Barn Book (Coats & Family Records)',
+        'Manage Rotating Pasture',
         ...this.animals.map((a) => this.animal_line(a)),
       ];
       opts.push('Leave');
@@ -5164,23 +5613,44 @@ export class Game {
       if (choice === 'Fill fodder boxes') {
         await this.barn_feed();
       } else if (choice.startsWith('Ring Grazing Bell')) {
-        if (this.weather !== 'Sunny') {
-          await this.say('Keep cows and sheep inside during bad weather!', null);
-        } else {
-          this.outdoor_hours += 10;
-          for (const a of this.animals) {
-            a.fed = true;
-            a.aff = Math.min(100, a.aff + 2);
-          }
-          this.msg(`Your livestock grazed in the pasture! (Outdoor hours: ${this.outdoor_hours}h)`, '0B');
-        }
+        await this.graze_barn_pasture();
+      } else if (choice.startsWith('Barn Book')) {
+        await this.barn_book();
+      } else if (choice.startsWith('Manage Rotating Pasture')) {
+        await this.pasture_menu();
       } else {
-        const animalIdx = sel - 2;
+        const animalIdx = sel - 4;
         if (this.animals[animalIdx]) {
           await this.animal_care(this.animals[animalIdx]);
         }
       }
     }
+  }
+
+  async graze_barn_pasture(): Promise<void> {
+    if (this.weather !== 'Sunny') {
+      await this.say('Keep cows and sheep inside during bad weather!', null);
+      return;
+    }
+    const patch = this.pasture.active;
+    const grass = this.pasture[patch];
+    const patchName = patch === 'west' ? 'West Meadow' : 'East Meadow';
+    if (grass <= 0) {
+      await this.say(`${patchName} is grazed bare (0% grass)! Open the Pasture Gate or Manage Rotating Pasture to switch patches.`, null);
+      return;
+    }
+    this.animals_grazing = true;
+    this.outdoor_hours += 10;
+    const lush = grass >= 40;
+    if (this.pasture.grazedDay !== this.absday()) {
+      this.pasture[patch] = Math.max(0, grass - PASTURE_GRAZE_COST);
+      this.pasture.grazedDay = this.absday();
+    }
+    for (const a of this.animals) {
+      a.fed = true;
+      a.aff = Math.min(100, a.aff + (lush ? 3 : 2) + (this.enrichment.shadeTree ? 1 : 0));
+    }
+    this.msg(`Livestock grazed in ${patchName} (${this.pasture[patch]}% grass left; Outdoor hours: ${this.outdoor_hours}h)`, '0B');
   }
 
   async barn_feed(): Promise<void> {
@@ -5224,8 +5694,9 @@ export class Game {
           a.talked = true;
           a.aff = Math.min(100, a.aff + 2);
           const sound = a.kind === 'cow' ? 'Moooo!' : 'Baaaa!';
+          const pers: AnimalPersonality = a.personality || 'calm';
           this.mastery_add('ranching');
-          await this.say(`${sound} ${name} seems happy to see you.`, name);
+          await this.say(`${sound} ${name} (${pers}) ${PERSONALITY_NOTES[pers].talk}`, name);
         }
       } else if (act === 'Brush') {
         if (a.brushed) {
@@ -5291,6 +5762,8 @@ export class Game {
     const defName = names.find((n) => !taken.has(n)) || `${label}${this.animals.length + 1}`;
     const name = (await this.text_input(`Name your ${label.toLowerCase()}:`, defName)).slice(0, 10);
     this.gold -= price;
+    const coat = breedCoat(kind, undefined, undefined, py_rng().random());
+    const personality = pickPersonality(this.animals.length + this.absday() + name.charCodeAt(0));
     this.animals.push({
       name,
       kind,
@@ -5302,8 +5775,13 @@ export class Game {
       brushed: false,
       wonFestival: false,
       pregnantDays: 0,
+      coat,
+      personality,
+      bornDay: this.absday(),
+      parents: ['Highmeadow Herd', null],
     });
-    await this.say(`${name} will be waiting in your barn. Fill the fodder box every day!`, 'Abel');
+    const coatLabel = coatInfo(kind, coat).label;
+    await this.say(`${name} (${coatLabel}, ${personality}) will be waiting in your barn. Fill the fodder box every day!`, 'Abel');
   }
 
   async buy_barn_tool(item: string, price: number): Promise<void> {
@@ -5326,6 +5804,10 @@ export class Game {
         a.pregnantDays -= 1;
         if (a.pregnantDays === 0 && this.animals.length + newBabies.length < this.barn_cap()) {
           const babyName = `${a.name}Jr`.slice(0, 10);
+          const mate = this.animals.find((o) => o !== a && o.kind === a.kind);
+          const babyCoat = breedCoat(a.kind, a.coat, mate?.coat, py_rng().random());
+          const babyPers = pickPersonality(this.absday() + this.animals.length + newBabies.length);
+          const coatObj = coatInfo(a.kind, babyCoat);
           newBabies.push({
             name: babyName,
             kind: a.kind,
@@ -5337,11 +5819,17 @@ export class Game {
             brushed: false,
             wonFestival: false,
             pregnantDays: 0,
+            coat: babyCoat,
+            personality: babyPers,
+            bornDay: this.absday(),
+            parents: [a.name, mate ? mate.name : 'Highmeadow Sire'],
           });
-          report.push(`${a.name} gave birth to ${babyName} in the barn!`);
+          report.push(`${a.name} gave birth to ${babyName} (${coatObj.label}${coatObj.rare ? ' — rare coat!' : ''}) in the barn!`);
         }
       }
       if (a.fed) {
+        if (this.has_perk('ranch_aff')) a.aff = Math.min(100, a.aff + 2);
+        if (this.enrichment.shadeTree && this.weather === 'Sunny') a.aff = Math.min(100, a.aff + 2);
         if (a.kind === 'cow') {
           a.ready = true;
         } else {
@@ -5671,6 +6159,8 @@ export class Game {
         ['Buy Lumber (50G)', () => this.buy('Lumber', 50)],
         ['Buy Golden Lumber (100,000G)', () => this.buy('Golden Lumber', 100000)],
         ['Order a House / Farm Expansion', () => this.order_expansion()],
+        ...(!this.enrichment.perch ? ([[`Build Chicken Perch (${PERCH_COST.gold}G + ${PERCH_COST.lumber} Lumber)`, () => this.build_enrichment('perch')]] as [string, () => Promise<void>][]) : []),
+        ...(!this.enrichment.shadeTree ? ([[`Plant Pasture Shade Tree (${SHADE_TREE_COST.gold}G + ${SHADE_TREE_COST.lumber} Lumber)`, () => this.build_enrichment('shadeTree')]] as [string, () => Promise<void>][]) : []),
         [`Buy Orchard Sapling (${SAPLING_PRICE}G)`, () => this.buy(SAPLING, SAPLING_PRICE, 3)],
         ...FARM_PIECE_NAMES.map((n) => [`Buy ${n} (${FARM_PIECES[n].price}G)`, () => this.buy(n, FARM_PIECES[n].price, 10)] as [string, () => Promise<void>]),
       ];
@@ -5694,6 +6184,9 @@ export class Game {
       return [
         ...(scene && this.inn_evening_day !== this.absday()
           ? ([[`Friday evening: ${scene.title}`, () => this.inn_evening()]] as [string, () => Promise<void>][])
+          : []),
+        ...(this.tea_counter_now()
+          ? ([['Rainy-night coffee & tea counter', () => this.tea_counter_menu()]] as [string, () => Promise<void>][])
           : []),
         ['Eat Gideon\'s Lunch (300G, +50 Stamina)', () => this.inn_lunch()],
         ['Use Inn Telephone (Order Saturday TV Shopping)', () => this.inn_phone_menu()],
@@ -5904,6 +6397,8 @@ export class Game {
     const piece = fw.pieces[k];
     if (piece) return FARM_PIECES[piece].tile;
     if (fw.orchard[k]) return 'orchard_tree';
+    if (this.enrichment.perch && x === PERCH_SPOT[0] && y === PERCH_SPOT[1]) return 'perch';
+    if (this.enrichment.shadeTree && x === SHADE_TREE_SPOT[0] && y === SHADE_TREE_SPOT[1]) return 'shade_tree';
     if (x === BARREL_SPOT[0] && y === BARREL_SPOT[1]) return 'rain_barrel';
     if (x === GLASS_SPOT[0] && y === GLASS_SPOT[1]) return 'greenhouse_frame';
     return undefined;
@@ -6381,7 +6876,15 @@ export class Game {
           : `Otto collects at 5:00 PM (${hh}h ${mm.toString().padStart(2, '0')}m from now).`;
 
     lines.push(`  ${this.date_str()} — ${this.weather}`);
-    lines.push(`  Tomorrow: ${this.tomorrow}`);
+    lines.push(`  Tomorrow: ${this.tomorrow}   Fortune: ${LUCK_LABELS[this.daily_luck].name}`);
+    const buff = this.active_buff();
+    if (buff) lines.push(`  Buff   ${buff.label}`);
+    if (this.spouse_routine && this.spouse_routine.day === this.absday()) {
+      lines.push(`  Home   ${this.spouse_routine.text}`);
+    }
+    if (this.pet_extras.cat && this.pet_extras.catClue) {
+      lines.push(`  Cat    ${this.pet_extras.catName}: ${this.pet_extras.catClue}`);
+    }
     lines.push('');
     if (this.first_steps) {
       const rows = this.first_steps_rows();
@@ -6454,6 +6957,26 @@ export class Game {
     if (works) lines.push(`  Bridge ${works}`);
     const pinRoute = this.pin_route();
     if (pinRoute) lines.push(`  Pin    ${pinRoute.landmark.name}: ${pinRoute.text}`);
+    const openContracts = this.contracts.filter((c) => !c.done);
+    if (openContracts.length) {
+      const c = openContracts[0];
+      lines.push(`  Ship   Contract: ${c.item} (${c.shipped}/${c.need}) for +${c.bonusGold}G by ${absdayLabel(c.deadline, false)}`);
+    }
+    const gv = this.current_guest_vendor();
+    if (gv) lines.push(`  Cart   ${gv.title} is in Market Cross today!`);
+    if (this.pantry.items.length >= PANTRY_GOAL) {
+      lines.push('  Pantry Community pantry is stocked — ready for a shared meal in Market Cross!');
+    } else if (this.pantry.items.length > 0) {
+      lines.push(`  Pantry Community pantry: ${this.pantry.items.length}/${PANTRY_GOAL} ingredients donated.`);
+    }
+    if (this.trail_encounter && this.trail_encounter.day === this.absday() && !this.trail_encounter.done) {
+      const te = TRAIL_ENCOUNTERS.find((e) => e.id === this.trail_encounter!.id);
+      if (te) lines.push(`  Trail  ${te.npc} was spotted along the trail in ${this.maps[te.map]?.title || te.map}.`);
+    }
+    if (this.animals.length > 0) {
+      const pName = this.pasture.active === 'west' ? 'West' : 'East';
+      lines.push(`  Grass  Pasture (${pName}): ${this.pasture[this.pasture.active]}% · Resting: ${this.pasture[this.pasture.active === 'west' ? 'east' : 'west']}%`);
+    }
     lines.push(`  Forge  ${this.forge_status().text}`);
     lines.push('');
     const bdays = this.birthdays();
@@ -7004,8 +7527,20 @@ export class Game {
       const name = this.npc_at(tx, ty)!;
       return { label: 'TALK', summary: `Talk to ${NPCS[name]?.name || name}` };
     }
+    if (this.mapname === 'house' && this.married && this.child_name && tx === SPOUSE_POS[0] + 1 && ty === SPOUSE_POS[1]) {
+      return { label: 'TALK', summary: this.held ? `Show ${this.held} to ${this.child_name}` : `Talk to ${this.child_name}` };
+    }
+    if (this.mapname === 'town' && tx === GUEST_VENDOR_SPOT[0] && ty === GUEST_VENDOR_SPOT[1] && this.current_guest_vendor()) {
+      return { label: 'SHOP', summary: `Visit ${this.current_guest_vendor()!.title}` };
+    }
+    const teHit = this.trail_at(tx, ty);
+    if (teHit) {
+      return teHit.kind === 'item'
+        ? { label: 'PICK', summary: `Pick up ${teHit.def.itemName || 'lost item'}` }
+        : { label: 'TALK', summary: `Talk to ${teHit.def.npc} on the trail` };
+    }
     if (pKey in m.doors || pKey in m.warps) return { label: 'ENTER', summary: 'Enter' };
-    if (this.mapname === 'farm' && ((tx === 21 && ty === 6) || (!this.riding_horse && tx === 25 && ty === 6))) {
+    if (this.mapname === 'farm' && ((tx === 21 && ty === 6) || (this.pet_extras.cat && tx === CAT_SPOT[0] && ty === CAT_SPOT[1]) || (!this.riding_horse && tx === 25 && ty === 6))) {
       return { label: 'CARE', summary: 'Care for the farm' };
     }
     const tile = m.tile(tx, ty);
@@ -7054,8 +7589,21 @@ export class Game {
       }
     }
     if (tile.startsWith('pocket_')) return { label: 'LOOK', summary: 'Look at the sealed side chamber' };
+    if (tile === 'pantry') return { label: 'PANTRY', summary: `Community Pantry (${this.pantry.items.length}/${PANTRY_GOAL})` };
+    if (tile === 'stamp_bench') return { label: 'PRINT', summary: 'Stamp-printing bench (winter hobby)' };
+    if (tile === 'pasture_gate') return { label: 'GATE', summary: `Pasture Gate (${this.pasture.active === 'west' ? 'West' : 'East'} ${this.pasture[this.pasture.active]}%)` };
+    if (tile === 'perch') return { label: 'LOOK', summary: 'Chicken Perch (+2 daily affection)' };
+    if (tile === 'shade_tree') return { label: 'LOOK', summary: 'Pasture Shade Tree (+2 daily affection)' };
+    if (tile === 'table' && this.mapname === 'house') return { label: 'TABLE', summary: 'Farmhouse Table (notes & dinner)' };
+    if (tile === 'orchard_tree') return { label: this.orchard_due(pKey) !== null ? 'PICK' : 'CHECK', summary: this.orchard_due(pKey) !== null ? 'Pick ripe Orchard Pear' : 'Check orchard pear tree' };
+    if (tile === 'rain_barrel') return { label: 'BARREL', summary: this.farm_works.channel ? `Rain Barrel (${this.farm_works.water}/${BARREL_CAP}d stored)` : 'Inspect / repair rain barrel' };
+    if (tile === 'greenhouse_frame') return { label: 'GLASS', summary: this.farm_works.greenhouse ? 'Inspect greenhouse' : 'Build greenhouse frame' };
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
+    }
+    if (isFarmPiece(this.tool) && this.mapname === 'farm') {
+      const ok = this.farm_can_place(pKey) && !this.farm_overlay(tx, ty);
+      return { label: 'PLACE', summary: ok ? `Place ${this.tool} (${FARM_PIECES[this.tool].glyph})` : `Cannot place ${this.tool} here` };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) {
       const pocket = this.fish_pocket(this.mapname, tx, ty);
@@ -7087,8 +7635,16 @@ export class Game {
     const pKey = pkey(tx, ty);
     const m = this.map;
     if (this.npc_at(tx, ty)) return { key: 'x', label: 'TALK' };
+    if (this.mapname === 'house' && this.married && this.child_name && tx === SPOUSE_POS[0] + 1 && ty === SPOUSE_POS[1]) {
+      return { key: 'x', label: 'TALK' };
+    }
+    if (this.mapname === 'town' && tx === GUEST_VENDOR_SPOT[0] && ty === GUEST_VENDOR_SPOT[1] && this.current_guest_vendor()) {
+      return { key: 'x', label: 'SHOP' };
+    }
+    const teHit = this.trail_at(tx, ty);
+    if (teHit) return { key: 'x', label: teHit.kind === 'item' ? 'PICK' : 'TALK' };
     if (pKey in m.doors || pKey in m.warps) return { key: 'x', label: 'ENTER' };
-    if (this.mapname === 'farm' && ((tx === 21 && ty === 6) || (!this.riding_horse && tx === 25 && ty === 6))) {
+    if (this.mapname === 'farm' && ((tx === 21 && ty === 6) || (this.pet_extras.cat && tx === CAT_SPOT[0] && ty === CAT_SPOT[1]) || (!this.riding_horse && tx === 25 && ty === 6))) {
       return { key: 'x', label: 'CARE' };
     }
     const tile = m.tile(tx, ty);
@@ -7121,6 +7677,11 @@ export class Game {
       }
     }
     if (tile.startsWith('pocket_')) return { key: 'x', label: 'LOOK' };
+    if (tile === 'pantry') return { key: 'x', label: 'PANTRY' };
+    if (tile === 'stamp_bench') return { key: 'x', label: 'PRINT' };
+    if (tile === 'pasture_gate') return { key: 'x', label: 'GATE' };
+    if (tile === 'perch' || tile === 'shade_tree') return { key: 'x', label: 'LOOK' };
+    if (tile === 'table' && this.mapname === 'house') return { key: 'x', label: 'TABLE' };
     if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
@@ -7837,19 +8398,50 @@ export class Game {
   }
 
   async mastery_page(): Promise<void> {
-    const lines: string[] = ['  Keep doing a discipline to earn XP and rank rewards.'];
-    for (const discipline of MASTERY_DISCIPLINES) {
-      const level = this.mastery_level(discipline);
-      const xp = this.mastery_xp[discipline] || 0;
-      const next = MASTERY_RANKS[level + 1];
-      const progress = next ? `${Math.min(xp, next.xp)}/${next.xp} XP` : `${xp} XP (max)`;
-      lines.push(
-        `  ${MASTERY_LABELS[discipline].padEnd(9)} ${MASTERY_RANKS[level].name.padEnd(7)} ${progress}`
+    while (true) {
+      const opts = [
+        ...MASTERY_DISCIPLINES.map((discipline) => {
+          const level = this.mastery_level(discipline);
+          const xp = this.mastery_xp[discipline] || 0;
+          const next = MASTERY_RANKS[level + 1];
+          const progress = next ? `${Math.min(xp, next.xp)}/${next.xp} XP` : `${xp} XP (max)`;
+          const perkId = this.mastery_perks[discipline];
+          const perk = MASTERY_PERKS.find((p) => p.id === perkId);
+          return `${MASTERY_LABELS[discipline].padEnd(9)} ${MASTERY_RANKS[level].name.padEnd(7)} ${progress}${perk ? ` · [${perk.name}]` : level >= 1 ? ' · [Pick Perk!]' : ''}`;
+        }),
+        'Back',
+      ];
+      const sel = await this.menu(
+        '★ Farm Mastery & Perks',
+        opts,
+        0,
+        (i) => {
+          if (i >= MASTERY_DISCIPLINES.length) return ['  Reach Adept rank in any discipline to choose a permanent perk.'];
+          const d = MASTERY_DISCIPLINES[i];
+          const level = this.mastery_level(d);
+          const perk = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[d]);
+          return [
+            perk ? `  Active perk: ${perk.name} — ${perk.desc}` : level >= 1 ? '  Unlocked! Press Enter to choose a perk for this discipline.' : '  Reach Adept (rank 1) to unlock perks.',
+            '  Rank rewards: 250G / 500G / 1000G / 2000G plus seeds, forage, fish, ore or feed.',
+          ];
+        },
       );
+      if (sel === null || sel >= MASTERY_DISCIPLINES.length) return;
+      const disc = MASTERY_DISCIPLINES[sel];
+      if (this.mastery_level(disc) < 1) {
+        await this.say(`Reach Adept rank in ${MASTERY_LABELS[disc]} first to choose a mastery perk.`, 'Farm Mastery');
+        continue;
+      }
+      const choices = perksForDiscipline(disc);
+      const pSel = await this.menu(
+        `Choose ${MASTERY_LABELS[disc]} Perk`,
+        [...choices.map((p) => `${this.mastery_perks[disc] === p.id ? '● ' : '○ '}${p.name} — ${p.desc}`), 'Cancel'],
+      );
+      if (pSel !== null && pSel < choices.length) {
+        this.mastery_perks[disc] = choices[pSel].id;
+        this.msg(`${MASTERY_LABELS[disc]} perk active: ${choices[pSel].name}!`, '0B');
+      }
     }
-    lines.push('');
-    lines.push('  Rewards: 250G / 500G / 1000G / 2000G plus seeds, forage, fish, ore or feed.');
-    await this.show_pages('Farm Mastery', [lines]);
   }
 
   async ranch_summary(): Promise<void> {
@@ -7982,11 +8574,36 @@ export class Game {
   async fest_run(f: [string, number, number, string]): Promise<void> {
     const [name, , end, kind] = f;
     this.fest_attended = true;
+    playSfx('fanfare');
     this.keepsake('first_festival', `${name} program`, `The printed program from the ${name}: your first festival in the valley.`);
-    await this.say(`Welcome, everyone, to the ${name}! Ho ho!`, 'Ambrose');
-    const fn = (this as any)[`fest_ev_${kind}`];
-    if (typeof fn === 'function') {
-      await fn.call(this);
+    const variant = festivalVariant(kind, this.year);
+    await this.say(`Welcome, everyone, to the ${name}! (${variant.theme}) ${variant.intro}`, 'Ambrose');
+    // Task 13: Pick a festival role (join main event / cook for the table / help set up the square)
+    const rolePick = await this.menu(
+      `${name} — Choose your role`,
+      ['Join the main event / competition', 'Cook for the festival table', 'Help set up Market Cross'],
+      0,
+      ['  Every festival lets you compete, cook with Gideon & Tess, or decorate with Ingrid & Ambrose.'],
+    );
+    const roleKey = rolePick === 1 ? 'cook' : rolePick === 2 ? 'setup' : 'compete';
+    this.fest_roles_done[`${this.year}:${kind}`] = roleKey;
+    if (roleKey === 'cook' || roleKey === 'setup') {
+      const donated = roleKey === 'cook' ? Object.keys(this.inv).find((i) => ['crop', 'dish', 'forage'].includes(ITEMS[i]?.[2])) ?? null : null;
+      if (donated) this.take(donated, 1);
+      const out = festivalRoleOutcome(name, roleKey, donated);
+      for (const [who, line] of out.lines) await this.say(line, who);
+      this.gold += out.gold;
+      for (const fr of out.friends) {
+        if (fr in NPCS) this.friend[fr] = clamp((this.friend[fr] || 0) + out.friendPts, 0, 100);
+      }
+      if (out.keepsake) this.keepsake(out.keepsake.key, out.keepsake.name, out.keepsake.text);
+      this.remember(out.friends[0], `Helped as ${out.title} at the ${name}.`, `festrole:${this.year}:${kind}`);
+      this.msg(`${out.title}: +${out.gold}G and +${out.friendPts} friendship with ${out.friends.join(', ')}.`, '0B');
+    } else {
+      const fn = (this as any)[`fest_ev_${kind}`];
+      if (typeof fn === 'function') {
+        await fn.call(this);
+      }
     }
     this.minutes = Math.max(this.minutes, end * 60);
     await this.say(`The ${name} draws to a close, and everyone heads home.`, null);
@@ -8290,8 +8907,11 @@ export class Game {
       await this.say('You have no cows to enter this year.', null);
       return;
     }
-    const bestCow = cows.reduce((a, b) => (a.aff >= b.aff ? a : b));
-    if (bestCow.aff >= 70 || py_rng().random() < 0.6) {
+    const bestCow = cows.reduce((a, b) =>
+      a.aff + coatInfo('cow', a.coat).festBonus >= b.aff + coatInfo('cow', b.coat).festBonus ? a : b,
+    );
+    const cowScore = bestCow.aff + coatInfo('cow', bestCow.coat).festBonus;
+    if (cowScore >= 70 || py_rng().random() < 0.6) {
       bestCow.wonFestival = true;
       bestCow.aff = 100;
       this.fest_win('Cow Festival');
@@ -8309,8 +8929,11 @@ export class Game {
       await this.say('You have no sheep to enter this year.', null);
       return;
     }
-    const bestSheep = sheep.reduce((a, b) => (a.aff >= b.aff ? a : b));
-    if (bestSheep.aff >= 70 || py_rng().random() < 0.6) {
+    const bestSheep = sheep.reduce((a, b) =>
+      a.aff + coatInfo('sheep', a.coat).festBonus >= b.aff + coatInfo('sheep', b.coat).festBonus ? a : b,
+    );
+    const sheepScore = bestSheep.aff + coatInfo('sheep', bestSheep.coat).festBonus;
+    if (sheepScore >= 70 || py_rng().random() < 0.6) {
       bestSheep.wonFestival = true;
       bestSheep.aff = 100;
       this.fest_win('Sheep Festival');
@@ -8699,24 +9322,34 @@ export class Game {
       report.push(`A fierce ${this.weather} sweeps through Brackenford! Stay safe!`);
     }
     this.farm_works_morning(report);
-    if (reason === 'sleep') this.night_surprise(report);
+    if (reason === 'sleep') {
+      this.night_surprise(report);
+      this.night_sky(report); // aurora over the valley tonight, reported at dawn
+    }
 
     // Incubator & Chickens
     if (this.incubator_days > 0) {
       this.incubator_days -= 1;
       if (this.incubator_days === 0 && this.chickens < this.coop_cap()) {
         this.chickens += 1;
+        this.chicken_personalities.push(pickPersonality(this.absday() + this.chickens));
         report.push('Cheep cheep! A new baby chick hatched in your Incubator!');
       }
     }
     if (this.fed) {
+      if (this.has_perk('ranch_aff')) this.chicken_aff = Math.min(100, this.chicken_aff + 2);
       this.eggs += this.fed;
       report.push(`Your chickens laid ${this.fed} egg${this.fed > 1 ? 's' : ''}.`);
+    }
+    if (this.enrichment.perch && this.chickens > 0 && this.weather === 'Sunny') {
+      this.chicken_aff = Math.min(100, this.chicken_aff + 2);
     }
     this.fed = 0;
 
     this.barn_new_day(report);
     this.farm_auto_feed(report);
+    const pastureMsg = pastureMorning(this.pasture, this.season);
+    if (pastureMsg) report.push(pastureMsg);
     report.push(...this.contest_close());
     this.favor_morning(report);
 
@@ -8748,10 +9381,60 @@ export class Game {
     report.push(...this.carpentry_day());
     report.push(...this.works_day());
 
-    // Marriage & Child Birth milestone
+    // Marriage & Child Birth milestone + child growth over seasons (Task 08)
     if (this.married && !this.child_name && this.marriage_day >= 0 && this.absday() - this.marriage_day >= 30) {
       this.child_name = 'Sprout';
       report.push(`Joyous news! ${this.married} and you welcomed a healthy baby into your family!`);
+    } else if (this.child_name) {
+      this.child_days += 1;
+    }
+
+    // Guest vendors becoming regulars (Task 11)
+    if (this.stall_earned >= 500 && !this.guest_regulars.includes('bram')) {
+      this.guest_regulars.push('bram');
+      report.push('Bram’s Traveling Seed Cart is now a Market Cross regular (Wed & Sat)!');
+    }
+    if ((this.public_works.built || this.house_flags.length > 0) && !this.guest_regulars.includes('maren')) {
+      this.guest_regulars.push('maren');
+      report.push('Maren’s Traveling Joinery is now a Market Cross regular (Mon & Thu)!');
+    }
+
+    // Family routines at home (Task 47)
+    if (this.married) {
+      this.spouse_routine = rollSpouseRoutine(this.married, this.absday(), this.season, this.weather);
+      report.push(this.spouse_routine.text);
+      if (this.spouse_routine.kind === 'flowers' && this.spouse_routine.gift && !this.vase_flower) {
+        this.vase_flower = this.spouse_routine.gift;
+      }
+    } else {
+      this.spouse_routine = null;
+    }
+
+    // Daily trail encounter (Task 36), daily luck (G13), weekly shipping contracts (G16)
+    this.trail_encounter = rollTrailEncounter(this.absday());
+    this.daily_luck = rollDailyLuck(this.absday(), this.farm.length * 13 + this.name.length);
+    this.contracts = this.contracts.filter((c) => !c.done && c.deadline >= this.absday());
+    if (this.weekday === 0 || this.contracts.length === 0) {
+      this.contracts = generateWeeklyContracts(this.absday(), this.season);
+    }
+    this.food_buff = sanitizeFoodBuff(this.food_buff, this.absday() * 1440 + 6 * 60);
+
+    // Multiple pets & morning bowl gifts + cat clue (G15 & Task 29)
+    if (this.dog_aff >= 50 || (this.pet_extras.cat && this.pet_extras.catAff >= 30)) {
+      if (!this.pet_extras.bowlGift) {
+        const gift = rollPetGift(this.season, this.absday());
+        this.pet_extras.bowlGift = gift;
+        report.push(`Your pet${this.pet_extras.cat ? 's' : ''} left a ${gift} by the pet bowl!`);
+      }
+    }
+    if (this.pet_extras.cat) {
+      const ripeCount = Object.values(this.crops).filter(([crop, age]) => CROPS[crop] && age >= CROPS[crop][2]).length;
+      if (ripeCount > 0) {
+        this.pet_extras.catClue = `sitting proudly by your ripe crops (${ripeCount} ready to pick).`;
+      } else {
+        const p = FISH_POCKETS[this.absday() % FISH_POCKETS.length];
+        this.pet_extras.catClue = `staring toward ${this.maps[p.map]?.title || p.map} (${p.glyph} ${p.fish} water).`;
+      }
     }
 
     // Market Cross request board
@@ -9066,6 +9749,15 @@ export class Game {
     const item = rng.choice(this.forage_pool(rng.choice(['mountain', 'beach', 'woods'])));
     this.give(item, 2);
     report.push(`${from} left a parcel by your door: 2 ${item}.`);
+  }
+
+  /** Aurora Borealis — a clear Fall night paints the valley in green curtains (task 57-style next-tier event). One showing per day at most. */
+  night_sky(report: string[]): void {
+    if (this.season !== 2) return; // aurora season: Fall
+    if (this.weather === 'Rain' || this.weather === 'Typhoon' || this.weather === 'Snow' || this.weather === 'Blizzard') return;
+    if (this.aurora_day === this.absday()) return;
+    this.aurora_day = this.absday();
+    report.push('The sky over Brackenford blushed to green tonight: the aurora came out over the valley. Walk the fields tonight if you dare!');
   }
 
   /** Semantic tag for a map cell, mirroring the precedence used by glyph(). */
@@ -9712,6 +10404,10 @@ export class Game {
         }
       } else if (this.tool === SAPLING) {
         ORCHARD_SPOTS.forEach((k) => aoeSet.add(k));
+      } else if (this.tool === 'Sprinkler') {
+        fixtureCoverage(pkey(tx, ty), false).forEach((k) => aoeSet.add(k));
+      } else if (this.tool === 'Scarecrow') {
+        fixtureCoverage(pkey(tx, ty), true).forEach((k) => aoeSet.add(k));
       }
       if (tx === BARREL_SPOT[0] && ty === BARREL_SPOT[1]) CHANNEL_CELLS.forEach((k) => aoeSet.add(k));
     }
@@ -9739,6 +10435,14 @@ export class Game {
         const tag = this.cell_tag(m, x, y, tile, hl, hl && !(x === tx && y === ty));
         if (actionReticle && x === tx && y === ty) tag.actionTarget = true;
         if (companion.has(pkey(x, y))) tag.companion = true;
+        // Task 41: Preview equipped placeable farm piece with its one-cell glyph on allowed ground
+        if (this.mapname === 'farm' && x === tx && y === ty && isFarmPiece(this.tool) && this.farm_can_place(pkey(x, y)) && !this.farm_overlay(x, y)) {
+          const piece = FARM_PIECES[this.tool];
+          ch = piece.glyph;
+          fg = '0C';
+          bold = true;
+          tag.piecePreview = { ch: piece.glyph, fg: '0C' };
+        }
         const px = ox + sx;
         s.put(px, oy + sy, ch, fg, bg, bold);
         s.tag(px, oy + sy, tag);
@@ -9754,33 +10458,54 @@ export class Game {
         if (under) s.tag(px, oy + sy, { ...under, ent, ...extra });
       }
     };
-    // Draw outdoor Dog, Horse, and grazing Chickens/Cows/Sheep on the Farm
+    // Draw outdoor Dog, Farm Cat, Horse, and grazing Chickens/Cows/Sheep on the Farm
     if (this.mapname === 'farm') {
+      if (this.pet_extras.cat) {
+        at(CAT_SPOT[0], CAT_SPOT[1], 'f', '0A', true, 'pet'); // Farm Cat beside Doghouse (G15)
+      }
       at(21, 6, 'd', '09', true, 'pet'); // Faithful Dog by Doghouse
       if (!this.riding_horse) {
         at(25, 6, 'H', '04', true, 'pet'); // Horse by Stable
       }
       if (this.animals_grazing && this.weather === 'Sunny') {
         const tick = Math.floor(Date.now() / 1500);
+        this.sync_animal_records();
         for (let i = 0; i < Math.min(6, this.chickens); i++) {
-          const gx = 18 + ((i * 3 + tick) % 7);
-          const gy = 8 + (i % 2);
-          if (!(gx === this.px && gy === this.py)) at(gx, gy, 'c', '07', true, 'animal');
+          const pers = this.chicken_personalities[i] || 'calm';
+          const [gx, gy] = animalYardSpot('chicken', pers, i, tick, this.enrichment, [this.px, this.py]);
+          if (!(gx === this.px && gy === this.py)) at(gx, gy, 'c', pers === 'curious' ? '09' : '07', true, 'animal');
         }
         for (let i = 0; i < Math.min(8, this.animals.length); i++) {
           const a = this.animals[i];
-          const gx = 28 + ((i * 4 + tick) % 10);
-          const gy = 8 + (i % 2);
+          const pers: AnimalPersonality = a.personality || 'calm';
+          const [gx, gy] = animalYardSpot(a.kind === 'sheep' ? 'sheep' : 'cow', pers, i, tick, this.enrichment, [this.px, this.py]);
           if (!(gx === this.px && gy === this.py)) {
             const sheepCh = (a.wool ?? WOOL_DAYS) >= WOOL_DAYS ? 'S' : 's';
-            at(gx, gy, a.kind === 'cow' ? 'C' : sheepCh, a.kind === 'cow' ? '07' : '05', true, 'animal');
+            const coat = coatInfo(a.kind, a.coat);
+            at(gx, gy, a.kind === 'cow' ? 'C' : sheepCh, coat.col, true, 'animal');
           }
+        }
+      }
+    }
+    // Guest vendor in Market Cross (Task 11)
+    if (this.mapname === 'town') {
+      const gv = this.current_guest_vendor();
+      if (gv) at(GUEST_VENDOR_SPOT[0], GUEST_VENDOR_SPOT[1], gv.glyph, gv.col, true, 'npc', { winterCoat: this.season === 3 });
+    }
+    // Trail neighbor & dropped scarf (Task 36)
+    if (this.trail_encounter && this.trail_encounter.day === this.absday() && !this.trail_encounter.done) {
+      const te = TRAIL_ENCOUNTERS.find((e) => e.id === this.trail_encounter!.id);
+      if (te && te.map === this.mapname) {
+        const nd = NPCS[te.npc];
+        at(te.pos[0], te.pos[1], nd?.g || te.npc[0], nd?.col || '0C', true, 'npc', { winterCoat: this.season === 3 });
+        if (te.itemPos && !this.trail_encounter.found) {
+          at(te.itemPos[0], te.itemPos[1], '≈', '08', true, 'animal');
         }
       }
     }
     for (const [n, [x, y]] of Object.entries(this.npc_pos)) {
       if (NPCS[n]?.where?.[0] === this.mapname) {
-        at(x, y, NPCS[n].g, NPCS[n].col);
+        at(x, y, NPCS[n].g, NPCS[n].col, true, 'npc', { winterCoat: this.season === 3 && !m.indoor });
       }
     }
     for (const [n, d] of Object.entries(this.indoor_npcs)) {
@@ -9789,10 +10514,15 @@ export class Game {
       }
     }
     if (this.mapname === 'house' && this.married) {
-      at(SPOUSE_POS[0], SPOUSE_POS[1], NPCS[this.married].g, NPCS[this.married].col);
+      if (!this.spouse_is_away()) {
+        at(SPOUSE_POS[0], SPOUSE_POS[1], NPCS[this.married].g, NPCS[this.married].col);
+      }
       if (this.child_name) {
         at(SPOUSE_POS[0] + 1, SPOUSE_POS[1], 'c', '0A', true, 'npc');
       }
+    }
+    if (this.mapname === 'house' && this.wall_print) {
+      at(9, 1, this.wall_print.marks[0] || '✦', this.wall_print.ink || '0C', true, 'animal');
     }
     // Player glyph color reflects Stamina & Fatigue state (White -> Orange -> Red -> Blue when exhausted!)
     const playerCol =
@@ -10079,8 +10809,8 @@ export class Game {
       if (picked.bid && HOURS[picked.bid] && picked.bid !== 'blacksmith') {
         info.push([this.shop_status(picked.bid).text, '05', false]);
       }
-      info.push([`⚒ Forge ${f.text}`, f.open ? '0B' : '08', false]);
-      if (r) info.push([`Pin: ${r.landmark.name} — ${r.text}`, '0E', false]);
+      info.push([`⚒ Forge [${f.open ? 'OPEN' : 'CLOSED'}] ${f.text}`, f.open ? '0B' : '08', false]);
+      if (r) info.push([`★ Pin: ${r.landmark.glyph} ${r.landmark.name} — ${r.text}`, '0E', false]);
       info.push([lms.filter((l) => l.map === picked.map).map((l) => `${l.glyph} ${l.name}`).join(' · '), '04', false]);
       for (let i = 0; i < info.length && i < cardH - 2; i++) {
         const [txt, col, b] = info[i];
@@ -10089,18 +10819,11 @@ export class Game {
 
       if (rightW >= 24) {
         s.box(rightX, top, rightW, cardH, '09', '00', 'LANDMARK LEGEND', '07', { kind: 'hud', accent: '09' });
-        const leg: [string, string, string][] = [
-          ['$', 'Shop / Shipping', '09'],
-          ['♥', 'Home / Villagers', '0A'],
-          ['♠', 'Woods / Peak Trail', '0B'],
-          ['≈', 'Beach / Fishing', '0C'],
-          ['⚒', 'Forge / Mine', '09'],
-          ['@', 'Your Current Spot', '0C'],
-        ];
+        const leg = mapSymbolLegend();
         for (let i = 0; i < leg.length && i < cardH - 2; i++) {
-          const [gl, desc, col] = leg[i];
-          s.put(rightX + 2, top + 1 + i, gl, col, '00', true);
-          s.put(rightX + 4, top + 1 + i, `: ${desc}`.slice(0, rightW - 6), '05');
+          const item = leg[i];
+          s.put(rightX + 2, top + 1 + i, item.glyph, item.col, '00', true);
+          s.put(rightX + 4, top + 1 + i, `: ${item.name}`.slice(0, rightW - 6), '05');
         }
       }
       s.put(3, top + cardH, hintText.slice(0, W - 6), '04');
@@ -10108,12 +10831,14 @@ export class Game {
     }
 
     const lines: [string, string][] = [];
-    lines.push([`> ${picked.glyph} ${picked.name}, ${region}${picked.id === this.map_pin ? '  [pinned]' : ''}`, '07']);
+    lines.push([`> ${picked.glyph} ${picked.name}, ${region}${picked.id === this.map_pin ? '  [★ PIN]' : ''}`, '07']);
     if (picked.bid && HOURS[picked.bid] && picked.bid !== 'blacksmith') {
-      lines.push([`  ${this.shop_status(picked.bid).text}`, '04']);
+      const st = this.shop_status(picked.bid);
+      lines.push([`  [${st.open ? 'OPEN' : 'CLOSED'}] ${st.text}`, '04']);
     }
-    lines.push([`  ⚒ Forge ${f.text}`, f.open ? '0B' : '08']);
-    if (r) lines.push([`  Pin: ${r.landmark.name}: ${r.text}`, '0E']);
+    lines.push([`  ⚒ Forge [${f.open ? 'OPEN' : 'CLOSED'}] ${f.text}`, f.open ? '0B' : '08']);
+    if (r) lines.push([`  ★ Pin: ${r.landmark.glyph} ${r.landmark.name}: ${r.text}`, '0E']);
+    lines.push([`  ${mapSymbolLegend().slice(0, 5).map((l) => `${l.glyph}=${l.name.split('/')[0].trim()}`).join(' ')}`, '04']);
     lines.push([`  ${lms.filter((l) => l.map === picked.map).map((l) => `${l.glyph} ${l.name}`).join('  ')}`, '05']);
     const wrap = (items: [string, string][]) => items.flatMap(([text, col]) => wrapLines([text], W - 4).map((ln): [string, string] => [ln, col]));
     // the key hint always shows in full; the body drops its later lines (the region list first) when space runs out
@@ -11301,22 +12026,33 @@ export class Game {
   async cook(): Promise<void> {
     while (true) {
       const dishes = Object.keys(RECIPES);
-      const opts: string[] = ['[Experimental Free-Form Cooking]'];
+      const opts: string[] = ['[Experimental Free-Form Cooking]', '[Host Dinner for Two Neighbors]'];
       for (const d of dishes) {
         const ut = RECIPES[d][1];
         const ok = (!ut || ut in this.inv) && this.ingredient_plan(d) !== null;
-        opts.push(`${ok ? '*' : ' '} ${d}`);
+        const known = this.recipes_discovered.includes(d);
+        opts.push(`${ok ? '*' : ' '} ${d}${known ? '' : ' (new)'}`);
       }
       const info = (s: number) => {
         if (s === 0) {
           return [
-            '  Combine any ingredient from your rucksack to experiment!',
-            '  Invalid combinations produce a Failed Dish (needed for Hedgerow Tea!).',
+            '  Combine 1–3 ingredients from your rucksack to discover new recipes!',
+            '  Matching a real recipe discovers & cooks it; unmatched combos yield a Failed Dish.',
           ];
         }
-        const d = dishes[s - 1];
+        if (s === 1) {
+          return [
+            '  Pick two neighbors (20+ friendship) and serve any cooked dish from your rucksack.',
+            '  Each pairing shares a dinner conversation and reacts to what you serve!',
+          ];
+        }
+        const d = dishes[s - 2];
         const [, ut, st, sell] = RECIPES[d];
-        const lines = [`  ${this.recipe_line(d)}`, `  +${st} Stamina, ships ${sell}G`];
+        const buff = foodBuffForDish(d, st);
+        const lines = [
+          `  ${this.recipe_line(d)}`,
+          `  +${st} Stamina, ships ${sell}G${buff ? ` · Buff: ${buff.label}` : ''}`,
+        ];
         const preserve = this.preserve_note(d);
         if (preserve) lines.push(`  ${preserve}`);
         if (ut && !(ut in this.inv)) {
@@ -11333,24 +12069,17 @@ export class Game {
         }
         return lines;
       };
-      const sel = await this.menu('Kitchen   (* = ready to cook)', opts, 0, info);
+      const sel = await this.menu(`Kitchen (${this.recipes_discovered.length}/${dishes.length} discovered · * = ready)`, opts, 0, info);
       if (sel === null) return;
       if (sel === 0) {
-        const usable = Object.keys(this.inv).filter((i) => ['crop', 'forage', 'fish', 'animal', 'ingredient', 'food'].includes(ITEMS[i]?.[2]));
-        if (!usable.length) {
-          await this.say('You have no food ingredients in your rucksack to experiment with.', null);
-          continue;
-        }
-        const ingSel = await this.menu('Pick an ingredient to experiment with:', usable);
-        if (ingSel !== null) {
-          const used = usable[ingSel];
-          this.take(used, 1);
-          this.give('Failed Dish', 1);
-          this.msg(`You experimented with ${used} and made a Failed Dish! (Used in Hedgerow Tea!)`, '0E');
-        }
+        await this.experimental_cook();
         continue;
       }
-      const d = dishes[sel - 1];
+      if (sel === 1) {
+        await this.dinner_menu();
+        continue;
+      }
+      const d = dishes[sel - 2];
       const ut = RECIPES[d][1];
       const plan = this.ingredient_plan(d);
       if (ut && !(ut in this.inv)) {
@@ -11362,8 +12091,480 @@ export class Game {
           this.take(i, q);
         }
         this.give(d);
+        if (!this.recipes_discovered.includes(d)) this.recipes_discovered.push(d);
+        playSfx('harvest');
         this.msg(`You cooked ${d}!`, '0A');
       }
+    }
+  }
+
+  async experimental_cook(): Promise<void> {
+    const picked: string[] = [];
+    const tempInv: Record<string, number> = { ...this.inv };
+    while (picked.length < 3) {
+      const usable = Object.keys(tempInv).filter(
+        (i) => tempInv[i] > 0 && ['crop', 'forage', 'fish', 'animal', 'ingredient', 'food'].includes(ITEMS[i]?.[2]),
+      );
+      if (!usable.length) {
+        if (!picked.length) {
+          await this.say('You have no food ingredients in your rucksack to experiment with.', null);
+          return;
+        }
+        break;
+      }
+      const opts = [...usable.map((i) => `${i} (x${tempInv[i]})`), ...(picked.length ? ['Cook now!'] : []), 'Cancel'];
+      const sel = await this.menu(`Experiment (${picked.length ? picked.join(' + ') : 'pick 1–3 ingredients'})`, opts);
+      if (sel === null || opts[sel] === 'Cancel') return;
+      if (opts[sel] === 'Cook now!') break;
+      const chosen = usable[sel];
+      picked.push(chosen);
+      tempInv[chosen] -= 1;
+    }
+    if (!picked.length) return;
+    for (const p of picked) this.take(p, 1);
+    const matched = matchExperimentalRecipe(picked, RECIPES, ITEMS, FRUITS, this.inv);
+    if (matched) {
+      this.give(matched, 1);
+      const fresh = !this.recipes_discovered.includes(matched);
+      if (fresh) this.recipes_discovered.push(matched);
+      playSfx('fanfare');
+      this.msg(fresh ? `Recipe discovered! You cooked ${matched}!` : `You cooked ${matched}!`, '0B');
+    } else {
+      this.give('Failed Dish', 1);
+      this.msg(`You experimented with ${picked.join(' + ')} and made a Failed Dish! (Used in Hedgerow Tea!)`, '0E');
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 02: Short outings with villagers
+  outing_available(n: string) {
+    return outingFor(n, {
+      friend: this.friend[n] || 0,
+      minutes: this.minutes,
+      season: this.season,
+      weather: this.weather,
+      absday: this.absday(),
+      lastDone: this.outings_done,
+      festival: Boolean(this.fest_on()),
+    });
+  }
+
+  async run_outing(def: (typeof OUTINGS)[number]): Promise<void> {
+    await this.advance(def.minutes);
+    for (const [who, line] of def.dialogue) await this.say(line, who);
+    if (def.bonusItem) this.give(def.bonusItem, 1);
+    this.friend[def.npc] = clamp((this.friend[def.npc] || 0) + 6, 0, 100);
+    this.talked.add(def.npc);
+    this.outings_done[def.id] = this.absday();
+    this.remember(def.npc, def.memory, `outing:${def.id}:${Math.floor(this.absday() / 7)}`);
+    playSfx('emote');
+    this.msg(`${def.bonusText} (+6 ${def.npc} friendship)`, '0B');
+  }
+
+  // ---------------------------------------------------------------- Task 06 & Task 47: Farmhouse table, dinner & routines
+  async house_table_menu(): Promise<void> {
+    const r = this.spouse_routine && this.spouse_routine.day === this.absday() ? this.spouse_routine : null;
+    const opts: string[] = [];
+    if (r && !r.claimed && r.gift) opts.push(`Take ${this.married}'s ${r.gift} from the table`);
+    if (r?.note) opts.push(`Read ${this.married}'s note`);
+    if (this.house_flags.includes('Kitchen')) opts.push('Invite two neighbors to dinner');
+    if (this.wall_print) opts.push(`Admire wall print: ${this.wall_print.title}`);
+    opts.push('Leave');
+    if (opts.length === 1) {
+      await this.say('Your sturdy farmhouse table. Add a Kitchen expansion to invite neighbors over for dinner!', 'Table');
+      return;
+    }
+    const sel = await this.menu('Farmhouse Table', opts);
+    if (sel === null || opts[sel] === 'Leave') return;
+    const pick = opts[sel];
+    if (r && !r.claimed && r.gift && pick.startsWith('Take ')) {
+      r.claimed = true;
+      this.give(r.gift, 1);
+      playSfx('harvest');
+      this.msg(`Picked up ${r.gift} that ${this.married} left on the table!`, '0B');
+    } else if (r?.note && pick.startsWith('Read ')) {
+      await this.say(r.note, this.married || 'Note');
+    } else if (pick === 'Invite two neighbors to dinner') {
+      await this.dinner_menu();
+    } else if (this.wall_print && pick.startsWith('Admire ')) {
+      await this.say(`"${this.wall_print.title}" [ ${this.wall_print.marks} ] — printed on ${absdayLabel(this.wall_print.day)}.`, 'Wall Print');
+    }
+  }
+
+  async dinner_menu(): Promise<void> {
+    if (this.dinner_day === this.absday()) {
+      await this.say('You already hosted dinner tonight. Invite friends again tomorrow!', 'Dinner');
+      return;
+    }
+    const dishes = Object.keys(this.inv).filter((i) => this.inv[i] > 0 && (ITEMS[i]?.[2] === 'dish' || i in RECIPES));
+    if (!dishes.length) {
+      await this.say('Cook a dish in your Kitchen first so you have something to serve your guests!', 'Dinner');
+      return;
+    }
+    const eligible = Object.keys(NPCS).filter(
+      (n) => (this.friend[n] || 0) >= DINNER_MIN_FRIEND && n !== 'Wellkeeper' && n !== 'Reed Heron',
+    );
+    if (eligible.length < 2) {
+      await this.say(`Make friends with at least two villagers (${DINNER_MIN_FRIEND}+ friendship) before hosting dinner.`, 'Dinner');
+      return;
+    }
+    const g1Sel = await this.menu('Invite Guest #1', [...eligible, 'Cancel']);
+    if (g1Sel === null || g1Sel >= eligible.length) return;
+    const guest1 = eligible[g1Sel];
+    const rest = eligible.filter((n) => n !== guest1);
+    const g2Sel = await this.menu(`Invite Guest #2 (with ${guest1})`, [...rest, 'Cancel']);
+    if (g2Sel === null || g2Sel >= rest.length) return;
+    const guest2 = rest[g2Sel];
+    const dSel = await this.menu('Serve which dish?', [...dishes.map((d) => `${d} (x${this.inv[d]})`), 'Cancel']);
+    if (dSel === null || dSel >= dishes.length) return;
+    const dish = dishes[dSel];
+    this.take(dish, 1);
+    this.dinner_day = this.absday();
+    await this.advance(60);
+    for (const [who, line] of dinnerPairLines(guest1, guest2, dish)) {
+      await this.say(line, who);
+    }
+    for (const g of [guest1, guest2]) {
+      const d = NPCS[g];
+      const pref = d.loves.includes(dish) ? 'love' : d.likes.includes(dish) ? 'like' : d.hates.includes(dish) ? 'hate' : 'neutral';
+      const react = dinnerDishReaction(g, dish, pref);
+      this.friend[g] = clamp((this.friend[g] || 0) + react.pts, 0, 100);
+      await this.say(react.line, g);
+      this.remember(g, `Shared ${dish} at your farmhouse dinner with ${g === guest1 ? guest2 : guest1}.`, `dinner:${this.absday()}:${g}`);
+    }
+    playSfx('fanfare');
+    this.msg(`Hosted ${guest1} & ${guest2} for ${dish}!`, '0B');
+  }
+
+  // ---------------------------------------------------------------- Task 08: Child's interests over seasons
+  async child_interact(): Promise<void> {
+    if (!this.child_name) return;
+    const cname = this.child_name;
+    if (this.held) {
+      const item = this.held;
+      const interest = classifyChildItem(item, ITEMS[item]?.[2]);
+      if (interest) {
+        const gain = this.child_state.shown_day === this.absday() ? 1 : 3;
+        this.child_state.points[interest] = (this.child_state.points[interest] || 0) + gain;
+        this.child_state.shown_day = this.absday();
+        playSfx('emote');
+        await this.say(childShowLine(cname, item, interest), cname);
+        this.msg(`${cname} grew more curious about ${CHILD_INTEREST_LABELS[interest]}!`, '0A');
+        return;
+      }
+      await this.say(`${cname} giggles at the ${item}. Try showing a fish, seed packet, relic, ore, or flower!`, cname);
+      return;
+    }
+    const scene = childMilestoneScene(cname, this.child_days, this.child_state);
+    if (scene) {
+      this.child_state.scenes.push(scene.id);
+      playSfx('fanfare');
+      await this.say(scene.text, cname);
+      return;
+    }
+    const top = topChildInterests(this.child_state);
+    if (top.length) {
+      const favs = top.slice(0, 2).map((k) => CHILD_INTEREST_LABELS[k]).join(' and ');
+      await this.say(`${cname} beams at you! Lately ${cname} is fascinated by ${favs}. (Day ${this.child_days} growing up)`, cname);
+    } else {
+      await this.say(`${cname} waves cheerfully! Hold a fish, seed bag, or relic and press X to show it to ${cname}.`, cname);
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 43: Rainy-night coffee & tea counter
+  tea_counter_now(): boolean {
+    const rainy = this.weather === 'Rain' || this.weather === 'Typhoon' || this.weather === 'Snow' || this.weather === 'Blizzard';
+    return rainy && this.minutes >= TEA_HOURS[0] * 60 && this.minutes < TEA_HOURS[1] * 60;
+  }
+
+  async tea_counter_menu(): Promise<void> {
+    if (this.tea_last_day === this.absday()) {
+      await this.say('The kettle is quiet now — you already poured drinks at the rainy-night counter tonight.', "Gideon's Inn");
+      return;
+    }
+    const reg = teaRegularFor(this.absday());
+    const chap = this.tea_progress[reg.npc] || 0;
+    await this.say(reg.orderLine, reg.npc);
+    const ingOpts = TEA_INGREDIENTS.map((ing) => `${ing.name}${(this.inv[ing.item] || 0) > 0 ? ` (using your ${ing.item})` : ' (inn pantry)'}`);
+    const first = await this.menu('Brew Step 1 — Pick base ingredient', [...ingOpts, 'Cancel']);
+    if (first === null || first >= TEA_INGREDIENTS.length) return;
+    const second = await this.menu('Brew Step 2 — Pick pairing ingredient', [...ingOpts, 'Cancel']);
+    if (second === null || second >= TEA_INGREDIENTS.length) return;
+    const a = TEA_INGREDIENTS[first];
+    const b = TEA_INGREDIENTS[second];
+    const drink = matchTeaDrink(a.id, b.id);
+    if (!drink) {
+      await this.say('Those two ingredients don’t steep into a drink — try pairing a tea leaf or roast bean with honey or milk!', 'Gideon');
+      return;
+    }
+    if ((this.inv[a.item] || 0) > 0) this.take(a.item, 1);
+    if (b.item !== a.item && (this.inv[b.item] || 0) > 0) this.take(b.item, 1);
+    this.tea_last_day = this.absday();
+    await this.advance(20);
+    if (drink.id === reg.drinkId) {
+      const idx = Math.min(chap, reg.chapters.length - 1);
+      await this.say(`Mmm — ${drink.name}, just what I hoped for!`, reg.npc);
+      await this.say(reg.chapters[idx], reg.npc);
+      this.tea_progress[reg.npc] = Math.min(reg.chapters.length, chap + 1);
+      this.friend[reg.npc] = clamp((this.friend[reg.npc] || 0) + 6, 0, 100);
+      this.remember(reg.npc, `Shared a rainy-night ${drink.name} at Gideon's Inn.`, `tea:${reg.npc}:${idx}`);
+      playSfx('emote');
+      this.msg(`Served ${reg.npc} ${drink.name} (+6 friendship; chapter ${idx + 1}/${reg.chapters.length}).`, '0C');
+    } else {
+      this.friend[reg.npc] = clamp((this.friend[reg.npc] || 0) + 2, 0, 100);
+      await this.say(`Warm ${drink.name} — not quite what I ordered, but appreciated on a wet night!`, reg.npc);
+      this.msg(`Served ${drink.name} (+2 ${reg.npc} friendship).`, '09');
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 48: Indoor winter hobby (stamp-printing bench)
+  async stamp_bench_menu(): Promise<void> {
+    const opts = ['Compose a New Block Print', ...(this.wall_print ? [`Inspect Wall Print (${this.wall_print.title})`] : []), 'Leave'];
+    const sel = await this.menu('⊞ Stamp-Printing Bench (Winter Hobby)', opts, 0, [
+      '  Combine geometric woodblock marks and ink to make a print for your wall or a neighbor.',
+    ]);
+    if (sel === null || opts[sel] === 'Leave') return;
+    if (opts[sel].startsWith('Inspect')) {
+      const wp = this.wall_print!;
+      await this.say(`"${wp.title}" [ ${wp.marks} ] — hanging proudly on your farmhouse wall.`, 'Wall Print');
+      return;
+    }
+    const markNames = STAMP_MARKS.map((m) => `${m.glyph} ${m.name}`);
+    const m1 = await this.menu('Pick Mark #1', [...markNames, 'Cancel']);
+    if (m1 === null || m1 >= STAMP_MARKS.length) return;
+    const m2 = await this.menu('Pick Mark #2', [...markNames, 'Cancel']);
+    if (m2 === null || m2 >= STAMP_MARKS.length) return;
+    const m3 = await this.menu('Pick Mark #3', [...markNames, 'Cancel']);
+    if (m3 === null || m3 >= STAMP_MARKS.length) return;
+    const inkSel = await this.menu('Pick Ink Accent', STAMP_INKS.map((i) => i.name));
+    if (inkSel === null) return;
+    const print = composeStampPrint([m1, m2, m3], inkSel, this.absday());
+    this.prints.push(print);
+    if (this.prints.length > 12) this.prints.shift();
+    await this.advance(30);
+    const dest = await this.menu(`Finished: ${print.title} [ ${print.marks} ]`, [
+      'Hang it on your farmhouse wall',
+      'Pack as a Block Print to gift a neighbor',
+    ]);
+    if (dest === 0) {
+      this.wall_print = print;
+      this.keepsake(`print:${print.title}`, print.title, `Hand-stamped winter print [ ${print.marks} ].`);
+      playSfx('harvest');
+      this.msg(`Hung "${print.title}" [ ${print.marks} ] on your farmhouse wall!`, '0C');
+    } else if (dest === 1) {
+      this.give('Block Print', 1);
+      playSfx('harvest');
+      this.msg(`Packed "${print.title}" as a Block Print in your rucksack — hold and gift it to any neighbor!`, '0C');
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 11: Guest vendors who become regulars
+  current_guest_vendor() {
+    return activeGuestVendor({
+      absday: this.absday(),
+      weekday: this.weekday,
+      minutes: this.minutes,
+      festival: Boolean(this.fest_on()),
+      regulars: this.guest_regulars,
+    });
+  }
+
+  async guest_vendor_menu(v: (typeof GUEST_VENDORS)[number]): Promise<void> {
+    const isReg = this.guest_regulars.includes(v.id);
+    while (true) {
+      const opts = [
+        ...v.stock.map((s) => `${s.item} (${s.price}G)`),
+        `Talk to ${v.name}`,
+        'Leave',
+      ];
+      const info = (i: number) => {
+        if (i < v.stock.length) return [`  ${v.stock[i].desc}`, `  Status: ${isReg ? 'Brackenford Regular' : v.unlockHint}`];
+        return [`  ${isReg ? v.regularGreeting : v.greeting}`];
+      };
+      const sel = await this.menu(`${v.title}   ${this.gold}G`, opts, 0, info);
+      if (sel === null || sel < 0 || sel >= opts.length || opts[sel] === 'Leave') return;
+      if (sel === v.stock.length) {
+        await this.say(isReg ? v.regularGreeting : v.greeting, v.name);
+      } else {
+        const s = v.stock[sel];
+        await this.buy(s.item, s.price, s.limit);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 15: Community pantry
+  async pantry_menu(): Promise<void> {
+    while (true) {
+      const count = this.pantry.items.length;
+      const ready = count >= PANTRY_GOAL;
+      const info = [
+        `  Pantry stock: ${count}/${PANTRY_GOAL} surplus ingredients   Shared meals held: ${this.pantry.meals}`,
+        ...(this.pantry.items.length ? [`  In the chest: ${this.pantry.items.slice(-6).join(', ')}`] : ['  Donate surplus crops, forage, fish, or farm goods.']),
+        ...(this.pantry.recipeLearned ? [`  Learned recipe: ${PANTRY_RECIPE}`] : ['  Hold your first shared meal to learn a neighbor’s special recipe!']),
+      ];
+      const opts = [
+        'Donate a surplus ingredient',
+        ...(ready ? ['Hold Community Shared Meal!'] : []),
+        'Leave',
+      ];
+      const sel = await this.menu('▤ Market Cross Community Pantry', opts, 0, info);
+      if (sel === null || sel < 0 || sel >= opts.length || opts[sel] === 'Leave') return;
+      if (opts[sel] === 'Donate a surplus ingredient') {
+        const usable = Object.keys(this.inv).filter((i) => this.inv[i] > 0 && PANTRY_CATEGORIES.has(ITEMS[i]?.[2]));
+        if (!usable.length) {
+          await this.say('Bring any crop, forage, fish, egg, milk, or dish to stock the Community Pantry.', 'Pantry');
+          continue;
+        }
+        const pick = await this.menu('Donate which ingredient?', [...usable.map((i) => `${i} (x${this.inv[i]})`), 'Cancel']);
+        if (pick === null || pick >= usable.length) continue;
+        const item = usable[pick];
+        this.take(item, 1);
+        this.pantry.items.push(item);
+        playSfx('harvest');
+        this.msg(`Added ${item} to the Community Pantry (${this.pantry.items.length}/${PANTRY_GOAL}).`, '0B');
+      } else if (opts[sel] === 'Hold Community Shared Meal!') {
+        if (this.pantry.lastMealDay === this.absday()) {
+          await this.say('We already gathered for a shared meal today — stock the pantry again for next time!', 'Gideon');
+          continue;
+        }
+        this.pantry.items = this.pantry.items.slice(PANTRY_GOAL);
+        this.pantry.meals += 1;
+        this.pantry.lastMealDay = this.absday();
+        await this.advance(60);
+        this.stamina = Math.min(this.max_stamina, this.stamina + 40);
+        this.fatigue = Math.max(0, this.fatigue - 20);
+        const diners = ['Gideon', 'Tess', 'Hollis', 'Rosalind'];
+        for (const n of diners) this.friend[n] = clamp((this.friend[n] || 0) + 4, 0, 100);
+        await this.say('Neighbors crowd around long tables in Market Cross, ladling steaming bowls from the Community Pantry! (+40 Stamina, -20 Fatigue, +4 friendship)', 'Shared Meal');
+        if (!this.pantry.recipeLearned) {
+          this.pantry.recipeLearned = true;
+          if (!this.recipes_discovered.includes(PANTRY_RECIPE)) this.recipes_discovered.push(PANTRY_RECIPE);
+          this.keepsake('pantry_first_meal', 'Community ladle tag', `From Brackenford's first Community Pantry dinner, where Tess taught you ${PANTRY_RECIPE}.`);
+          this.remember('Tess', `Tess taught you how to cook ${PANTRY_RECIPE} after the first Community Pantry dinner.`, 'pantry:recipe');
+          await this.say(`That supper warmed the whole square! Here — let me write down our recipe for ${PANTRY_RECIPE} for your kitchen!`, 'Tess');
+        }
+        playSfx('fanfare');
+        return;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- Task 36: People you meet along the trail
+  trail_at(x: number, y: number): { kind: 'npc' | 'item'; def: (typeof TRAIL_ENCOUNTERS)[number] } | null {
+    if (!this.trail_encounter || this.trail_encounter.day !== this.absday() || this.trail_encounter.done) return null;
+    const def = TRAIL_ENCOUNTERS.find((e) => e.id === this.trail_encounter!.id);
+    if (!def || def.map !== this.mapname) return null;
+    if (def.pos[0] === x && def.pos[1] === y) return { kind: 'npc', def };
+    if (def.itemPos && !this.trail_encounter.found && def.itemPos[0] === x && def.itemPos[1] === y) return { kind: 'item', def };
+    return null;
+  }
+
+  async trail_interact_at(x: number, y: number): Promise<boolean> {
+    const hit = this.trail_at(x, y);
+    if (!hit || !this.trail_encounter) return false;
+    const { kind, def } = hit;
+    if (kind === 'item') {
+      this.trail_encounter.found = true;
+      playSfx('harvest');
+      this.msg(`Found ${def.npc}'s ${def.itemName || 'lost keepsake'} on the brambles! Bring it back to ${def.npc}.`, '0A');
+      return true;
+    }
+    if (def.kind === 'scarf' && !this.trail_encounter.found) {
+      await this.say(def.prompt, def.npc);
+      return true;
+    }
+    if (def.kind !== 'scarf') await this.say(def.prompt, def.npc);
+    await this.say(def.resolve, def.npc);
+    if (def.rewardItem) this.give(def.rewardItem, 1);
+    this.friend[def.npc] = clamp((this.friend[def.npc] || 0) + 5, 0, 100);
+    this.trail_encounter.done = true;
+    this.remember(def.npc, def.memory, `trail:${def.id}:${this.year}`);
+    playSfx('emote');
+    this.msg(`${def.clue} (+5 ${def.npc} friendship)`, '0C');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- Task 26, 27, 28 & G15: Ranch menus
+  async pasture_menu(): Promise<void> {
+    while (true) {
+      const wLabel = `West Meadow: ${this.pasture.west}% grass${this.pasture.active === 'west' ? ' [ACTIVE]' : ' [Resting]'}`;
+      const eLabel = `East Meadow: ${this.pasture.east}% grass${this.pasture.active === 'east' ? ' [ACTIVE]' : ' [Resting]'}`;
+      const other = this.pasture.active === 'west' ? 'East' : 'West';
+      const opts = [
+        `Switch active pasture to ${other} Meadow`,
+        'Graze barn animals on active meadow',
+        'Leave',
+      ];
+      const sel = await this.menu('╪ Rotating Pasture Gate', opts, 0, [
+        `  ${wLabel}`,
+        `  ${eLabel}`,
+        '  Resting meadow regrows overnight (+30%/day in warm seasons, +10% in Winter).',
+      ]);
+      if (sel === null || sel < 0 || sel >= opts.length || opts[sel] === 'Leave') return;
+      if (sel === 0) {
+        this.pasture.active = this.pasture.active === 'west' ? 'east' : 'west';
+        this.msg(`Switched active pasture to ${this.pasture.active === 'west' ? 'West' : 'East'} Meadow (${this.pasture[this.pasture.active]}% grass).`, '0B');
+      } else if (sel === 1) {
+        await this.graze_barn_pasture();
+        return;
+      }
+    }
+  }
+
+  async build_enrichment(which: 'perch' | 'shadeTree'): Promise<void> {
+    const cost = which === 'perch' ? PERCH_COST : SHADE_TREE_COST;
+    const name = which === 'perch' ? 'Chicken Perch' : 'Pasture Shade Tree';
+    if (this.enrichment[which]) {
+      await this.say(`You already built the ${name} on your farm.`, 'Ingrid');
+      return;
+    }
+    if (!this.pay_works(cost)) return;
+    this.enrichment[which] = true;
+    playSfx('fanfare');
+    await this.say(`Done! Your ${name} is ready on the farm — your animals will love it on fair days!`, 'Ingrid');
+  }
+
+  async barn_book(): Promise<void> {
+    this.sync_animal_records();
+    if (!this.animals.length) {
+      await this.say('The Barn Book is blank. Buy cows or sheep from Abel at Highmeadow Dairy.', 'Barn Book');
+      return;
+    }
+    const lines = [
+      '  Name        Kind   Coat              Mood      Born         Parents',
+      ...this.animals.map((a) => {
+        const coat = coatInfo(a.kind, a.coat);
+        const parents = Array.isArray(a.parents) ? a.parents.filter(Boolean).join(' + ') : 'Highmeadow Herd';
+        return `  ${String(a.name).padEnd(11)} ${String(a.kind).padEnd(6)} ${(coat.label + (coat.rare ? '*' : '')).padEnd(17)} ${String(a.personality || 'calm').padEnd(9)} ${absdayLabel(a.bornDay || 0, false).padEnd(12)} ${parents}`;
+      }),
+      '',
+      '  * Rare coat variants earn festival bonuses and pass rare genes to calves/lambs.',
+    ];
+    await this.show_lines('Barn Book — Coats & Family Records', lines);
+  }
+
+  async cat_menu(): Promise<void> {
+    if (!this.pet_extras.cat) return;
+    const h = Math.floor(this.pet_extras.catAff / 10);
+    const bar = `[${'#'.repeat(h)}${'.'.repeat(10 - h)}]`;
+    const opts = [
+      `Pet ${this.pet_extras.catName}`,
+      ...(this.pet_extras.bowlGift ? [`Collect Pet Bowl Gift (${this.pet_extras.bowlGift})`] : []),
+      'Leave',
+    ];
+    const info = this.pet_extras.catClue ? [`  ${this.pet_extras.catName} is ${this.pet_extras.catClue}`] : [];
+    const sel = await this.menu(`Farm Cat — ${this.pet_extras.catName} ${bar}`, opts, 0, info);
+    if (sel === null || opts[sel] === 'Leave') return;
+    if (sel === 0) {
+      this.pet_extras.catAff = Math.min(100, this.pet_extras.catAff + 4);
+      this.fx_add('emote', CAT_SPOT[0], CAT_SPOT[1], 1.0, { emote: 'heart' });
+      playSfx('emote');
+      this.msg(`Purrr! ${this.pet_extras.catName} leans against your boots. (+Affection)`, '0A');
+    } else if (this.pet_extras.bowlGift) {
+      const g = this.pet_extras.bowlGift;
+      this.pet_extras.bowlGift = null;
+      this.give(g, 1);
+      playSfx('harvest');
+      this.msg(`Collected ${g} from the pet bowl!`, '0B');
     }
   }
 }

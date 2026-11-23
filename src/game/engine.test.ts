@@ -309,6 +309,57 @@ describe('daily surprises', () => {
     withRandom([0, 0.6, 0], () => g.night_surprise(report)); // kinds: star, parcel -> parcel
     assert.match(report[0], /^Tess left a parcel by your door: 2 /);
   });
+
+  describe('aurora borealis', () => {
+    test('aurora appears on a clear Fall night and adds report', () => {
+      const g = fresh();
+      g.season = 2;
+      g.weather = 'Sunny';
+      const report: string[] = [];
+      g.night_sky(report);
+      assert.match(report[0], /aurora/);
+      assert.equal(g.aurora_day, g.absday());
+    });
+
+    test('aurora does not appear outside Fall season', () => {
+      const g = fresh();
+      g.season = 0;
+      g.weather = 'Sunny';
+      const report: string[] = [];
+      g.night_sky(report);
+      assert.deepEqual(report, []);
+    });
+
+    test('aurora does not appear in rain', () => {
+      const g = fresh();
+      g.season = 2;
+      g.weather = 'Rain';
+      const report: string[] = [];
+      g.night_sky(report);
+      assert.deepEqual(report, []);
+    });
+
+    test('aurora does not appear in snow', () => {
+      const g = fresh();
+      g.season = 2;
+      g.weather = 'Snow';
+      const report: string[] = [];
+      g.night_sky(report);
+      assert.deepEqual(report, []);
+    });
+
+    test('aurora shows at most once per day', () => {
+      const g = fresh();
+      g.season = 2;
+      g.weather = 'Sunny';
+      const report1: string[] = [];
+      const report2: string[] = [];
+      g.night_sky(report1);
+      g.night_sky(report2);
+      assert.match(report1[0], /aurora/);
+      assert.deepEqual(report2, []);
+    });
+  });
 });
 
 describe('outer-region content', () => {

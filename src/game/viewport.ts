@@ -1,5 +1,6 @@
 // Canvas grid sizing and touch-input helpers for GameScreen. Pure functions, unit-tested.
 import { COMPACT_MIN_COLS, FULL_MIN_COLS, MIN_ROWS } from './compact';
+import { TEXT_SCALES, type TextScale } from './accessibility';
 
 export const MAX_COLS = 160;
 export const MAX_ROWS = 50;
@@ -32,7 +33,14 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  *   the compact layout at the largest size (<= 14px) that still fits 50x24.
  * - Anything smaller is shrunk to fit 50x24; the canvas is scaled down if even that fails.
  */
-export function chooseGrid(width: number, height: number, measure: (px: number) => number, touch: boolean): Grid {
+export function chooseGrid(
+  width: number,
+  height: number,
+  measure: (px: number) => number,
+  touch: boolean,
+  textScale: TextScale = 'normal',
+): Grid {
+  const boost = TEXT_SCALES[textScale]?.boostPx ?? 0;
   const fits = (px: number, minCols: number) =>
     width / measure(px) >= minCols && height / lineHeight(px) >= MIN_ROWS;
   const grid = (px: number, minCols: number): Grid => {
@@ -47,11 +55,26 @@ export function chooseGrid(width: number, height: number, measure: (px: number) 
     );
 
   if (!touch) {
-    const px = Math.max(BASE_FONT, Math.min(26, Math.floor(height / (31 * 1.25)), Math.floor(width / (96 * 0.61))));
-    return grid(fits(px, FULL_MIN_COLS) ? px : shrinkTo(FULL_MIN_COLS), FULL_MIN_COLS);
+    const maxPx = 26 + boost;
+    const targetPx = Math.max(BASE_FONT + boost, Math.min(maxPx, Math.floor(height / (31 * 1.25)) + boost, Math.floor(width / (96 * 0.61)) + boost));
+    if (fits(targetPx, FULL_MIN_COLS)) return grid(targetPx, FULL_MIN_COLS);
+    // Larger text scale on small desktop windows prefers bigger readable text in compact layout before shrinking tiny.
+    if (boost > 0) {
+      for (let px = targetPx; px >= BASE_FONT; px--) {
+        if (fits(px, FULL_MIN_COLS)) return grid(px, FULL_MIN_COLS);
+      }
+      for (let px = Math.min(targetPx, COMPACT_MAX_FONT + boost); px >= COMPACT_MIN_FONT + Math.min(3, boost); px--) {
+        if (fits(px, COMPACT_MIN_COLS)) return grid(px, COMPACT_MIN_COLS);
+      }
+    }
+    return grid(shrinkTo(FULL_MIN_COLS), FULL_MIN_COLS);
   }
-  for (let px = BASE_FONT; px >= TOUCH_FULL_MIN_FONT; px--) if (fits(px, FULL_MIN_COLS)) return grid(px, FULL_MIN_COLS);
-  for (let px = COMPACT_MAX_FONT; px >= COMPACT_MIN_FONT; px--) if (fits(px, COMPACT_MIN_COLS)) return grid(px, COMPACT_MIN_COLS);
+  // On touch with larger text scale, raise the minimum threshold for full 80-col layout so prompts stay big & legible.
+  const fullMin = TOUCH_FULL_MIN_FONT + boost;
+  const fullMax = BASE_FONT + boost;
+  for (let px = fullMax; px >= fullMin; px--) if (fits(px, FULL_MIN_COLS)) return grid(px, FULL_MIN_COLS);
+  const compactMax = COMPACT_MAX_FONT + boost;
+  for (let px = compactMax; px >= COMPACT_MIN_FONT; px--) if (fits(px, COMPACT_MIN_COLS)) return grid(px, COMPACT_MIN_COLS);
   return grid(shrinkTo(COMPACT_MIN_COLS), COMPACT_MIN_COLS);
 }
 

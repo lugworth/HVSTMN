@@ -1,4 +1,6 @@
 import { TILES, INTERIOR_LAYOUTS, INTERIOR_LEGEND, BUILDINGS, STALL_SPOT, pkey } from './constants';
+import { PANTRY_SPOT } from './town-life';
+import { PASTURE_GATE_SPOT } from './ranch';
 import prebuiltMaps from './prebuilt_maps.json';
 import { py_rng } from './runtime_helpers';
 
@@ -188,6 +190,8 @@ export function build_farm(): GameMap {
   m.signs[pkey(35, 6)] = 'mill';
   // a bench on the farmhouse porch (mechanics task 44)
   m.set(9, 6, 'bench');
+  // rotating pasture gate between coop and barn (mechanics task 27)
+  m.set(PASTURE_GATE_SPOT[0], PASTURE_GATE_SPOT[1], 'pasture_gate');
   return m;
 }
 
@@ -233,6 +237,8 @@ export function build_town(): GameMap {
   m.signs[pkey(42, 10)] = 'request_board';
   // The player's Saturday market stall, on the east side of the square.
   m.set(STALL_SPOT[0], STALL_SPOT[1], 'stall');
+  // Community pantry chest by Market Cross (mechanics task 15).
+  m.set(PANTRY_SPOT[0], PANTRY_SPOT[1], 'pantry');
   // Add South path & bridge across the river to Brackenford Beach (warp only at the south border y=31!)
   m.rect(35, 21, 3, 7, 'path');
   m.rect(35, 28, 3, 2, 'bridge');
@@ -254,6 +260,9 @@ export function build_mountain(): GameMap {
   m.rect(45, 7, 3, 2, 'pond');
   m.set(44, 8, 'sign');
   m.signs[pkey(44, 8)] = 'Wellkeeper Pond — Hold an item and press X facing the pond to make an offering to the Wellkeeper!';
+  // Copperseam Mine: deep floors west of the pond
+  m.set(51, 4, 'sign');
+  m.signs[pkey(51, 4)] = 'Copperseam Mine — Step down on floor tiles to delve deeper; each floor holds ore, gems and side chambers. Bring a lamp.';
 
   // Mirewater Mine island in the middle of Beacon Hill Lake (surrounded by water; freezes in Winter!)
   m.rect(14, 8, 3, 2, 'grass');
@@ -279,7 +288,7 @@ export function build_beach(): GameMap {
   // Wooden Fishing & Fireworks Pier jutting into the sea
   m.rect(31, 4, 3, 16, 'bridge');
   m.set(30, 12, 'sign');
-  m.signs[pkey(30, 12)] = 'Brackenford Beach Pier — Fish in the ocean or watch the Summer 24 Fireworks!';
+  m.signs[pkey(30, 12)] = 'Brackenford Beach Pier — Fish in the ocean or watch the Summer 24 Fireworks! Crab pot at pier end: bait with cheapest fish, press X to lower; unbaited is a gamble.';
   // (Otto & Ferreira's house now stands on Lighthouse Point, east along the shore.)
   // Nico's Seaside Lodge
   m.building(42, 5, 10, 5, 5, 'kai_shack', 'SEASIDE', '09');
@@ -430,11 +439,15 @@ export function build_river(): GameMap {
   const [sx, sy] = FOOTBRIDGE_SIGN;
   m.set(sx, sy, 'sign');
   m.signs[pkey(sx, sy)] = 'footbridge';
+  // east-bank sign facing the dock, where the rebuilt planks will land
+  const [ex, ey] = [riverX(FOOTBRIDGE_ROWS[3]) + 5, FOOTBRIDGE_ROWS[3]];
+  m.set(ex, ey, 'sign');
+  m.signs[pkey(ex, ey)] = 'Footbridge — the western planks washed away; ask Ingrid at her workshop to rebuild.';
   // The Hearthfolk' hut, in the meadow on the far bank, just off the road.
   m.building(49, 6, 9, 4, 4, 'sprites', 'SPRITES', '0A');
   m.set(53, 10, 'path');
   m.set(28, 10, 'sign');
-  m.signs[pkey(28, 10)] = 'Willow Bend — The river runs slow and deep here. Good fishing off the east-bank dock, and the flat stones skip well (face the river, press X).';
+  m.signs[pkey(28, 10)] = 'Willow Bend — The river runs slow and deep here. Good fishing off the east-bank dock, and the flat stones skip well (face the river, press X). Footbridge washed out; ask Ingrid.';
   return m;
 }
 
@@ -711,7 +724,9 @@ export function open_shortcut(maps: Record<string, GameMap>, id: string): void {
 }
 
 export function build_house(): GameMap {
-  return GameMap.fromPrebuilt('house');
+  const m = GameMap.fromPrebuilt('house');
+  m.set(13, 8, 'stamp_bench');
+  return m;
 }
 
 export function build_mine(floor: number, objs: Record<string, Record<string, string>>, mineType: 'spring' | 'lake' = 'spring'): GameMap {
@@ -822,6 +837,8 @@ export function build_house_upgraded(flags: Set<string> | string[]): GameMap {
   m.set(12, 1, 'bin');
   // the mantel for festival souvenirs and keepsakes (mechanics task 45)
   m.set(14, 1, 'mantel');
+  // indoor winter hobby stamp-printing bench (mechanics task 48)
+  m.set(13, 8, 'stamp_bench');
   m.rect(3, 4, 3, 2, 'table');
   // Flower Vase on the table
   m.set(3, 4, 'vase');

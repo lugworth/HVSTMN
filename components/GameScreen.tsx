@@ -20,6 +20,17 @@ import {
 } from '@/src/game/viewport';
 import GameMenu, { type MenuClose, type MenuItem, type MenuSection } from './GameMenu';
 import { PIXEL_ICONS, bitmapToBoxShadow, toolIconId, type ToolbarIconId } from '@/src/game/toolbarIcons';
+import {
+  TEXT_SCALES,
+  readTextScale,
+  readHighContrast,
+  readKeyBindings,
+  resolveKeyBinding,
+  type TextScale,
+  type KeyBindings,
+} from '@/src/game/accessibility';
+import { defaultAssist, readAssistSettings, type AssistSettings } from '@/src/game/progression';
+import { isSfxEnabled, loadSfxPreference } from '@/src/game/audio';
 
 const FARM_FONT = '"FURROW Farm Symbols"';
 const FONT = `"HRVSTMN Mono", ${FARM_FONT}, "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
@@ -78,8 +89,9 @@ const KEYMAP: Record<string, string> = {
 };
 
 /** Keep text entry intact while translating held row keys to the non-starting command. */
-export function rowKeyboardKey(key: string, repeat: boolean, typing: boolean): string {
-  return repeat && !typing && (key === 'c' || key === 'C') ? 'row-repeat' : key;
+export function rowKeyboardKey(key: string, repeat: boolean, typing: boolean, bindings: KeyBindings = {}): string {
+  const command = resolveKeyBinding(key, bindings, typing);
+  return repeat && !typing && (command === 'c' || command === 'C') ? 'row-repeat' : command;
 }
 
 /** One outstanding repeat at most; stopping also discards an unconsumed repeat. */
@@ -223,6 +235,14 @@ export default function GameScreen() {
   const hapticsRef = useRef(true);
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [pace, setPaceState] = useState<DayPace>('normal');
+  const [textScale, setTextScaleState] = useState<TextScale>('normal');
+  const textScaleRef = useRef<TextScale>('normal');
+  const [highContrast, setHighContrastState] = useState(false);
+  const highContrastRef = useRef(false);
+  const [sfxOn, setSfxOnState] = useState(true);
+  const [assist, setAssistState] = useState<AssistSettings>(defaultAssist());
+  const keyBindingsRef = useRef<KeyBindings>({});
+  const relayoutRef = useRef<(() => void) | null>(null);
 
   // Send a key to the game engine
   const sendKey = useCallback((name: string) => {
@@ -610,6 +630,15 @@ export default function GameScreen() {
             checked: pace === p,
             run: () => gameRef.current?.set_pace(p),
           })),
+          ...(Object.keys(TEXT_SCALES) as TextScale[]).map((sc) => ({
+            id: `text-${sc}`,
+            label: `Text size: ${TEXT_SCALES[sc].label}`,
+            kind: 'radio' as const,
+            checked: textScale === sc,
+            run: () => gameRef.current?.set_text_scale(sc),
+          })),
+          { id: 'contrast', label: 'High contrast', kind: 'checkbox', checked: highContrast, run: () => gameRef.current?.set_high_contrast(!highContrastRef.current) },
+          { id: 'sfx', label: 'Sound effects', kind: 'checkbox', checked: sfxOn, run: () => gameRef.current?.set_sfx(!sfxOn) },
           { id: 'detail', label: 'High-res detail', kind: 'checkbox', checked: hires, run: toggleHires },
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
@@ -619,6 +648,14 @@ export default function GameScreen() {
           ...(canFullscreen
             ? [{ id: 'full', label: 'Full screen', kind: 'checkbox' as const, checked: fullscreen, run: toggleFullscreen }]
             : []),
+        ],
+      },
+      {
+        title: 'Assist',
+        items: [
+          { id: 'nofaint', label: 'No-faint mode', kind: 'checkbox', checked: assist.noFaint, run: () => gameRef.current?.set_assist({ noFaint: !assist.noFaint }) },
+          { id: 'easyfish', label: 'Easier fishing', kind: 'checkbox', checked: assist.easyFishing, run: () => gameRef.current?.set_assist({ easyFishing: !assist.easyFishing }) },
+          { id: 'confirmdest', label: 'Confirm destructive', kind: 'checkbox', checked: assist.confirmDestructive, run: () => gameRef.current?.set_assist({ confirmDestructive: !assist.confirmDestructive }) },
         ],
       },
       { title: 'Help', items: [key('help', 'Help & controls', '?', '?')] },
@@ -724,6 +761,22 @@ export default function GameScreen() {
       }
       screen.onRender?.();
     };
+    const savedScale = readTextScale(window.localStorage);
+    textScaleRef.current = savedScale;
+    setTextScaleState(savedScale);
+    const savedHc = readHighContrast(window.localStorage);
+    screen.highContrast = savedHc;
+    highContrastRef.current = savedHc;
+    setHighContrastState(savedHc);
+    screen.onHighContrastChange = (next) => {
+      highContrastRef.current = next;
+      setHighContrastState(next);
+      screen.onRender?.();
+    };
+    loadSfxPreference(window.localStorage);
+    setSfxOnState(isSfxEnabled());
+    setAssistState(readAssistSettings(window.localStorage));
+    keyBindingsRef.current = readKeyBindings(window.localStorage);
     screenRef.current = screen;
 
     function measureCell(px: number) {
@@ -738,7 +791,7 @@ export default function GameScreen() {
       if (!stage) return;
       const W = stage.clientWidth || 800;
       const H = stage.clientHeight || 500;
-      const g = chooseGrid(W, H, measureCell, hasTouch);
+      const g = chooseGrid(W, H, measureCell, hasTouch, textScaleRef.current);
       fontPx = g.fontPx;
       cw = measureCell(fontPx);
       ch = lineHeight(fontPx);
@@ -812,8 +865,8 @@ export default function GameScreen() {
           renderEnhanced();
         });
       }
-      // mode changes (detail, palette, CRT) force a full repaint
-      const prefix = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:`;
+      // mode changes (detail, palette, CRT, high contrast) force a full repaint
+      const prefix = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:${screen.highContrast ? 'hc' : ''}:`;
       const sig = `${prefix}${frameSignature(frame)}`;
       if (sig === lastSig) return;
       const modeChanged = !lastSig.startsWith(prefix);
@@ -887,6 +940,7 @@ export default function GameScreen() {
       if (game && game.modal_depth === 0) game.render();
       if (screen.onRender) screen.onRender();
     };
+    relayoutRef.current = relayout;
 
     // The bundled font may arrive after first paint: re-measure and repaint once it's ready.
     if (document.fonts && document.fonts.load) {
@@ -921,12 +975,13 @@ export default function GameScreen() {
       } else if (KEYMAP[e.key]) {
         name = KEYMAP[e.key];
       } else if ([...e.key].length === 1) {
-        name = rowKeyboardKey(e.key, e.repeat, Boolean(gameRef.current?.typing));
+        name = e.key;
       } else {
         return;
       }
 
       e.preventDefault();
+      name = rowKeyboardKey(name, e.repeat, Boolean(gameRef.current?.typing), keyBindingsRef.current);
       // Walking keys keep the game's own rhythm: the OS key repeat is ignored (held.ts).
       const dir = WALK_KEYS[name];
       if (dir) {
@@ -939,7 +994,8 @@ export default function GameScreen() {
     const onKeyUp = (e: KeyboardEvent) => {
       const name = KEYMAP[e.key] ?? e.key;
       if (WALK_KEYS[name]) heldRelease(name);
-      if ((e.key === 'c' || e.key === 'C') && rowPointerRef.current === null) {
+      const command = resolveKeyBinding(name, keyBindingsRef.current, false);
+      if ((command === 'c' || command === 'C') && rowPointerRef.current === null) {
         rowRepeatRef.current?.stop();
       }
     };
@@ -990,6 +1046,16 @@ export default function GameScreen() {
     gameRef.current = game;
     setPaceState(game.pace);
     game.onPace = (p) => setPaceState(p);
+    game.onTextScale = (sc) => {
+      textScaleRef.current = sc;
+      setTextScaleState(sc);
+      relayoutRef.current?.();
+    };
+    game.onAssist = (a) => setAssistState({ ...a });
+    game.onKeyBindings = (b) => {
+      keyBindingsRef.current = { ...b };
+    };
+    game.onSfx = (on) => setSfxOnState(on);
     // Focus the name field (touch only; it stays mounted) inside the tap that opened the prompt,
     // so the phone keyboard comes up without a second tap.
     game.onTyping = () => {
@@ -1107,7 +1173,7 @@ export default function GameScreen() {
 
   const rootBase = 'game-root bg-[#000000] text-[#d0d0d0] overflow-hidden select-none';
   return (
-    <div className={isTouch ? `${rootBase} touch-ui` : `${rootBase} flex flex-col`}>
+    <div className={isTouch ? `${rootBase} touch-ui` : `${rootBase} flex flex-col`} data-text-scale={textScale}>
       {/* Canvas Area */}
       <div
         ref={stageRef}

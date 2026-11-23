@@ -611,3 +611,29 @@ html, body {
   padding: 0 14px;
   color: var(--base0B);
 }
+
+/* Task 56 & G17: Larger readable prompts and controls in portrait, landscape, and desktop. */
+.game-root[data-text-scale="large"] .game-toolbar {
+  font-size: clamp(13.5px, 1.25vw, 17px);
+}
+.game-root[data-text-scale="xlarge"] .game-toolbar {
+  font-size: clamp(15px, 1.45vw, 19px);
+}
+.game-root[data-text-scale="large"] .game-menu-pop,
+.game-root[data-text-scale="large"] .game-menu-sheet {
+  font-size: 16px;
+}
+.game-root[data-text-scale="xlarge"] .game-menu-pop,
+.game-root[data-text-scale="xlarge"] .game-menu-sheet {
+  font-size: 18px;
+}
+.game-root[data-text-scale="large"] .pad-btn,
+.game-root[data-text-scale="large"] .dpad-arm {
+  font-size: clamp(13px, calc(var(--u, 44px) * 0.28), 16px);
+  min-height: 46px;
+}
+.game-root[data-text-scale="xlarge"] .pad-btn,
+.game-root[data-text-scale="xlarge"] .dpad-arm {
+  font-size: clamp(15px, calc(var(--u, 44px) * 0.32), 18px);
+  min-height: 48px;
+}

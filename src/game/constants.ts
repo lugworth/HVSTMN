@@ -3470,6 +3470,20 @@ export const INN_SCENES: InnScene[] = [
       ['Hilde', 'The old folk said the deep mine floors were warmer then. Bring me what you find down there.'],
     ],
   },
+  {
+    id: 'ghost_story',
+    title: 'Ghost story by the fireplace',
+    cast: ['Gideon', 'Ingrid', 'Corin'],
+    listen: [
+      ['Ingrid', "They say the old forge at Ironwood is haunted by a smith who vanished in the winter of '82."],
+      ['Gideon', 'Hmph. And yet the cold never bothered me anyway.'],
+      ['Corin', "I've felt a draft even on calm nights. Maybe the wind brings whispers."],
+    ],
+    join: 'Share a ghostly memory',
+    joined: [
+      ['Gideon', 'I once heard a knock at the inn door at midnight. Turned out to be the wind.'],
+    ],
+  },
 ];
 
 /** Task 04: Rowan's two-chapter request. Chapter one asks for Copperseam Mine copper. */
@@ -3932,3 +3946,15 @@ for (const [name, p] of Object.entries(FARM_PIECES)) {
 TILES['orchard_tree'] = ['♣', '0A', '00', false];
 TILES['rain_barrel'] = ['▥', '0C', '00', false];
 TILES['greenhouse_frame'] = ['▦', '0B', '00', false];
+// New feature tiles & items (tasks 15, 27, 28, 36, 48 & G15)
+TILES['pantry'] = ['▤', '09', '00', false];
+TILES['stamp_bench'] = ['⊞', '0C', '00', false];
+TILES['pasture_gate'] = ['╪', '0B', '00', false];
+TILES['perch'] = ['╤', '09', '00', false];
+TILES['shade_tree'] = ['♣', '0B', '00', false];
+TILES['pet_bowl'] = ['◡', '0A', '00', false];
+TILES['scarf'] = ['≈', '08', '00', true];
+ITEMS['Block Print'] = [120, 0, 'special'];
+ITEMS['Brackenford Potluck Stew'] = [420, 45, 'dish'];
+RECIPES['Brackenford Potluck Stew'] = [[['any:crop', 2], ['any:forage', 1]], 'Pot', 45, 420];
+ITEMS['Crimson Scarf'] = [0, 0, 'special'];

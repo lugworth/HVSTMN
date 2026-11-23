@@ -13,6 +13,14 @@ test('keyboard row repeats cannot start another row, but typing and other keys a
   assert.equal(rowKeyboardKey('x', true, false), 'x');
 });
 
+test('repeat handling follows the resolved row command', () => {
+  const bindings = { row: 'space', bag: 'c' };
+  assert.equal(rowKeyboardKey('space', false, false, bindings), 'c');
+  assert.equal(rowKeyboardKey('space', true, false, bindings), 'row-repeat');
+  assert.equal(rowKeyboardKey('C', true, false, bindings), 'i');
+  assert.equal(rowKeyboardKey('C', true, true, bindings), 'C');
+});
+
 test('row hold waits, repeats at the shared cadence, and never backs up the queue', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const screen = new Screen();

@@ -692,7 +692,11 @@ function isTorch(F: Frame, x: number, y: number, tag: CellTag): boolean {
 }
 
 /** Fixtures worth noticing: they keep their colour in the monochrome look. */
-const INTEREST = new Set(['bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall', 'mantel', 'bench', 'plotsign', 'pocket_seam', 'pocket_geode', 'pocket_moss']);
+const INTEREST = new Set([
+  'bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall',
+  'mantel', 'bench', 'plotsign', 'pocket_seam', 'pocket_geode', 'pocket_moss',
+  'pantry', 'stamp_bench', 'pasture_gate', 'perch', 'shade_tree', 'pet_bowl', 'scarf',
+]);
 
 const isRainy = (F: Frame) => !F.indoor && (F.weather === 'Rain' || F.weather === 'Typhoon');
 const isWet = (F: Frame) => isRainy(F) || (!F.indoor && F.wetness > 0.06);
@@ -1456,7 +1460,7 @@ function applyStep(out: OutCell[][], step: RenderCtx['step'], t: number, W: numb
 }
 
 export function computeFrame(
-  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires'>>,
+  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires' | 'highContrast'>>,
   t: number,
 ): OutCell[][] {
   const { buf, tags, ctx } = scr;
@@ -1492,7 +1496,9 @@ export function computeFrame(
                 ? { ch: '·', fg: '#ffcc33' }
                 : creature && cell[0] === 'H'
                   ? { ch: '`', fg: '#ffe0a0' }
-                  : undefined;
+                  : tag.winterCoat && tag.ent === 'npc'
+                    ? { ch: '≈', fg: '#ff9900' }
+                    : undefined;
           o = {
             ch: sprite,
             fg: pal(cell[1]),
@@ -1523,6 +1529,10 @@ export function computeFrame(
         if (tag.greenhouse) o.bg = mix(o.bg, '#9fe8d0', 0.1);
         if (tag.fixture && !tag.ent) {
           o = { ...o, ch: tag.fixture.ch, fg: pal(tag.fixture.fg), bold: true, plain: true, accent: true, textureGlyph: undefined, texture: undefined };
+        }
+        // Preview an equipped placeable farm detail with its one-cell glyph (task 41).
+        if (tag.piecePreview && !tag.ent) {
+          o = { ...o, ch: tag.piecePreview.ch, fg: pal(tag.piecePreview.fg), bg: mix(o.bg, '#00ffff', 0.16), bold: true, plain: true, accent: true, textureGlyph: undefined, texture: undefined };
         }
         // a seed bag's aim marks the tiles in a companion pairing with a small blossom (task 17)
         if (tag.companion) o.detail = { ch: '✿', fg: COMPANION_MARK };
@@ -2007,6 +2017,23 @@ export function computeFrame(
   if (ctx.wipe && motion && t > 0) applyWipe(out, v, W, H, ctx.wipe);
   if (ctx.step && motion) applyStep(out, ctx.step, t, W, H);
   decorateBoxes(out, boxes, W, H, t);
+  if (scr.highContrast) {
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const c = out[y][x];
+        const tg = tags[y]?.[x];
+        const isUi = !tg || tg.t === 'ui';
+        if (isUi && c.ch !== ' ') {
+          c.bg = '#000000';
+          c.fg = c.fg === '#000000' ? '#ffffff' : mix(c.fg, '#ffffff', 0.45);
+          c.bold = true;
+        } else if (tg?.ent || c.accent) {
+          c.fg = mix(c.fg, '#ffffff', 0.3);
+          c.bold = true;
+        }
+      }
+    }
+  }
   snapFrame(out);
   return out;
 }
