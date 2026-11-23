@@ -165,7 +165,7 @@ import type { ValleyLandmark, DayPace } from './constants';
 import { migrateLegacySave } from './legacy_names';
 import type { CatchOdds, MakerStep } from './rules';
 import {
-  HYBRIDS, HYBRID_CROPS, ORCHARD_SPOTS, SAPLING, SAPLING_PRICE, TREE_DAYS, FRUIT_DAYS, BARREL_SPOT, CHANNEL_CELLS, BARREL_CAP, CHANNEL_COST,
+  HYBRIDS, HYBRID_CROPS, HYBRID_RECROSS_FEE, ORCHARD_SPOTS, SAPLING, SAPLING_PRICE, TREE_DAYS, FRUIT_DAYS, BARREL_SPOT, CHANNEL_CELLS, BARREL_CAP, CHANNEL_COST,
   GLASS_SPOT, GLASS_CELLS, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage,
 } from './farm-works';
 import type { FarmWorks } from './farm-works';
@@ -522,6 +522,9 @@ export const MASTERY_REWARD_ITEMS: Record<MasteryDiscipline, string> = {
 const OUTDOOR_MAPS = ['farm', 'town', 'mountain', 'beach', 'woods', 'ridge', 'river', 'point', 'grove'];
 /** Forage spots spawned per map each day (winter thins the inland ones). */
 const FORAGE_TARGET: Record<string, number> = { mountain: 11, beach: 4, woods: 10, ridge: 8, river: 6, point: 4, grove: 8 };
+
+/** Pristine NPC positions, captured at load before any festival rearranges the shared NPCS table. */
+const NPC_HOME: Record<string, any> = Object.fromEntries(Object.entries(NPCS).map(([n, d]) => [n, d.where]));
 
 export class Game {
   [key: string]: any;
@@ -1249,13 +1252,18 @@ export class Game {
     return getMaxStamina(this.power_berries || 0) + (this.house_flags.includes('Big Bed') ? 20 : 0);
   }
 
+  /** Max stamina from Heartseeds plus the Big Bed; the one place that sums them. */
+  recompute_max_stamina(): void {
+    this.max_stamina = this.calc_max_stamina();
+  }
+
   give_power_berry(source: string): boolean {
     if (this.berry_sources.includes(source) || this.power_berries >= 10) {
       return false;
     }
     this.berry_sources.push(source);
     this.power_berries += 1;
-    this.max_stamina = this.calc_max_stamina();
+    this.recompute_max_stamina();
     this.stamina = this.max_stamina;
     this.fatigue = 0;
     this.msg(`You ate a Heartseed! Max Stamina +10 (${this.max_stamina})!`, '0A');
@@ -1586,7 +1594,7 @@ export class Game {
       const tr: any = this.trap;
       this.trap = tr && Number.isInteger(tr.day) ? { day: tr.day, bait: typeof tr.bait === 'string' && ITEMS[tr.bait] ? tr.bait : null } : null;
       this.composted = Array.isArray(this.composted) ? [...new Set(this.composted.filter((k) => typeof k === 'string' && this.tilled.has(k)))] : [];
-      this.max_stamina = this.calc_max_stamina();
+      this.recompute_max_stamina();
       this.stamina = Math.min(this.max_stamina, Math.max(0, d.stamina ?? this.max_stamina));
 
       if (this.mapname === 'mine') {
@@ -2619,6 +2627,10 @@ export class Game {
 
   /** Pin a seed bag for fast planting and return to the previous tool with one action. */
   seed_pouch_shortcut(): void {
+    if (this.levels[this.tool] === 5) {
+      this.msg(`Your ${this.tool} is FEY and cannot be unequipped! Visit Lucan at Church.`, '08');
+      return;
+    }
     const bags = this.tool_list().filter((t) => t.endsWith(' Seeds') && (this.inv[t] || 0) > 0);
     if (!bags.length) {
       this.msg('You do not have any seed bags ready in your rucksack.', '08');
@@ -2809,13 +2821,14 @@ export class Game {
       if (this.mapname !== 'farm') {
         this.msg('You can only till soil on your farm (or dig in the mines).');
         return;
-      } else if (this.season === 3) {
+      } else if (this.season === 3 && !this.farm_works.greenhouse) {
         this.msg('The ground is frozen solid in Winter.');
         return;
       } else {
         let n = 0;
         for (const [qx, qy] of rowTarget ? [rowTarget] : this.area()) {
           const qk = pkey(qx, qy);
+          if (this.ground_frozen(qk)) continue;
           if (this.maps['farm'].tile(qx, qy) === 'field' && !objs[qk] && !this.tilled.has(qk)) {
             this.tilled.add(qk);
             if (this.weather === 'Rain' || this.weather === 'Typhoon') {
@@ -2829,7 +2842,7 @@ export class Game {
           }
         }
         if (!n) {
-          this.msg(obj ? `There's a ${obj} in the way.` : "Can't till there.");
+          this.msg(obj ? `There's a ${obj} in the way.` : this.season === 3 ? 'The ground is frozen solid in Winter; only the greenhouse plot can be tilled.' : "Can't till there.");
           return;
         }
       }
@@ -6286,7 +6299,7 @@ export class Game {
     ];
     const sel = await this.menu(
       `Ferreira's Exotic Shop   ${this.gold}G`,
-      items.map(([name, p]) => `${name} (${p}G)`),
+      items.map(([name, p]) => (name.startsWith('Jewel of Truth') && this.berry_sources.includes('truth:won_shop') ? 'Jewel of Truth (owned)' : `${name} (${p}G)`)),
       0,
       (s) => {
         const name = items[s]?.[0] || '';
@@ -6301,11 +6314,12 @@ export class Game {
     if (sel === null) return;
     const [name, price, lim] = items[sel];
     if (name.startsWith('Jewel of Truth')) {
-      if (this.gold < price) {
+      if (this.berry_sources.includes('truth:won_shop') || this.truth_jewels >= 9) {
+        await this.say('Hehehe! Sold out, friend. You already own my Jewel of Truth.', 'Ferreira');
+      } else if (this.gold < price) {
         await this.say('Hehehe! Come back when you have 50,000G!', 'Ferreira');
-      } else {
+      } else if (this.give_truth_jewel('won_shop')) {
         this.gold -= price;
-        this.give_truth_jewel('won_shop');
       }
       return;
     }
@@ -6380,11 +6394,13 @@ export class Game {
     if (sel === 0) {
       if (this.levels[this.tool] !== 5) {
         await this.say('You do not currently have a Fey Tool stuck to your hand.', 'Lucan');
+      } else if (['Hoe', 'Watering Can'].includes(this.tool)) {
+        await this.say(`I cannot lift the curse from your Fey ${this.tool}; bless it instead (option 2). No charge.`, 'Lucan');
       } else if (this.gold < 1000) {
         await this.say('A 1000G donation is required to lift the binding curse.', 'Lucan');
       } else {
         this.gold -= 1000;
-        this.tool = TOOLS.find((t) => this.levels[t] !== 5) || 'Hoe';
+        this.tool = TOOLS.find((t) => this.levels[t] !== 5 && this.tool_list().includes(t)) || 'Hoe';
         await this.say('May the Wellkeeper cleanse this curse! You can freely switch tools again.', 'Lucan');
       }
     } else if (sel === 1) {
@@ -6579,6 +6595,12 @@ export class Game {
     }
   }
 
+  /** True when no seed, planted crop or bin item of this hybrid remains anywhere. */
+  hybrid_lost(crop: string): boolean {
+    return !(this.inv[`${crop} Seeds`] > 0) && !(this.inv[crop] > 0) && !Object.values(this.crops).some((c) => c[0] === crop) &&
+      !((this.bin[crop] || 0) > 0 || (this.bin[`${crop} Seeds`] || 0) > 0);
+  }
+
   async hybrid_menu(): Promise<void> {
     const fw = this.farm_works;
     const sel = await this.menu(
@@ -6589,20 +6611,27 @@ export class Game {
     );
     if (sel === null) return;
     const h = HYBRIDS[sel];
-    if (fw.hybrids.includes(h.crop)) {
+    const known = fw.hybrids.includes(h.crop);
+    if (known && !this.hybrid_lost(h.crop)) {
       this.msg(`Silas has already crossed ${h.crop} for you; save seed from your harvest to grow more.`, '08');
       return;
     }
     const [a, b] = h.parents.map((p) => `${p} Seeds`);
+    const fee = known ? HYBRID_RECROSS_FEE : 0;
     if (!(this.inv[a] > 0) || !(this.inv[b] > 0)) {
-      this.msg(`Silas needs one ${a} and one ${b}.`, '08');
+      this.msg(`Silas needs one ${a} and one ${b}${fee ? ` and ${fee}G` : ''}.`, '08');
       return;
     }
+    if (this.gold < fee) {
+      this.msg(`Silas charges ${fee}G to cross ${h.crop} again.`, '08');
+      return;
+    }
+    this.gold -= fee;
     this.take(a);
     this.take(b);
     this.give(`${h.crop} Seeds`);
-    fw.hybrids.push(h.crop);
-    this.msg(`Silas crossed a new seed: ${h.crop} Seeds!`, '0A');
+    if (!known) fw.hybrids.push(h.crop);
+    this.msg(known ? `Silas crossed ${h.crop} Seeds again for ${fee}G.` : `Silas crossed a new seed: ${h.crop} Seeds!`, '0A');
   }
 
   /** Morning work: sprinklers, the rain channel, then typhoon damage. */
@@ -6711,6 +6740,12 @@ export class Game {
     }
   }
 
+  /** Add one hen and its temperament together so the two lists stay aligned. */
+  add_chicken(): void {
+    this.chickens += 1;
+    this.chicken_personalities.push(pickPersonality(this.absday() + this.chickens));
+  }
+
   async buy_chicken(): Promise<void> {
     if (this.chickens >= this.coop_cap()) {
       await this.say('Your coop is full!', 'Rosalind');
@@ -6718,7 +6753,7 @@ export class Game {
       await this.say("A chicken is 1500G. Come back when you've saved up.", 'Rosalind');
     } else if (await this.confirm('Buy a chicken for 1500G?')) {
       this.gold -= 1500;
-      this.chickens += 1;
+      this.add_chicken();
       await this.say('Dennis will bring it to your coop. Remember to fill its feed box!', 'Rosalind');
     }
   }
@@ -7388,6 +7423,11 @@ export class Game {
     });
   }
 
+  /** Winter ground is frozen except under glass once the greenhouse is built. */
+  ground_frozen(key: string): boolean {
+    return this.season === 3 && !(this.farm_works.greenhouse && GLASS_CELLS.includes(key));
+  }
+
   /** What the row tool does on a tile the player walks past (task 54): work it, walk over what is done, or stop. */
   row_tile(x: number, y: number): 'work' | 'pass' | 'stop' {
     if (this.mapname !== 'farm' || !this.walkable(this.mapname, x, y) || this.npc_at(x, y)) return 'stop';
@@ -7395,7 +7435,7 @@ export class Game {
     if (key in this.map.doors || key in this.map.warps) return 'stop';
     if (this.tool === 'Hoe') {
       if (this.tilled.has(key)) return 'pass';
-      const untilled = this.season !== 3 && this.map.tile(x, y) === 'field' && !(key in this.crops);
+      const untilled = !this.ground_frozen(key) && this.map.tile(x, y) === 'field' && !(key in this.crops);
       return untilled ? 'work' : 'stop';
     }
     if (this.tool === 'Watering Can') {
@@ -8560,7 +8600,7 @@ export class Game {
     const f = this.fest_active();
     const saved = this._fest_saved;
     if (f && saved === null) {
-      this._fest_saved = Object.fromEntries(Object.entries(NPCS).map(([n, d]) => [n, d.where]));
+      this._fest_saved = { ...NPC_HOME };
       const names = Object.keys(NPCS);
       for (let i = 0; i < names.length; i++) {
         const n = names[i];
@@ -8571,10 +8611,9 @@ export class Game {
       if (!this.fest_attended) {
         this.msg(`The ${f[0]} has begun in Market Cross!`, '0A');
       }
-    } else if (!f && saved !== null) {
-      for (const [n, w] of Object.entries(saved)) {
-        if (NPCS[n]) NPCS[n].where = w;
-      }
+    } else if (!f && (saved !== null || Object.entries(NPC_HOME).some(([n, w]) => NPCS[n]?.where !== w))) {
+      // NPCS is module-level: a festival synced by another Game must not leak into this one.
+      for (const [n, w] of Object.entries(NPC_HOME)) NPCS[n].where = w;
       this._fest_saved = null;
       this.npc_pos = {};
     }
@@ -9380,10 +9419,14 @@ export class Game {
     // Incubator & Chickens
     if (this.incubator_days > 0) {
       this.incubator_days -= 1;
-      if (this.incubator_days === 0 && this.chickens < this.coop_cap()) {
-        this.chickens += 1;
-        this.chicken_personalities.push(pickPersonality(this.absday() + this.chickens));
-        report.push('Cheep cheep! A new baby chick hatched in your Incubator!');
+      if (this.incubator_days === 0) {
+        if (this.chickens < this.coop_cap()) {
+          this.add_chicken();
+          report.push('Cheep cheep! A new baby chick hatched in your Incubator!');
+        } else {
+          this.incubator_days = 1; // keep the egg warm until the coop has room
+          report.push('The egg is ready to hatch, but your coop is full. It stays in the Incubator until there is room.');
+        }
       }
     }
     if (this.fed) {
@@ -11840,9 +11883,7 @@ export class Game {
     if (!this.house_flags.includes(name)) {
       this.house_flags.push(name);
     }
-    if (name === 'Big Bed') {
-      this.max_stamina = this.calc_max_stamina();
-    }
+    if (name === 'Big Bed') this.recompute_max_stamina();
     this.rebuild_house();
     return [`Ingrid finished building your ${name}! ${EXPANSIONS[name]?.[3] || ''}`];
   }
