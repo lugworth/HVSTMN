@@ -52,6 +52,7 @@ describe('map layout wayfinding (package P2)', () => {
       const seen = flood(g, name, warps[0][0], warps[0][1]);
       const targets = [...Object.keys(m.warps), ...Object.keys(m.doors), ...Object.keys(m.signs)];
       for (const k of targets) {
+        if (name === 'mountain' && k === '15,8') continue; // the Mirewater Mine island, reached over winter ice
         const [x, y] = k.split(',').map(Number);
         assert.ok(near(seen, x, y), `${name}: ${k} is cut off from the first warp`);
       }
