@@ -14,6 +14,7 @@ import {
   dpadDirection,
   firstStep,
   lineHeight,
+  REPEAT_DELAY_MS,
   REPEAT_MS,
   type Dir,
 } from '@/src/game/viewport';
@@ -192,7 +193,6 @@ export default function GameScreen() {
   /** The game menu: closed (null), or open with focus on its first or last item ('none' on touch). */
   const [menu, setMenu] = useState<'first' | 'last' | 'none' | null>(null);
   const menuOpenRef = useRef(false);
-  const rowKeyInterruptedRef = useRef(false);
   const rowPointerRef = useRef<number | null>(null);
   const rowRepeatRef = useRef<ReturnType<typeof createRowRepeat> | null>(null);
   if (!rowRepeatRef.current) {
@@ -477,7 +477,6 @@ export default function GameScreen() {
   const focusGame = useCallback(() => canvasRef.current?.focus({ preventScroll: true }), []);
   const openMenu = useCallback((focus: 'first' | 'last' | 'none', opener: Element | null) => {
     stopRow();
-    rowKeyInterruptedRef.current = true;
     if (gameRef.current) gameRef.current.row = null;
     menuOpenRef.current = true;
     menuOpenerRef.current = opener instanceof HTMLElement && opener !== document.body ? opener : null;
@@ -831,7 +830,6 @@ export default function GameScreen() {
     screen.onRender = () => {
       // A dialog can open and close between repeat ticks; a new press must start any later row.
       if (gameRef.current?.modal_depth) {
-        rowKeyInterruptedRef.current = true;
         gameRef.current.row = null;
         if (rowPointerRef.current !== null) stopRow();
       }
@@ -935,23 +933,20 @@ export default function GameScreen() {
         if (!e.repeat) heldPress(name, dir);
         return;
       }
+      if (name === 'row-repeat' && (!gameRef.current?.row || screen.keyQueue.length > 0)) return;
       sendKey(name);
     };
     const onKeyUp = (e: KeyboardEvent) => {
       const name = KEYMAP[e.key] ?? e.key;
       if (WALK_KEYS[name]) heldRelease(name);
-    };
-    // A key let go in another window never sends its keyup here.
-    const onBlur = () => heldReleaseAll();
-
-    const onKeyUp = (e: KeyboardEvent) => {
       if ((e.key === 'c' || e.key === 'C') && rowPointerRef.current === null) {
         rowRepeatRef.current?.stop();
       }
     };
+    // Keys released in another window never send their keyup here.
     const onBlur = () => {
+      heldReleaseAll();
       stopRow();
-      rowKeyInterruptedRef.current = true;
       if (gameRef.current) gameRef.current.row = null;
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1052,6 +1047,7 @@ export default function GameScreen() {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       heldReleaseAll();
+      stopRow();
       if (heldTimer.current) clearInterval(heldTimer.current);
       heldTimer.current = null;
       window.removeEventListener('resize', onResize);
@@ -1067,7 +1063,7 @@ export default function GameScreen() {
       clearInterval(hudTimer);
       cancelWalk();
     };
-  }, [sendKey, cancelWalk, heldPress, heldRelease, heldReleaseAll]);
+  }, [sendKey, cancelWalk, heldPress, heldRelease, heldReleaseAll, stopRow]);
 
   // Leaving the name prompt (by any button) clears the field and drops the keyboard; iOS can
   // leave the page scrolled after its keyboard closes, so snap back.
