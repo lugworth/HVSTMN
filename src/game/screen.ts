@@ -300,7 +300,7 @@ export class Screen {
     corner(x + w - 1, y + h - 1, 'box:br');
     if (title) {
       // never run over the top-right corner: ` title ` sits between x+2 and x+w-3
-      this.put(x + 2, y, ` ${title.slice(0, Math.max(0, w - 6))} `, tfg, bg, true);
+      this.put(x + 2, y, ` ${title.slice(0, Math.max(0, w - 4))} `, tfg, bg, true);
     }
   }
 
