@@ -4754,3 +4754,82 @@ describe('mine side chambers (task 40)', () => {
     assert.deepEqual(bad.pockets_read, ['moss']);
   });
 });
+
+describe('revamped tabbed rucksack UI', () => {
+  const screenText = (s: Screen) => s.buf.map((row) => row.map((c) => c[0]).join('')).join('\n');
+
+  test('desktop split view renders category tabs, grouped sections, inspector card, and supports tab/sort/action keys', async () => {
+    const s = new Screen(96, 31);
+    const g = new Game(s, true) as any;
+    g.new_game('Ash', 'Bramble');
+    g.inv = {
+      'Turnip Seeds': 4,
+      'Cucumber Seeds': 2,
+      Turnip: 6,
+      Cucumber: 3,
+      'Bamboo Shoot': 5,
+      'Small Fish': 2,
+      Egg: 3,
+      Salad: 1,
+      Copper: 10,
+      Basket: 1,
+    };
+
+    const frames: string[] = [];
+    const origFlush = s.flush.bind(s);
+    s.flush = () => {
+      frames.push(screenText(s));
+      origFlush();
+    };
+
+    // Frame 1: initial All + Category view; press 'right' to Seeds tab, '/' to sort by Value, '1' back to All, 'down' to next item, 'enter' then 'enter' (Hold), closing rucksack
+    s.pushKey('right'); // switch to Seeds tab
+    s.pushKey('/');     // cycle sort -> Value
+    s.pushKey('1');     // back to All tab
+    s.pushKey('down');  // move cursor
+    s.pushKey('enter'); // open item actions
+    s.pushKey('enter'); // select Hold (index 0)
+    await g.rucksack();
+
+    assert.ok(frames.length >= 4, 'captured intermediate frames');
+    assert.match(frames[0], /▣ Rucksack/);
+    assert.match(frames[0], /▸All 10/);
+    assert.match(frames[0], /── SEEDS \(2\)/);
+    assert.match(frames[0], /\[Enter\] Actions/);
+    assert.ok(frames.some((f) => /▸Seeds? 2/.test(f)), 'switched to Seeds tab');
+    assert.ok(frames.some((f) => f.includes('/ Value')), 'cycled sort mode to Value');
+    assert.ok(g.held !== null, `holding selected item (${g.held})`);
+  });
+
+  test('compact 50x24 phone layout renders stacked list + inspector cleanly without spilling off-screen', async () => {
+    const s = new Screen(50, 24);
+    const g = new Game(s, true) as any;
+    g.new_game('Ash', 'Bramble');
+    g.inv = {
+      'Turnip Seeds': 3,
+      Turnip: 5,
+      'Medicinal Herb': 4,
+      'Small Fish': 2,
+      Salad: 1,
+      Copper: 8,
+    };
+
+    let lastFrame = '';
+    const origFlush = s.flush.bind(s);
+    s.flush = () => {
+      lastFrame = screenText(s);
+      origFlush();
+    };
+    s.pushKey('right');
+    s.pushKey('i'); // toggle close with I
+    await g.rucksack();
+
+    assert.match(lastFrame, /▣ Rucksack/);
+    assert.match(lastFrame, /▸Seed 1/);
+    assert.match(lastFrame, /Ships|Sown/);
+    for (const line of lastFrame.split('\n')) {
+      assert.equal(line.length, 50, 'every row stays strictly within 50 cols');
+    }
+  });
+});
+

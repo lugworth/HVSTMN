@@ -367,12 +367,19 @@ html, body {
   justify-content: center;
   min-height: 44px;
   padding: 4px 6px;
-  border: 1px solid var(--base02);
-  background: var(--base01);
+  border: 1px solid var(--fence-rail);
+  background: #140b04;
+  color: var(--base06);
   font-weight: 700;
   text-align: center;
   white-space: normal;
+  box-shadow: inset 0 1px 0 rgba(154, 90, 17, 0.22);
   touch-action: manipulation;
+}
+.game-menu-sheet .menu-item:active {
+  background: var(--sign-board);
+  border-color: var(--base0C);
+  color: var(--base07);
 }
 .game-menu-sheet .menu-key,
 .game-menu-sheet .menu-mark { display: none; } /* on touch the green border shows what is checked */
@@ -381,7 +388,11 @@ html, body {
   .game-menu-sheet .menu-group { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
   .game-menu-sheet .menu-item { min-height: 40px; }
 }
-.game-menu-sheet .menu-item[aria-checked="true"] { border-color: var(--base0B); }
+.game-menu-sheet .menu-item[aria-checked="true"] {
+  background: var(--sign-board);
+  border-color: var(--base0B);
+  color: var(--base07);
+}
 @media (max-width: 1120px) {
   .game-toolbar { gap: 3px; padding: 7px 10px; font-size: clamp(10.5px, 1vw, 13px); }
   .game-control { gap: 4px; padding: 4px 5px; }
@@ -405,8 +416,8 @@ html, body {
   }
 }
 
-/* ---- Touch layout. Portrait: map on top, then a utility row, D-pad (left thumb) and actions
-   (right thumb). Short landscape screens (phones) put the controls in columns either side. */
+/* ---- Touch layout. Portrait: map on top, then a fence-trimmed timber deck with utility signboards,
+   D-pad (left thumb) and action cluster (right thumb). Short landscape screens flank the map. */
 .touch-ui {
   --u: clamp(40px, 12.5vw, 56px);
   --gap: 6px;
@@ -417,6 +428,7 @@ html, body {
     "stage stage"
     "util util"
     "move act";
+  background: #070401;
   touch-action: none;
   overscroll-behavior: none;
 }
@@ -425,6 +437,7 @@ html, body {
   position: relative;
   min-width: 0;
   min-height: 0;
+  background: var(--base00);
 }
 .touch-ui .t-util {
   grid-area: util;
@@ -432,7 +445,10 @@ html, body {
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: var(--gap);
-  padding: 6px 12px 0;
+  padding: 8px 10px 0;
+  border-top: 1px solid var(--fence-rail);
+  box-shadow: inset 0 1px 0 var(--sign-board);
+  background: #070401;
 }
 .touch-ui .t-util-a,
 .touch-ui .t-util-b {
@@ -448,12 +464,12 @@ html, body {
 .touch-ui .t-move {
   grid-area: move;
   align-self: end;
-  padding: 10px 0 12px 12px;
+  padding: 10px 0 12px 10px;
 }
 .touch-ui .t-act {
   grid-area: act;
   align-self: end;
-  padding: 10px 12px 12px 0;
+  padding: 10px 10px 12px 0;
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
@@ -467,6 +483,8 @@ html, body {
   }
   .touch-ui .t-util {
     display: contents;
+    border-top: 0;
+    box-shadow: none;
   }
   .touch-ui .t-util-a,
   .touch-ui .t-util-b {
@@ -475,22 +493,27 @@ html, body {
     align-content: start;
     gap: var(--gap);
     padding-top: 8px;
+    background: #070401;
   }
   .touch-ui .t-util-a {
     grid-area: util-a;
     padding-left: 10px;
     padding-right: 8px;
+    border-right: 1px solid var(--fence-rail);
   }
   .touch-ui .t-util-b {
     grid-area: util-b;
     padding-left: 8px;
     padding-right: 10px;
+    border-left: 1px solid var(--fence-rail);
   }
   .touch-ui .t-move {
     padding: 8px 8px 10px 10px;
+    border-right: 1px solid var(--fence-rail);
   }
   .touch-ui .t-act {
     padding: 8px 10px 10px 8px;
+    border-left: 1px solid var(--fence-rail);
   }
 }
 
@@ -499,32 +522,47 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   text-align: center;
   min-width: 0;
   min-height: 44px;
-  padding: 0 4px;
+  padding: 0 5px;
   border-radius: 0;
-  border: 1px solid var(--base02);
-  background: var(--base01);
-  color: var(--base05);
-  font: 700 clamp(11px, calc(var(--u, 44px) * 0.24), 14px)/1.1 var(--font-display);
-  letter-spacing: 0.02em;
-  box-shadow: 0 2px 0 var(--base00);
+  border: 1px solid var(--fence-rail);
+  background: #140b04;
+  color: var(--base06);
+  font: 700 clamp(10.5px, calc(var(--u, 44px) * 0.23), 13.5px)/1.1 var(--font-display);
+  letter-spacing: 0.03em;
+  box-shadow: inset 0 1px 0 rgba(154, 90, 17, 0.26), 0 2px 0 var(--base00);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
 }
+.pad-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  line-height: 0;
+}
+.pad-lbl {
+  min-width: 0;
+  line-height: 1.05;
+}
+.pad-util {
+  gap: 4px;
+  padding: 0 4px;
+}
 .pad-btn:active,
-.dpad-arm[data-on="1"] {
-  background: var(--base02);
-  border-color: var(--base03);
+.pad-menu[aria-expanded="true"] {
+  background: var(--sign-board);
+  border-color: var(--base0C);
+  color: var(--base07);
+  box-shadow: inset 0 1px 0 rgba(0, 255, 255, 0.2), 0 1px 0 var(--base00);
 }
 .pad-btn[aria-pressed="true"] {
   border-color: currentColor; /* toggles that are on wear their own colour */
-}
-.dpad-arm[data-on="1"] {
-  color: var(--base07);
 }
 .pad-btn:active,
 .dpad-arm[data-on="1"] {
@@ -542,46 +580,90 @@ html, body {
   width: max-content; /* the box must hug the arms: directions are measured from its centre */
   grid-template-columns: repeat(3, var(--u));
   grid-template-rows: repeat(3, var(--u));
-  gap: var(--gap);
+  gap: 4px;
   touch-action: none;
 }
 .dpad-arm {
-  font-size: calc(var(--u) * 0.36);
+  background: #1a0f06;
+  border-color: var(--fence-post);
+  color: var(--base05);
+  font-size: calc(var(--u) * 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 153, 0, 0.16), 0 2px 0 var(--base00);
   pointer-events: none; /* the D-pad surface tracks the thumb */
 }
-.dpad-up { grid-area: 1 / 2; }
-.dpad-left { grid-area: 2 / 1; }
-.dpad-right { grid-area: 2 / 3; }
-.dpad-down { grid-area: 3 / 2; }
+.dpad-up { grid-area: 1 / 2; border-bottom-color: var(--fence-rail); }
+.dpad-left { grid-area: 2 / 1; border-right-color: var(--fence-rail); }
+.dpad-right { grid-area: 2 / 3; border-left-color: var(--fence-rail); }
+.dpad-down { grid-area: 3 / 2; border-top-color: var(--fence-rail); }
+.dpad-arm[data-on="1"] {
+  background: var(--sign-board);
+  border-color: var(--base0C);
+  color: var(--base0C);
+  box-shadow: inset 0 0 0 1px rgba(0, 255, 255, 0.35), 0 1px 0 var(--base00);
+}
 .dpad-hub {
   grid-area: 2 / 2;
-  margin: 22%;
-  border-radius: 50%;
-  border: 1px solid var(--base01);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12%;
+  border-radius: 0;
+  background: #140b04;
+  border: 1px solid var(--fence-rail);
+  box-shadow: inset 0 0 0 2px #090502;
+  color: var(--fence-post);
+  font: 700 calc(var(--u) * 0.28)/1 var(--font-display);
+  pointer-events: none;
 }
 
 .act-grid {
   display: grid;
-  grid-template-columns: calc(var(--u) * 1.35) calc(var(--u) * 1.65);
+  grid-template-columns: calc(var(--u) * 1.48) calc(var(--u) * 1.66);
   grid-template-rows: calc(var(--u) * 1.15) calc(var(--u) * 1.85);
   gap: var(--gap);
 }
 .act-grid .pad-btn {
-  font-size: clamp(10px, calc(var(--u) * 0.24), 13px);
+  font-size: clamp(10px, calc(var(--u) * 0.23), 13px);
+}
+.pad-util .pad-lbl,
+.act-tool .pad-lbl,
+.act-use .pad-lbl,
+.act-menu .pad-lbl {
+  white-space: nowrap;
 }
 .act-tool,
-.act-use {
+.act-menu {
+  background: #140b04;
+  border-color: var(--fence-rail);
   color: var(--base05);
 }
-.act-menu {
-  color: var(--base04);
+.act-use {
+  background: #241408;
+  border-color: var(--fence-post);
+  color: var(--base07);
 }
 .act-grid .act-a {
-  color: var(--base00);
-  background: var(--base0C);
-  border-color: var(--base0C);
-  font-size: clamp(11px, calc(var(--u) * 0.28), 15px);
+  flex-direction: column;
+  gap: 5px;
+  color: var(--base07);
+  background: var(--sign-board);
+  border: 2px solid var(--base0C);
+  box-shadow: inset 0 0 0 2px var(--base00), inset 0 0 0 3px var(--fence-post), 0 2px 0 var(--base00);
+  font-size: clamp(11px, calc(var(--u) * 0.26), 14px);
+  letter-spacing: 0.05em;
+}
+.act-grid .act-a .pad-ico {
+  padding: 3px;
+  background: var(--base00);
+  border: 1px solid var(--base0C);
+}
+.act-grid .act-a .pad-lbl {
   word-spacing: 100vw; /* one word per line: "USE / HAMMER" */
+}
+.act-grid .act-a:active {
+  background: #0a2428;
+  border-color: var(--base07);
+  color: var(--base0C);
 }
 
 .type-bar {
@@ -593,9 +675,10 @@ html, body {
   display: flex;
   gap: 6px;
   padding: 6px;
-  border: 1px solid var(--base0D);
-  border-radius: 10px;
-  background: var(--base00);
+  border: 1px solid var(--fence-post);
+  border-radius: 0;
+  background: #0c0703;
+  box-shadow: 0 0 0 2px var(--base00), inset 0 1px 0 var(--sign-board);
 }
 /* Hidden but focusable: the field must already be in the page when a prompt opens. */
 .type-bar.type-off {
@@ -606,8 +689,8 @@ html, body {
   flex: 1;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid var(--base02);
-  border-radius: 6px;
+  border: 1px solid var(--fence-rail);
+  border-radius: 0;
   background: var(--base00);
   color: var(--base07);
   font: 16px "HRVSTMN Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace; /* >= 16px: no iOS focus zoom */
@@ -620,6 +703,8 @@ html, body {
 }
 .type-bar .type-done {
   padding: 0 14px;
+  background: var(--sign-board);
+  border-color: var(--base0B);
   color: var(--base0B);
 }
 
@@ -640,11 +725,11 @@ html, body {
 }
 .game-root[data-text-scale="large"] .pad-btn,
 .game-root[data-text-scale="large"] .dpad-arm {
-  font-size: clamp(13px, calc(var(--u, 44px) * 0.28), 16px);
+  font-size: clamp(12px, calc(var(--u, 44px) * 0.26), 15px);
   min-height: 46px;
 }
 .game-root[data-text-scale="xlarge"] .pad-btn,
 .game-root[data-text-scale="xlarge"] .dpad-arm {
-  font-size: clamp(15px, calc(var(--u, 44px) * 0.32), 18px);
+  font-size: clamp(13.5px, calc(var(--u, 44px) * 0.29), 17px);
   min-height: 48px;
 }

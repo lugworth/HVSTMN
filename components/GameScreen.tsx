@@ -83,6 +83,10 @@ const KEYMAP: Record<string, string> = {
   ArrowDown: 'down',
   ArrowLeft: 'left',
   ArrowRight: 'right',
+  PageUp: 'pgup',
+  PageDown: 'pgdn',
+  Home: 'home',
+  End: 'end',
   Enter: 'enter',
   Escape: 'esc',
   Backspace: 'backspace',
@@ -134,23 +138,25 @@ const TITLE_TOOLBAR = [
 type Hud = { label: string; modal: boolean; typing: boolean; tool: string; idle: boolean; started: boolean };
 const sameHud = (a: Hud, b: Hud) =>
   a.label === b.label && a.modal === b.modal && a.typing === b.typing && a.tool === b.tool && a.idle === b.idle && a.started === b.started;
-type PadKey = { key: string; label: string; color: string; title: string };
+type PadKey = { key: string; label: string; color: string; title: string; icon: ToolbarIconId };
 
 // Touch utility buttons (colours from base16 Isotope Dark).
 const UTIL_A: PadKey[] = [
-  { key: 'i', label: 'BAG', color: '#d0d0d0', title: 'Rucksack (I)' },
-  { key: 'y', label: 'TODAY', color: '#33ff00', title: "Today's plan (Y)" },
-  { key: 'n', label: 'MAP', color: '#00ffff', title: 'Minimap (N)' },
-  { key: 'r', label: 'NOTES', color: '#ff0099', title: 'Villager notes (R)' },
+  { key: 'i', label: 'BAG', color: '#9a5a11', title: 'Rucksack (I)', icon: 'bag' },
+  { key: 'y', label: 'TODAY', color: '#ff9900', title: "Today's plan (Y)", icon: 'today' },
+  { key: 'n', label: 'MAP', color: '#00ffff', title: 'Minimap (N)', icon: 'map' },
+  { key: 'r', label: 'NOTES', color: '#ff0099', title: 'Villager notes (R)', icon: 'notes' },
 ];
-const HORSE: PadKey = { key: 'H', label: 'HORSE', color: '#ff9900', title: 'Whistle for your horse (Shift+H)' };
-const INFO: PadKey = { key: 'p', label: 'INFO', color: '#cc00ff', title: 'Show or hide the status panel' };
+const HORSE: PadKey = { key: 'H', label: 'HORSE', color: '#ff9900', title: 'Whistle for your horse (Shift+H)', icon: 'horse' };
+const INFO: PadKey = { key: 'p', label: 'INFO', color: '#cc00ff', title: 'Show or hide the status panel', icon: 'info' };
 /** Menu entries the touch utility row already has (MAP, HORSE, INFO); the touch menu leaves them out. */
 const ON_PAD = new Set(['map', 'horse', 'panel']);
 
 /** A touch button: fires on pointer-down for snappy input; keyboard activation still works. */
 function PadButton({
   label,
+  icon,
+  iconColor,
   onPress,
   className = '',
   style,
@@ -158,6 +164,8 @@ function PadButton({
   menu,
 }: {
   label: React.ReactNode;
+  icon?: ToolbarIconId;
+  iconColor?: string;
   onPress: () => void;
   className?: string;
   style?: React.CSSProperties;
@@ -168,7 +176,7 @@ function PadButton({
   return (
     <button
       type="button"
-      className={`pad-btn ${className}`}
+      className={`pad-btn ${className}`.trim()}
       style={style}
       title={title}
       aria-label={title}
@@ -183,7 +191,12 @@ function PadButton({
         if (e.detail === 0) onPress(); // keyboard / assistive activation; taps were handled on pointer-down
       }}
     >
-      {label}
+      {icon && (
+        <span className="pad-ico" style={iconColor ? { color: iconColor } : undefined} aria-hidden="true">
+          <PixelIcon icon={icon} className="pad-pixel" />
+        </span>
+      )}
+      <span className="pad-lbl">{label}</span>
     </button>
   );
 }
@@ -1153,7 +1166,7 @@ export default function GameScreen() {
     }
   }, [hud.typing]);
 
-  // Tap the map to walk there (touch only, outside menus); a tap that closes the menu doesn't walk.
+  // Tap/click modal targets (on any device) or tap the map to walk there (touch only, outside menus).
   const tapRef = useRef<{ id: number; x: number; y: number; t: number } | null>(null);
   const onStagePointerDown = (e: React.PointerEvent) => {
     if (menu) {
@@ -1166,17 +1179,25 @@ export default function GameScreen() {
   const onStagePointerUp = (e: React.PointerEvent) => {
     const tap = tapRef.current;
     tapRef.current = null;
-    if (!isTouch || !tap || tap.id !== e.pointerId) return;
+    if (!tap || tap.id !== e.pointerId) return;
     if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 12 || performance.now() - tap.t > 600) return;
     const canvas = canvasRef.current;
     const screen = screenRef.current;
     const game = gameRef.current;
-    if (!canvas || !screen || !game || game.modal_depth > 0 || !game.started) return;
+    if (!canvas || !screen || !game || !game.started) return;
     const r = canvas.getBoundingClientRect();
     const x = Math.floor(((e.clientX - r.left) / r.width) * screen.w);
     const y = Math.floor(((e.clientY - r.top) / r.height) * screen.h);
     const tag = screen.tags[y]?.[x];
-    if (!tag || tag.t === 'ui' || tag.wx === undefined || tag.wy === undefined) return;
+    if (game.modal_depth > 0) {
+      if (tag?.hit) {
+        buzz(6);
+        sendKey(tag.hit);
+        if (!isTouch) focusGame();
+      }
+      return;
+    }
+    if (!isTouch || !tag || tag.t === 'ui' || tag.wx === undefined || tag.wy === undefined) return;
     if (tag.wx === game.px && tag.wy === game.py) return;
     buzz(6);
     walkTo(tag.wx, tag.wy);
@@ -1338,14 +1359,29 @@ export default function GameScreen() {
           <div className="t-util">
             <div className="t-util-a">
               {UTIL_A.map((b) => (
-                <PadButton key={b.key} label={b.label} title={b.title} style={{ color: b.color }} onPress={() => press(b.key)} />
+                <PadButton
+                  key={b.key}
+                  label={b.label}
+                  icon={b.icon}
+                  iconColor={b.color}
+                  title={b.title}
+                  className="pad-util"
+                  onPress={() => press(b.key)}
+                />
               ))}
             </div>
             <div className="t-util-b">
-              <PadButton label={HORSE.label} title={HORSE.title} style={{ color: HORSE.color }} onPress={() => press(HORSE.key)} />
+              <PadButton
+                label={HORSE.label}
+                icon={HORSE.icon}
+                iconColor={HORSE.color}
+                title={HORSE.title}
+                className="pad-util"
+                onPress={() => press(HORSE.key)}
+              />
               <button
                 type="button"
-                className="pad-btn"
+                className="pad-btn pad-util"
                 title="Work a row: tap to preview or step, hold to continue (C)"
                 aria-label="Work a row: tap to preview or step, hold to continue"
                 onPointerDown={(e) => {
@@ -1373,15 +1409,27 @@ export default function GameScreen() {
                   if (e.detail === 0 && game?.started && !game.modal_depth && !game.typing && !menuOpenRef.current) press('c');
                 }}
               >
-                ROW
+                <span className="pad-ico" style={{ color: '#33ff00' }} aria-hidden="true">
+                  <PixelIcon icon="row" className="pad-pixel" />
+                </span>
+                <span className="pad-lbl">ROW</span>
               </button>
               {compact && (
-                <PadButton label={INFO.label} title={INFO.title} style={{ color: INFO.color }} onPress={() => press(INFO.key)} />
+                <PadButton
+                  label={INFO.label}
+                  icon={INFO.icon}
+                  iconColor={INFO.color}
+                  title={INFO.title}
+                  className="pad-util"
+                  onPress={() => press(INFO.key)}
+                />
               )}
               <PadButton
                 label="MENU"
+                icon="menu"
+                iconColor="#9a5a11"
                 title="Game menu: tools, saving, settings and help (F10)"
-                style={{ color: '#d0d0d0' }}
+                className="pad-util pad-menu"
                 menu={menu !== null}
                 onPress={() => {
                   buzz(8);
@@ -1437,21 +1485,44 @@ export default function GameScreen() {
                   {d === 'up' ? '▲' : d === 'down' ? '▼' : d === 'left' ? '◀' : '▶'}
                 </button>
               ))}
-              <span className="dpad-hub" aria-hidden="true" />
+              <span className="dpad-hub" aria-hidden="true">◇</span>
             </div>
           </div>
 
           <div className="t-act">
             <div className="act-grid">
-              <PadButton label="TOOL ▸" title="Next tool (Tab)" className="act-tool" onPress={() => press('tab')} />
-              <PadButton label="USE" title="Use the equipped tool (Space)" className="act-use" onPress={() => press('space')} />
+              <PadButton
+                label="TOOL"
+                icon="swap"
+                iconColor="#c0c0c0"
+                title="Next tool (Tab)"
+                className="act-tool"
+                onPress={() => press('tab')}
+              />
+              <PadButton
+                label="USE"
+                icon={hud.tool ? toolIconId(hud.tool) : 'hoe'}
+                iconColor="#ff9900"
+                title="Use the equipped tool (Space)"
+                className="act-use"
+                onPress={() => press('space')}
+              />
               <PadButton
                 label={hud.typing ? 'SKIP' : hud.modal ? 'BACK' : 'DIARY'}
+                icon="diary"
+                iconColor="#e0e0e0"
                 title={hud.modal ? 'Back / cancel (Esc)' : 'Diary & pause menu (Esc)'}
                 className="act-menu"
                 onPress={() => press('esc')}
               />
-              <PadButton label={hud.label} title={`${hud.label} (context action)`} className="act-a" onPress={pressAction} />
+              <PadButton
+                label={hud.label}
+                icon={hud.label === 'WATER' ? 'watering_can' : 'act'}
+                iconColor="#00ffff"
+                title={`${hud.label} (context action)`}
+                className="act-a"
+                onPress={pressAction}
+              />
             </div>
           </div>
         </>

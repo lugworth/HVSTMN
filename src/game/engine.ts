@@ -238,6 +238,26 @@ import {
   worksSummary,
 } from './rules';
 import {
+  type InvCategory,
+  type InvSort,
+  type InvItemEntry,
+  INV_SORT_LABEL,
+  INV_TABS,
+  nextSortMode,
+  buildInventoryEntries,
+  buildInventoryTabs,
+  sortAndFilterInventory,
+  buildDisplayRows,
+  findItemRowIndex,
+  stepItemRow,
+  pageItemRow,
+  computeListViewport,
+  fitTabStrip,
+  computeInventoryLayout,
+  formatListItemRow,
+  wrapNoteLines,
+} from './inventory-ui';
+import {
   SAVE_VERSION,
   type SaveSlot,
   type SaveSummary,
@@ -5316,37 +5336,190 @@ export class Game {
     }
   }
 
-  async rucksack(): Promise<void> {
+  private rucksack_item_notes(item: string, basketTotal: number): { text: string; fg: string }[] {
+    const notes: { text: string; fg: string }[] = [];
+    if (item === 'Basket') {
+      const contents = Object.entries(this.basket)
+        .map(([k, v]) => `${k} ×${v}`)
+        .join(', ');
+      notes.push({
+        text: `Holds up to ${BASKET_CAPACITY} shippable items (${basketTotal}/${BASKET_CAPACITY}).`,
+        fg: '0C',
+      });
+      notes.push({
+        text: contents ? `Inside: ${contents}` : 'Empty — Hold while harvesting crops with X to pack automatically.',
+        fg: contents ? '05' : '04',
+      });
+      return notes;
+    }
+
+    const preserve = this.preserve_note(item);
+    if (preserve) notes.push({ text: preserve, fg: '09' });
+
+    if (item.endsWith(' Seeds')) {
+      const crop = item.slice(0, -6);
+      for (const ln of this.crop_forecast_lines(crop)) notes.push({ text: ln, fg: '0B' });
+      if (item === `${COMPANION.helper} Seeds`) {
+        notes.push({
+          text: `Companion: bloom beside ${COMPANION.crop} gives ${1 + COMPANION.bonus} per picking.`,
+          fg: '0A',
+        });
+      } else if (item === `${COMPANION.crop} Seeds`) {
+        notes.push({
+          text: `Companion: plant beside blooming ${COMPANION.helper} for +${COMPANION.bonus} yield.`,
+          fg: '0A',
+        });
+      }
+    }
+
+    if (item === 'Compost') {
+      notes.push({
+        text: `Equip (Tab) and spread on tilled soil: +${COMPOST_BONUS} at next harvest.`,
+        fg: '0B',
+      });
+    } else if (item === 'Waystone') {
+      notes.push({ text: 'Use from actions to warp straight to any valley landmark.', fg: '0C' });
+    } else if (item === SAPLING) {
+      notes.push({ text: 'Equip & plant on orchard spots east of the farmhouse (Fall fruit).', fg: '0B' });
+    } else if (isFarmPiece(item)) {
+      notes.push({ text: FARM_PIECES[item].info, fg: '05' });
+    }
+
+    const recipe = this.seed_recipe(item);
+    if (recipe) {
+      notes.push({
+        text: `Seed Saver: ${recipe.need} ${item} → ${recipe.bags} Seed Bag.`,
+        fg: '0B',
+      });
+    }
+
+    // Saturday market demand hint (avoid duplicating preserve note)
+    if (!preserve) {
+      const wants = this.market_wants();
+      if (wants.pantry.includes(item)) {
+        notes.push({ text: `Sat Market: Gideon seeks ${item} (${MARKET_SHOPPERS.pantry.markup}×).`, fg: '09' });
+      } else if (wants.flower === item) {
+        notes.push({ text: `Sat Market: Rosalind seeks ${item} (${MARKET_SHOPPERS.flower.markup}×).`, fg: '0A' });
+      }
+    }
+
+    // Active Otto shipping contracts & weekly board order
+    const contract = this.contracts.find((c) => !c.done && c.item === item);
+    if (contract) {
+      notes.push({
+        text: `Otto Contract: ${contract.shipped}/${contract.need} shipped (+${contract.bonusGold}G bonus).`,
+        fg: '0C',
+      });
+    }
+    if (this.order) {
+      const t = ORDERS.find((o) => o.id === this.order!.id);
+      if (t) {
+        const pieceIdx = t.pieces.findIndex((p) => p.any.includes(item));
+        if (pieceIdx >= 0 && (this.order.delivered[pieceIdx] || 0) < t.pieces[pieceIdx].qty) {
+          notes.push({
+            text: `Board Order (${t.npc}): ${this.order.delivered[pieceIdx]}/${t.pieces[pieceIdx].qty} delivered.`,
+            fg: '0E',
+          });
+        }
+      }
+    }
+
+    const eat = ITEMS[item]?.[1] || 0;
+    if (eat > 0 && (ITEMS[item]?.[2] === 'dish' || item in RECIPES)) {
+      const b = foodBuffForDish(item, eat);
+      if (b) notes.push({ text: `Meal Buff: ${b.label}`, fg: '0A' });
+    } else if (item.includes('Brisk Tonic') || item === 'Hedgerow Tea' || item === 'Relaxation Tea' || item === 'Frostwort') {
+      notes.push({ text: 'Also eases -35 Fatigue when consumed.', fg: '0C' });
+    }
+
+    if (ITEMS[item]?.[2] === 'crop') {
+      notes.push({ text: 'Can also be tossed on the farm Compost Heap.', fg: '04' });
+    }
+
+    return notes;
+  }
+
+  private async rucksack_item_action(item: string, basketTotal: number): Promise<'continue' | 'close'> {
+    const sub = [this.held === item ? 'Put away' : 'Hold (to gift / offer / use)'];
+    if (ITEMS[item] && ITEMS[item][1] !== 0) {
+      sub.push('Eat');
+    }
+    if (item !== 'Basket' && this.inv['Basket'] && ITEMS[item]?.[0] > 0 && basketTotal < BASKET_CAPACITY) {
+      sub.push(`Put in Basket (${basketTotal}/${BASKET_CAPACITY})`);
+    }
+    if (item === 'Waystone') {
+      sub.push('Teleport');
+    }
+    const recipe = this.seed_recipe(item);
+    if (recipe) sub.push(`Save seeds (${recipe.need} → ${recipe.bags} bag)`);
+    if (ITEMS[item]?.[2] === 'crop') {
+      sub.push('Compost one');
+      if ((this.inv[item] || 0) > 1) sub.push(`Compost all ${this.inv[item]}`);
+    }
+    sub.push('Cancel');
+    const s2 = await this.menu(
+      `▣ ${item}`,
+      sub,
+      0,
+      null,
+      null,
+      { style: { kind: 'hud', accent: '09' }, alignToMap: true },
+    );
+    if (s2 === null || sub[s2] === 'Cancel') return 'continue';
+    if (sub[s2] === 'Eat') {
+      this.take(item);
+      const baseGain = ITEMS[item][1];
+      const gain = ITEMS[item][2] === 'forage' && this.has_perk('forage_stamina') ? Math.round(baseGain * 1.25) : baseGain;
+      this.stamina = clamp(this.stamina + gain, 0, this.max_stamina);
+      if (item.includes('Brisk Tonic') || item === 'Hedgerow Tea' || item === 'Relaxation Tea' || item === 'Frostwort') {
+        this.fatigue = Math.max(0, this.fatigue - 35);
+      }
+      let buffNote = '';
+      if (ITEMS[item][2] === 'dish' || item in RECIPES) {
+        const b = foodBuffForDish(item, gain);
+        if (b) {
+          this.food_buff = { kind: b.kind, label: b.label, until: this.now_abs() + FOOD_BUFF_MINUTES };
+          buffNote = ` · Buff: ${b.label}`;
+        }
+      }
+      this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina${buffNote})`, '0B');
+    } else if (sub[s2].startsWith('Put in Basket')) {
+      const space = BASKET_CAPACITY - basketTotal;
+      const maxPut = Math.min(space, this.inv[item]);
+      const q = maxPut === 1 ? 1 : await this.ask_qty(`Put how many ${item} in Basket?`, maxPut, ITEMS[item][0], 'Value');
+      if (q > 0) {
+        this.take(item, q);
+        this.basket[item] = (this.basket[item] || 0) + q;
+        this.msg(`Placed ${q} ${item} into your Basket (${getBasketTotal(this.basket)}/${BASKET_CAPACITY}).`, '09');
+      }
+    } else if (sub[s2] === 'Teleport') {
+      await this.use_teleport_stone();
+      return 'close';
+    } else if (sub[s2].startsWith('Save seeds')) {
+      await this.seed_saving_menu(item);
+    } else if (sub[s2] === 'Compost one') {
+      this.compost_crop(item, 1);
+    } else if (sub[s2].startsWith('Compost all')) {
+      this.compost_crop(item, this.inv[item] || 0);
+    } else if (sub[s2] === 'Put away') {
+      this.held = null;
+      this.msg(`You put away the ${item}.`);
+    } else {
+      this.held = item;
+      this.msg(
+        item === 'Basket'
+          ? `Holding Basket (${basketTotal}/${BASKET_CAPACITY}). Harvest crops with X to fill it automatically!`
+          : `You hold the ${item}. Face someone or a pond and press X.`,
+      );
+      return 'close';
+    }
+    return 'continue';
+  }
+
+  private async rucksack_legacy(): Promise<void> {
     while (true) {
       const items = py_sorted(Object.keys(this.inv));
-      if (!items.length) {
-        await this.show_hud_pages(
-          '▣ Rucksack',
-          (cw) => [
-            [
-              {
-                kind: 'ledger',
-                prefix: '▣',
-                prefixCol: '09',
-                label: 'HELD: Nothing',
-                labelCol: '04',
-                value: '0 kinds',
-                valueCol: '03',
-              },
-              { kind: 'fence' },
-              {
-                kind: 'spans',
-                spans: [{ text: 'Your rucksack is empty.', fg: '07', bold: true }],
-              },
-              ...wrapLine('Forage herbs & berries, harvest crops, or visit Hollis\'s Supermarket in town to stock up.', cw).map(
-                (ln): HudPageLine => ({ kind: 'spans', spans: [{ text: ln, fg: '04' }] }),
-              ),
-            ],
-          ],
-          { style: { kind: 'hud', accent: '09' }, alignToMap: true, minWidth: 44, footerHint: 'Any key — Close' },
-        );
-        return;
-      }
+      if (!items.length) return;
       const basketTotal = getBasketTotal(this.basket);
       const opts = items.map((i) => {
         if (i === 'Basket') {
@@ -5409,80 +5582,498 @@ export class Game {
         footerHint: 'Enter: Action · Esc: Close',
       });
       if (sel === null) return;
-      const item = items[sel];
-      const sub = [this.held === item ? 'Put away' : 'Hold (to gift / offer / use)'];
-      if (ITEMS[item] && ITEMS[item][1] !== 0) {
-        sub.push('Eat');
-      }
-      if (item !== 'Basket' && this.inv['Basket'] && ITEMS[item]?.[0] > 0 && basketTotal < BASKET_CAPACITY) {
-        sub.push(`Put in Basket (${basketTotal}/${BASKET_CAPACITY})`);
-      }
-      if (item === 'Waystone') {
-        sub.push('Teleport');
-      }
-      const recipe = this.seed_recipe(item);
-      if (recipe) sub.push(`Save seeds (${recipe.need} → ${recipe.bags} bag)`);
-      if (ITEMS[item]?.[2] === 'crop') {
-        sub.push('Compost one');
-        if ((this.inv[item] || 0) > 1) sub.push(`Compost all ${this.inv[item]}`);
-      }
-      sub.push('Cancel');
-      const s2 = await this.menu(
-        `▣ ${item}`,
-        sub,
-        0,
-        null,
-        null,
-        { style: { kind: 'hud', accent: '09' }, alignToMap: true }
+      const res = await this.rucksack_item_action(items[sel], basketTotal);
+      if (res === 'close') return;
+    }
+  }
+
+  async rucksack(): Promise<void> {
+    if (this.menu !== Game.prototype.menu) {
+      return this.rucksack_legacy();
+    }
+
+    let activeTab: InvCategory = 'all';
+    let sortMode: InvSort = 'category';
+    let lastSelected: string | null = this.held;
+
+    while (true) {
+      const basketTotal = getBasketTotal(this.basket);
+      const allEntries = buildInventoryEntries(
+        this.inv,
+        this.held,
+        basketTotal,
+        BASKET_CAPACITY,
+        (n) => ITEMS[n],
+        (n) => PRESERVES.includes(n),
       );
-      if (s2 === null || sub[s2] === 'Cancel') continue;
-      if (sub[s2] === 'Eat') {
-        this.take(item);
-        const baseGain = ITEMS[item][1];
-        const gain = ITEMS[item][2] === 'forage' && this.has_perk('forage_stamina') ? Math.round(baseGain * 1.25) : baseGain;
-        this.stamina = clamp(this.stamina + gain, 0, this.max_stamina);
-        if (item.includes('Brisk Tonic') || item === 'Hedgerow Tea' || item === 'Relaxation Tea' || item === 'Frostwort') {
-          this.fatigue = Math.max(0, this.fatigue - 35);
-        }
-        let buffNote = '';
-        if (ITEMS[item][2] === 'dish' || item in RECIPES) {
-          const b = foodBuffForDish(item, gain);
-          if (b) {
-            this.food_buff = { kind: b.kind, label: b.label, until: this.now_abs() + FOOD_BUFF_MINUTES };
-            buffNote = ` · Buff: ${b.label}`;
-          }
-        }
-        this.msg(`You ate the ${item}. (${gain >= 0 ? '+' : ''}${gain} Stamina${buffNote})`, '0B');
-      } else if (sub[s2].startsWith('Put in Basket')) {
-        const space = BASKET_CAPACITY - basketTotal;
-        const maxPut = Math.min(space, this.inv[item]);
-        const q = maxPut === 1 ? 1 : await this.ask_qty(`Put how many ${item} in Basket?`, maxPut, ITEMS[item][0], 'Value');
-        if (q > 0) {
-          this.take(item, q);
-          this.basket[item] = (this.basket[item] || 0) + q;
-          this.msg(`Placed ${q} ${item} into your Basket (${getBasketTotal(this.basket)}/${BASKET_CAPACITY}).`, '09');
-        }
-      } else if (sub[s2] === 'Teleport') {
-        await this.use_teleport_stone();
-        return;
-      } else if (sub[s2].startsWith('Save seeds')) {
-        await this.seed_saving_menu(item);
-      } else if (sub[s2] === 'Compost one') {
-        this.compost_crop(item, 1);
-      } else if (sub[s2].startsWith('Compost all')) {
-        this.compost_crop(item, this.inv[item] || 0);
-      } else if (sub[s2] === 'Put away') {
-        this.held = null;
-        this.msg(`You put away the ${item}.`);
-      } else {
-        this.held = item;
-        this.msg(
-          item === 'Basket'
-            ? `Holding Basket (${basketTotal}/${BASKET_CAPACITY}). Harvest crops with X to fill it automatically!`
-            : `You hold the ${item}. Face someone or a pond and press X.`
+      if (!allEntries.length) {
+        await this.show_hud_pages(
+          '▣ Rucksack',
+          (cw) => [
+            [
+              {
+                kind: 'ledger',
+                prefix: '▣',
+                prefixCol: '09',
+                label: 'HELD: Nothing',
+                labelCol: '04',
+                value: '0 kinds',
+                valueCol: '03',
+              },
+              { kind: 'fence' },
+              {
+                kind: 'spans',
+                spans: [{ text: 'Your rucksack is empty.', fg: '07', bold: true }],
+              },
+              ...wrapLine('Forage herbs & berries, harvest crops, or visit Hollis\'s Supermarket in town to stock up.', cw).map(
+                (ln): HudPageLine => ({ kind: 'spans', spans: [{ text: ln, fg: '04' }] }),
+              ),
+            ],
+          ],
+          { style: { kind: 'hud', accent: '09' }, alignToMap: true, minWidth: 44, footerHint: 'Any key — Close' },
         );
         return;
       }
+
+      const tabs = buildInventoryTabs(allEntries);
+      if (!tabs.some((t) => t.id === activeTab)) activeTab = 'all';
+      let filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+
+      const getRows = () => {
+        const [W, H] = [this.scr.w, this.scr.h];
+        const divX = this.scr.ctx?.divX ?? W;
+        const divY = this.scr.ctx?.divY ?? H;
+        const lay = computeInventoryLayout(W, H, divX, divY);
+        const showHeaders = lay.listH >= 9;
+        return { lay, rows: buildDisplayRows(filtered, activeTab, sortMode, showHeaders) };
+      };
+
+      let { rows } = getRows();
+      let curRowIdx = findItemRowIndex(rows, lastSelected);
+
+      const draw = () => {
+        const { lay, rows: liveRows } = getRows();
+        rows = liveRows;
+        if (curRowIdx < 0 || curRowIdx >= rows.length || rows[curRowIdx]?.kind !== 'item') {
+          curRowIdx = findItemRowIndex(rows, lastSelected);
+        }
+        const enhanced = this.scr.style === 'enhanced';
+        this.scr.box(lay.bx, lay.by, lay.bw, lay.bh, '09', '00', '▣ Rucksack', '07', { kind: 'hud', accent: '09' });
+
+        // Top-border Held badge
+        const heldLabel = this.held ? `HELD: ${this.held}` : 'Empty hands';
+        const maxTopRight = Math.max(6, lay.bw - 18);
+        const topRight = heldLabel.length > maxTopRight ? heldLabel.slice(0, maxTopRight - 1) + '…' : heldLabel;
+        const topRx = lay.bx + lay.bw - 2 - topRight.length;
+        this.scr.put(topRx, lay.by, topRight, this.held ? '0A' : '03', '00', !!this.held);
+
+        // Category tab strip + sort pill (row by + 1)
+        const sortLabel = ` / ${INV_SORT_LABEL[sortMode]} `;
+        const sortX = lay.bx + lay.bw - 2 - sortLabel.length;
+        const tabAvailW = lay.split ? sortX - (lay.bx + 2) - 1 : lay.bw - 4;
+        const fullStripW = tabs.reduce(
+          (acc, t, idx) => acc + (t.id === activeTab ? t.label.length + 2 : t.label.length + 1) + String(t.count).length + (idx > 0 ? 1 : 0),
+          0,
+        );
+        const useShortTabs = !lay.split || fullStripW > tabAvailW;
+        const strip = fitTabStrip(tabs, activeTab, tabAvailW, useShortTabs);
+        if (strip.leftArrow) {
+          this.scr.put(lay.bx + 2, lay.tabRowY, '<', '0C', '00', true);
+          this.scr.tag(lay.bx + 2, lay.tabRowY, { t: 'ui', hit: 'inv:tab-prev' });
+        }
+        for (const chip of strip.chips) {
+          const cx = lay.bx + 2 + chip.x;
+          if (chip.active) {
+            this.scr.put(cx, lay.tabRowY, chip.text, '07', '00', true);
+            this.scr.put(cx, lay.tabRowY, '▸', '0C', '00', true);
+            for (let i = 0; i < chip.text.length; i++) {
+              this.scr.tag(cx + i, lay.tabRowY, { t: 'ui', k: 'hud:sign', hit: `inv:tab:${chip.id}` });
+            }
+          } else {
+            const dot = chip.text.indexOf('·');
+            if (dot >= 0) {
+              const namePart = chip.text.slice(0, dot);
+              const countPart = chip.text.slice(dot);
+              this.scr.put(cx, lay.tabRowY, namePart, '04', '00', false);
+              this.scr.put(cx + namePart.length, lay.tabRowY, countPart, '03', '00', false);
+            } else {
+              this.scr.put(cx, lay.tabRowY, chip.text, '04', '00', false);
+            }
+            for (let i = 0; i < chip.text.length; i++) {
+              this.scr.tag(cx + i, lay.tabRowY, { t: 'ui', hit: `inv:tab:${chip.id}` });
+            }
+          }
+        }
+        if (strip.rightArrow) {
+          const rx = lay.bx + 2 + tabAvailW - 1;
+          this.scr.put(rx, lay.tabRowY, '>', '0C', '00', true);
+          this.scr.tag(rx, lay.tabRowY, { t: 'ui', hit: 'inv:tab-next' });
+        }
+        if (lay.split) {
+          this.scr.put(sortX, lay.tabRowY, ' / ', '0C', '00', true);
+          this.scr.put(sortX + 3, lay.tabRowY, `${INV_SORT_LABEL[sortMode]} `, '07', '00', false);
+          for (let i = 0; i < sortLabel.length; i++) {
+            this.scr.tag(sortX + i, lay.tabRowY, { t: 'ui', k: 'hud:sign', hit: 'inv:sort' });
+          }
+        }
+
+        // Fence beneath tabs
+        this.draw_hud_fence(lay.bx, lay.topFenceY, lay.bw);
+
+        // Item list viewport
+        const vp = computeListViewport(rows, curRowIdx, lay.listH);
+        const hasScroll = rows.length > lay.listH;
+        const itemRowW = hasScroll ? lay.listW - 1 : lay.listW;
+        const scrollX = lay.listX + lay.listW - 1;
+
+        for (let r = 0; r < lay.listH; r++) {
+          const ry = lay.listY + r;
+          const row = vp.visRows[r];
+          if (hasScroll) {
+            const onThumb = r >= vp.thumbTop && r < vp.thumbTop + vp.thumbHeight;
+            this.scr.put(scrollX, ry, onThumb ? '█' : '│', onThumb ? '09' : '01');
+          }
+          if (!row) continue;
+
+          if (row.kind === 'header') {
+            const title = `── ${row.label} (${row.count}) `;
+            const ruleLen = Math.max(0, itemRowW - title.length);
+            const clippedTitle = title.slice(0, itemRowW);
+            this.scr.put(lay.listX, ry, clippedTitle, row.color, '00', true);
+            if (ruleLen > 0) {
+              this.scr.put(lay.listX + clippedTitle.length, ry, '─'.repeat(ruleLen), '01');
+            }
+            continue;
+          }
+
+          const rowAbsIdx = vp.top + r;
+          const active = rowAbsIdx === curRowIdx;
+          const rowBg = active ? '0D' : '00';
+          const entry = row.entry;
+          const fmt = formatListItemRow(entry, itemRowW);
+
+          this.scr.put(lay.listX - 1, ry, ' '.repeat(itemRowW + 1), active ? '07' : '05', rowBg, active);
+          this.scr.put(lay.listX, ry, active ? '>' : ' ', active ? (enhanced ? '0C' : '00') : '03', rowBg, active);
+          this.scr.put(lay.listX + 2, ry, entry.glyph, active ? (enhanced ? entry.glyphCol : '00') : entry.glyphCol, rowBg, active);
+          this.scr.put(lay.listX + 4, ry, fmt.nameStr, active ? (enhanced ? '07' : '00') : '05', rowBg, active);
+          if (entry.held) {
+            this.scr.put(lay.listX + 4 + fmt.nameStr.length, ry, '*', active ? (enhanced ? '0A' : '00') : '0A', rowBg, true);
+          }
+
+          let rightCursor = lay.listX + itemRowW;
+          if (fmt.tagStr) {
+            rightCursor -= fmt.tagStr.length;
+            const tCol = active
+              ? enhanced
+                ? entry.name === 'Basket'
+                  ? '0C'
+                  : '04'
+                : '00'
+              : entry.name === 'Basket'
+                ? '0C'
+                : '03';
+            this.scr.put(rightCursor, ry, fmt.tagStr, tCol, rowBg, active && entry.name === 'Basket');
+            rightCursor -= 1;
+          }
+          if (fmt.qtyStr) {
+            const qx = rightCursor - fmt.qtyStr.length;
+            const qCol = active ? (enhanced ? '09' : '00') : entry.held ? '0A' : '09';
+            this.scr.put(qx, ry, fmt.qtyStr, qCol, rowBg, active);
+          }
+
+          for (let x = lay.listX - 1; x < lay.listX + itemRowW; x++) {
+            this.scr.tag(x, ry, { t: 'ui', hit: `inv:pick:${rowAbsIdx}` });
+          }
+        }
+
+        // Selected item for inspector
+        const activeRow = rows[curRowIdx];
+        const selEntry: InvItemEntry | null = activeRow?.kind === 'item' ? activeRow.entry : null;
+
+        if (lay.split) {
+          for (let r = 0; r < lay.listH; r++) {
+            this.scr.put(lay.splitX, lay.listY + r, '│', '01');
+          }
+          if (selEntry) {
+            this.draw_rucksack_detail_split(selEntry, lay.detailX, lay.detailY, lay.detailW, lay.detailH, basketTotal);
+          }
+        } else {
+          this.draw_hud_fence(lay.bx, lay.detailY - 1, lay.bw);
+          if (selEntry) {
+            this.draw_rucksack_detail_stacked(selEntry, lay.detailX, lay.detailY, lay.detailW, lay.detailH, basketTotal);
+          }
+        }
+
+        // Footer fence & controls
+        this.draw_hud_fence(lay.bx, lay.bottomFenceY, lay.bw);
+        const itemPos = activeRow?.kind === 'item' ? activeRow.itemIndex + 1 : 0;
+        const countTxt = `${itemPos}/${filtered.length}`;
+        const rightBtn = lay.split ? `${countTxt}  [Esc]` : `${countTxt}`;
+        const footAvail = Math.max(10, lay.bw - 5 - rightBtn.length);
+        const sortTag = `/ ${INV_SORT_LABEL[sortMode]}`;
+        const leftHint = lay.split
+          ? fitText(
+              footAvail,
+              '↑↓ Move · ←→ Tab · / Sort · Enter Use',
+              '↑↓ · ←→ Tab · / Sort · Enter Use',
+              'Enter Use · Esc Close',
+            )
+          : fitText(
+              footAvail,
+              `↑↓ · ←→ Tab · ${sortTag} · Enter Use`,
+              `←→ Tab · ${sortTag} · Enter`,
+            );
+        const clippedHint = leftHint.slice(0, footAvail);
+        this.scr.put(lay.bx + 2, lay.footerY, clippedHint, '04');
+        const sortPos = clippedHint.indexOf(lay.split ? '/ Sort' : sortTag);
+        if (sortPos >= 0) {
+          const sLen = (lay.split ? '/ Sort' : sortTag).length;
+          this.scr.put(lay.bx + 2 + sortPos, lay.footerY, '/', '0C', '00', true);
+          for (let i = 0; i < sLen; i++) {
+            this.scr.tag(lay.bx + 2 + sortPos + i, lay.footerY, { t: 'ui', hit: 'inv:sort' });
+          }
+        }
+        const usePos = clippedHint.indexOf('Enter Use');
+        if (usePos >= 0) {
+          this.scr.put(lay.bx + 2 + usePos, lay.footerY, 'Enter', '0C', '00', true);
+          for (let i = 0; i < 9; i++) {
+            this.scr.tag(lay.bx + 2 + usePos + i, lay.footerY, { t: 'ui', hit: 'inv:act' });
+          }
+        }
+        const rightStart = lay.bx + lay.bw - 2 - rightBtn.length;
+        this.scr.put(rightStart, lay.footerY, countTxt, '0C', '00', true);
+        if (lay.split) {
+          this.scr.put(rightStart + countTxt.length + 2, lay.footerY, '[Esc]', '04', '00', false);
+          for (let i = 0; i < 5; i++) {
+            this.scr.tag(rightStart + countTxt.length + 2 + i, lay.footerY, { t: 'ui', hit: 'inv:close' });
+          }
+        }
+      };
+
+      let actionItem: string | null = null;
+      while (true) {
+        const k = await this.modal(draw);
+        const activeRow = rows[curRowIdx];
+        const currentEntry = activeRow?.kind === 'item' ? activeRow.entry : null;
+        if (currentEntry) lastSelected = currentEntry.name;
+
+        if (['up', 'w', 'k'].includes(k)) {
+          curRowIdx = stepItemRow(rows, curRowIdx, -1);
+        } else if (['down', 's', 'j'].includes(k)) {
+          curRowIdx = stepItemRow(rows, curRowIdx, 1);
+        } else if (k === 'pgup') {
+          const { lay } = getRows();
+          curRowIdx = pageItemRow(rows, curRowIdx, lay.listH, -1);
+        } else if (k === 'pgdn') {
+          const { lay } = getRows();
+          curRowIdx = pageItemRow(rows, curRowIdx, lay.listH, 1);
+        } else if (k === 'home') {
+          curRowIdx = findItemRowIndex(rows, null);
+        } else if (k === 'end') {
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (rows[i].kind === 'item') {
+              curRowIdx = i;
+              break;
+            }
+          }
+        } else if (['left', 'a', 'h', 'btab', '['].includes(k) || k === 'inv:tab-prev') {
+          const tIdx = tabs.findIndex((t) => t.id === activeTab);
+          activeTab = tabs[(tIdx - 1 + tabs.length) % tabs.length].id;
+          filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+          rows = getRows().rows;
+          curRowIdx = findItemRowIndex(rows, lastSelected);
+        } else if (['right', 'd', 'l', 'tab', ']'].includes(k) || k === 'inv:tab-next') {
+          const tIdx = tabs.findIndex((t) => t.id === activeTab);
+          activeTab = tabs[(tIdx + 1) % tabs.length].id;
+          filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+          rows = getRows().rows;
+          curRowIdx = findItemRowIndex(rows, lastSelected);
+        } else if (k.length === 1 && /^[1-8]$/.test(k)) {
+          const target = tabs[Number(k) - 1];
+          if (target) {
+            activeTab = target.id;
+            filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+            rows = getRows().rows;
+            curRowIdx = findItemRowIndex(rows, lastSelected);
+          }
+        } else if (['/', 'o', 'O', 'f', 'F'].includes(k) || k === 'inv:sort') {
+          sortMode = nextSortMode(sortMode);
+          filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+          rows = getRows().rows;
+          curRowIdx = findItemRowIndex(rows, lastSelected);
+        } else if (k.startsWith('inv:tab:')) {
+          const want = k.slice('inv:tab:'.length) as InvCategory;
+          if (tabs.some((t) => t.id === want)) {
+            activeTab = want;
+            filtered = sortAndFilterInventory(allEntries, activeTab, sortMode);
+            rows = getRows().rows;
+            curRowIdx = findItemRowIndex(rows, lastSelected);
+          }
+        } else if (k.startsWith('inv:pick:')) {
+          const idx = Number(k.slice('inv:pick:'.length));
+          if (Number.isInteger(idx) && rows[idx]?.kind === 'item') {
+            if (idx === curRowIdx) {
+              actionItem = (rows[idx] as { kind: 'item'; entry: InvItemEntry }).entry.name;
+              break;
+            }
+            curRowIdx = idx;
+          }
+        } else if (OK_KEYS.has(k) || k === 'inv:act') {
+          if (currentEntry) {
+            actionItem = currentEntry.name;
+            break;
+          }
+        } else if (CANCEL_KEYS.has(k) || k === 'i' || k === 'I' || k === 'inv:close') {
+          return;
+        }
+      }
+
+      if (actionItem) {
+        const res = await this.rucksack_item_action(actionItem, basketTotal);
+        if (res === 'close') return;
+      }
+    }
+  }
+
+  private draw_rucksack_detail_split(
+    entry: InvItemEntry,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    basketTotal: number,
+  ): void {
+    const tabMeta = INV_TABS.find((t) => t.id === entry.tabCat)!;
+    // Title line
+    this.scr.put(dx, dy, entry.glyph, entry.glyphCol, '00', true);
+    const titleStr = entry.name.length > dw - 2 ? entry.name.slice(0, dw - 3) + '…' : entry.name;
+    this.scr.put(dx + 2, dy, titleStr, '07', '00', true);
+
+    // Subtitle / category + [HELD]
+    const subTag = entry.isPreserve
+      ? 'PRESERVE'
+      : HYBRID_CROPS.has(entry.name)
+        ? 'HYBRID CROP'
+        : entry.rawCat.toUpperCase();
+    this.scr.put(dx, dy + 1, subTag.slice(0, dw - (entry.held ? 7 : 0)), tabMeta.color, '00', false);
+    if (entry.held && dw >= 10) {
+      const heldBadge = ' HELD ';
+      const hx = dx + dw - heldBadge.length;
+      this.scr.put(hx, dy + 1, heldBadge, '0A', '00', true);
+      for (let i = 0; i < heldBadge.length; i++) this.scr.tag(hx + i, dy + 1, { t: 'ui', k: 'hud:sign' });
+    }
+    this.scr.put(dx, dy + 2, '─'.repeat(dw), '01');
+
+    // Ledger stats
+    let r = dy + 3;
+    const putLedger = (label: string, val: string, vCol: string) => {
+      if (r >= dy + dh - 1) return;
+      this.scr.put(dx, r, label, '04');
+      const vClip = val.slice(0, Math.max(4, dw - label.length - 1));
+      this.scr.put(dx + dw - vClip.length, r, vClip, vCol, '00', true);
+      r++;
+    };
+
+    putLedger(
+      'In Bag',
+      entry.name === 'Basket' ? `${basketTotal}/${BASKET_CAPACITY} slots` : `×${entry.qty}`,
+      entry.name === 'Basket' ? '0C' : '09',
+    );
+    putLedger(
+      'Ships',
+      entry.sell > 0
+        ? entry.qty > 1
+          ? `${entry.sell}G (${entry.sell * entry.qty}G)`
+          : `${entry.sell}G`
+        : 'Not shippable',
+      entry.sell > 0 ? '09' : '03',
+    );
+    putLedger(
+      'Energy',
+      entry.stamina !== 0 ? `${entry.stamina > 0 ? '+' : ''}${entry.stamina} Stamina` : '—',
+      entry.stamina > 0 ? '0B' : entry.stamina < 0 ? '08' : '03',
+    );
+
+    const cropKey = entry.name.endsWith(' Seeds') ? entry.name.slice(0, -6) : entry.name;
+    const cropDef = CROPS[cropKey];
+    if (cropDef && cropKey !== 'Grass') {
+      const [season, , grow, regrow] = cropDef;
+      const gStr = `${season} · ${grow}d${regrow ? ` (+${regrow}d)` : ''}`;
+      putLedger('Grow', gStr, SEASON_COL[season] || '0B');
+    }
+
+    // Contextual notes
+    const notes = this.rucksack_item_notes(entry.name, basketTotal);
+    if (notes.length && r < dy + dh - 2) {
+      r++;
+      for (const note of notes) {
+        for (const ln of wrapLine(note.text, dw)) {
+          if (r >= dy + dh - 1) break;
+          this.scr.put(dx, r, ln.slice(0, dw), note.fg);
+          r++;
+        }
+        if (r >= dy + dh - 1) break;
+      }
+    }
+
+    // Bottom action CTA pill
+    if (dh >= 6) {
+      const btn = ' [Enter] Actions ▸ ';
+      const bx = dx + Math.max(0, Math.floor((dw - btn.length) / 2));
+      const by = dy + dh - 1;
+      const clipBtn = btn.slice(0, dw);
+      this.scr.put(bx, by, clipBtn, '07', '00', true);
+      if (clipBtn.includes('[Enter]')) {
+        const idx = clipBtn.indexOf('[Enter]');
+        this.scr.put(bx + idx, by, '[Enter]', '0C', '00', true);
+      }
+      for (let i = 0; i < clipBtn.length; i++) {
+        this.scr.tag(bx + i, by, { t: 'ui', k: 'hud:sign', hit: 'inv:act' });
+      }
+    }
+  }
+
+  private draw_rucksack_detail_stacked(
+    entry: InvItemEntry,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    basketTotal: number,
+  ): void {
+    const tabMeta = INV_TABS.find((t) => t.id === entry.tabCat)!;
+    const badge = entry.isPreserve ? '[PRESERVE]' : `[${tabMeta.label.toUpperCase()}]`;
+    const heldTxt = entry.held ? ' [HELD]' : '';
+    const rightMeta = `${badge}${heldTxt}`;
+    const maxName = Math.max(8, dw - 3 - rightMeta.length);
+    const title = entry.name.length > maxName ? entry.name.slice(0, maxName - 1) + '…' : entry.name;
+    this.scr.put(dx, dy, entry.glyph, entry.glyphCol, '00', true);
+    this.scr.put(dx + 2, dy, title, '07', '00', true);
+    const rx = dx + dw - rightMeta.length;
+    this.scr.put(rx, dy, badge, tabMeta.color);
+    if (entry.held) this.scr.put(rx + badge.length, dy, heldTxt, '0A', '00', true);
+
+    const stats: string[] = [];
+    if (entry.name === 'Basket') {
+      stats.push(`Basket ${basketTotal}/${BASKET_CAPACITY}`);
+    } else {
+      stats.push(entry.sell > 0 ? `Ships ${entry.sell}G${entry.qty > 1 ? ` (${entry.sell * entry.qty}G)` : ''}` : 'Not shippable');
+      if (entry.stamina !== 0) stats.push(`${entry.stamina > 0 ? '+' : ''}${entry.stamina} Stam`);
+    }
+    const cropKey = entry.name.endsWith(' Seeds') ? entry.name.slice(0, -6) : entry.name;
+    if (CROPS[cropKey] && cropKey !== 'Grass') {
+      stats.push(`${CROPS[cropKey][0]} ${CROPS[cropKey][2]}d`);
+    }
+    this.scr.put(dx, dy + 1, stats.join(' · ').slice(0, dw), '05');
+
+    const notes = this.rucksack_item_notes(entry.name, basketTotal);
+    const wrapped = wrapNoteLines(
+      notes.slice(0, 2).map((n) => n.text),
+      dw,
+    );
+    const noteCol = notes[0]?.fg || '04';
+    for (let i = 0; i < Math.min(dh - 2, wrapped.length); i++) {
+      this.scr.put(dx, dy + 2 + i, wrapped[i].slice(0, dw), noteCol);
     }
   }
 

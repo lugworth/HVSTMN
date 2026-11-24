@@ -75,6 +75,8 @@ export type CellTag = {
   label?: HudLabel;
   /** Thin bottom-edge progress rule (e.g. Tool XP bar in the right-side HUD). */
   subBar?: { frac: number; pos: number; len: number; col: string; track: string };
+  /** Optional interactive hit-target identifier for canvas pointer clicks in modals. */
+  hit?: string;
 };
 
 export type FxKind = 'dust' | 'sparkle' | 'splash' | 'coin' | 'swing' | 'flash' | 'debris' | 'text' | 'emote';
