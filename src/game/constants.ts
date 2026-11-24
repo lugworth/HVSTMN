@@ -2049,6 +2049,48 @@ export const TILES: Record<string, any> = {
     "0C",
     "01",
     false
+  ],
+  "clock": [
+    "C",
+    "0C",
+    "01",
+    false
+  ],
+  "mirror": [
+    "M",
+    "07",
+    "01",
+    false
+  ],
+  "fridge": [
+    "F",
+    "07",
+    "01",
+    false
+  ],
+  "cabinet": [
+    "K",
+    "09",
+    "01",
+    false
+  ],
+  "rug": [
+    "~",
+    "08",
+    "00",
+    true
+  ],
+  "record_player": [
+    "♪",
+    "0E",
+    "01",
+    false
+  ],
+  "lamp": [
+    "*",
+    "0A",
+    "00",
+    false
   ]
 };
 
@@ -2800,6 +2842,11 @@ Object.assign(ITEMS, {
   "Dog Ball": [0, 0, "tool"],
   "Frisbee": [0, 0, "tool"],
   "Record Player": [0, 0, "special"],
+  "Clock": [0, 0, "special"],
+  "Mirror": [0, 0, "special"],
+  "Refrigerator": [0, 0, "special"],
+  "Cabinet": [0, 0, "special"],
+  "Rug": [0, 0, "special"],
   "Golden Lumber": [100, 0, "material"],
   "Necklace": [2000, 0, "special"],
   "Earrings": [2000, 0, "special"],
@@ -2895,6 +2942,7 @@ Object.assign(BUILDINGS, {
   "sprites": "Hearthfolk Hut",
   "zack": "Otto & Ferreira's Beach House",
   "kai_shack": "Nico's Seaside Lodge",
+  "cottage": "Town Cottage",
 });
 
 Object.assign(HOURS, {
@@ -2902,6 +2950,7 @@ Object.assign(HOURS, {
   "sprites": [6, 22, []],
   "zack": [11, 16, []],
   "kai_shack": [11, 19, [6]],
+  "cottage": [0, 24, []],
 });
 
 Object.assign(INTERIOR_LAYOUTS, {
@@ -2930,6 +2979,14 @@ Object.assign(INTERIOR_LAYOUTS, {
     "#...............#",
     "#.ctc....1....o.#",
     "########D########"
+  ],
+  "cottage": [
+    "#############",
+    "#...........#",
+    "#...........#",
+    "#.ctc...ctc.#",
+    "#...........#",
+    "######D######"
   ],
 });
 
@@ -3957,7 +4014,6 @@ TILES['greenhouse_frame'] = ['▦', '0B', '00', false];
 // New feature tiles & items (tasks 15, 27, 28, 36, 48 & G15)
 TILES['pantry'] = ['▤', '09', '00', false];
 TILES['stamp_bench'] = ['⊞', '0C', '00', false];
-TILES['pasture_gate'] = ['╪', '0B', '00', false];
 TILES['perch'] = ['╤', '09', '00', false];
 TILES['shade_tree'] = ['♣', '0B', '00', false];
 TILES['pet_bowl'] = ['◡', '0A', '00', false];

@@ -9,6 +9,8 @@ import {
   open_shortcut,
   SHORTCUT_IDS,
   HEDGE_GATE,
+  COTTAGE_DOOR,
+  applyTownCottagePlot,
   build_house,
   build_interior,
   build_house_upgraded,
@@ -297,7 +299,7 @@ import {
 } from './town-life';
 import {
   PERSONALITY_NOTES, pickPersonality, coatInfo, breedCoat, ensureAnimalRecord, animalYardSpot,
-  PASTURE_GATE_SPOT, PASTURE_GRAZE_COST, emptyPastureState, sanitizePastureState, pastureMorning, type PastureState,
+  PASTURE_GRAZE_COST, emptyPastureState, sanitizePastureState, pastureMorning, type PastureState,
   PERCH_SPOT, SHADE_TREE_SPOT, PERCH_COST, SHADE_TREE_COST, emptyEnrichmentState, sanitizeEnrichmentState, type EnrichmentState,
   CAT_SPOT, CAT_UNLOCK_DOG_AFF, emptyPetExtras, sanitizePetExtras, rollPetGift, type PetExtrasState, type AnimalPersonality,
 } from './ranch';
@@ -326,7 +328,7 @@ import {
   KEY_ACTION_SPECS, readKeyBindings, writeKeyBindings, keyLabelFor, mapSymbolLegend,
   type TextScale, type KeyBindings,
 } from './accessibility';
-import { playSfx, isSfxEnabled, setSfxEnabled, loadSfxPreference } from './audio';
+import { playSfx, isSfxEnabled, setSfxEnabled, loadSfxPreference, playMelody, TRACKS } from './audio';
 
 type HudSpan = { text: string; fg?: string; bold?: boolean };
 type HudPageLine =
@@ -696,6 +698,8 @@ export class Game {
   fireplace_lit: boolean = false;
   tv_watched_saturday: string | null = null;
   tv_order: [string, number] | null = null;
+  fridge_inv: Record<string, number> = {};
+  cabinet_inv: Record<string, number> = {};
   makers: string[] = [];
   /** A batch inside each walk-up Maker: what went in (grade by grade) and the absolute minute it is done. */
   maker_jobs: Record<string, { steps: MakerStep[]; ready: number }> = {};
@@ -866,7 +870,7 @@ export class Game {
     'horse_aff', 'horse_grown', 'riding_horse', 'medals', 'friend', 'sprite_aff', 'sprite_jobs',
     'heart_events_seen', 'rival_events_seen', 'married', 'marriage_day', 'child_name', 'child_days',
     'shipped_total', 'steps', 'fish_caught', 'goddess_gifts', 'kappa_gifts',
-    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'makers', 'maker_jobs',
+    'goddess_jewels', 'kappa_jewels', 'truth_jewels', 'vase_flower', 'tv_order', 'fridge_inv', 'cabinet_inv', 'makers', 'maker_jobs',
     'museum', 'museum_rewards',
     'requests', 'next_request_id', 'requests_done', 'order', 'order_next', 'order_last', 'reminders', 'compost_scraps', 'composted', 'trap', 'flush_day', 'flush_spots', 'aurora_day', 'dog_clue', 'milestones_said', 'memories', 'souvenirs', 'notebook', 'seats_rested', 'plots', 'exhibits_done', 'pocket', 'pockets_read', 'postcards', 'contest', 'favor', 'favor_offered',
     'mastery_xp', 'mastery_claimed',
@@ -1112,6 +1116,8 @@ export class Game {
     this.fireplace_lit = false;
     this.tv_watched_saturday = null;
     this.tv_order = null;
+    this.fridge_inv = {};
+    this.cabinet_inv = {};
     this.makers = [];
     this.maker_jobs = {};
     this.place_makers();
@@ -1188,6 +1194,8 @@ export class Game {
     // a carved shortcut lives in the maps, so a new farm gets a fresh valley
     if (this.shortcuts.length) { Object.assign(this.maps, build_valley()); this.hook_farm(); }
     this.shortcuts = [];
+    this.house_flags = [];
+    this.apply_town_cottage();
     this.prayed = false;
     this.fest_wins = [];
     this.fest_attended = false;
@@ -1513,6 +1521,8 @@ export class Game {
       this.basket = sanitizeStringRecordNumber(this.basket);
       this.shipped_counts = sanitizeStringRecordNumber(this.shipped_counts);
       this.fish_caught = sanitizeStringRecordNumber(this.fish_caught);
+      this.fridge_inv = sanitizeStringRecordNumber(this.fridge_inv);
+      this.cabinet_inv = sanitizeStringRecordNumber(this.cabinet_inv);
       if (this.held && !this.inv[this.held]) {
         this.held = null;
       }
@@ -1693,7 +1703,8 @@ export class Game {
       if (!Array.isArray(this.face) || this.face.length !== 2) {
         this.face = [0, -1];
       }
-      this.rebuild_house();
+      this.sync_house_furniture();
+      this.apply_town_cottage();
       this.cam_x = null;
       this.cam_y = null;
       this._saveDirty = false;
@@ -3049,6 +3060,10 @@ export class Game {
           }
         }
       } else if (tile === 'tree') {
+        if (m.signs[pKey] === 'cedar_spirit' && !this.berry_sources.includes('mountain_tree')) {
+          await this.cedar_spirit_event();
+          return;
+        }
         this.msg('This tree is too big to chop down.');
       }
       await this.spend(2);
@@ -4005,6 +4020,23 @@ export class Game {
       await this.hedge_latch();
       return;
     }
+    if (signId === 'cedar_spirit') {
+      await this.cedar_spirit_event();
+      return;
+    }
+    if (signId === 'town_lamp') {
+      if (!this.berry_sources.includes('truth:town_lamp')) {
+        await this.say('You inspect the iron streetlight between Mayor Ambrose\'s Manor and the Church. A shimmering gem rests inside the lantern!', 'Streetlight');
+        this.give_truth_jewel('town_lamp');
+      } else {
+        await this.say('The iron streetlight casts a steady golden glow down the avenue.', 'Streetlight');
+      }
+      return;
+    }
+    if (signId === 'cottage_plot') {
+      await this.say("Town Cottage Lot — Commission Ingrid at her Beacon Hill workshop (100,000G + 999 Lumber after building the Bathroom) to raise your Town Cottage here!", 'Town Plot');
+      return;
+    }
 
     if (tile === 'bin') {
       await this.ship();
@@ -4017,7 +4049,7 @@ export class Game {
       await this.tv_menu();
     } else if (tile === 'cal') {
       await this.calendar_menu();
-    } else if (tile === 'counter' || tile === 'bookcase') {
+    } else if (tile === 'counter' || tile === 'bookcase' || tile === 'furn') {
       await this.interior_interact(tile, [tx, ty]);
     } else if (tile === 'mantel') {
       await this.mantel_menu();
@@ -4030,14 +4062,29 @@ export class Game {
       if (seat) await this.sit(seat[0]);
     } else if (tile === 'kitchen' || tile === 'bath' || tile === 'shelf' || tile === 'vase' || tile === 'fireplace') {
       await this.use_furniture(tile);
+    } else if (tile === 'clock') {
+      await this.say(`Exact Time: ${fmt_time(this.minutes)} (${this.date_str()}, ${this.weather}).`, 'Farmhouse Clock');
+    } else if (tile === 'mirror') {
+      const wear = this.fatigue >= 80 ? 'exhausted — rest or bathe soon!' : this.fatigue >= 50 ? 'getting tired.' : 'fresh and ready to farm!';
+      await this.say(`You look in the Mirror: Stamina ${this.stamina}/${this.max_stamina}, Fatigue ${this.fatigue}/100. You look ${wear}`, 'Mirror');
+    } else if (tile === 'fridge') {
+      await this.storage_menu('fridge');
+    } else if (tile === 'cabinet') {
+      if (!this.berry_sources.includes('truth:cabinet')) {
+        await this.say('Tucked in a secret cedar drawer inside your Cabinet lies a Jewel of Truth!', 'Cabinet');
+        this.give_truth_jewel('cabinet');
+      }
+      await this.storage_menu('cabinet');
+    } else if (tile === 'record_player') {
+      await this.music_menu();
+    } else if (tile === 'rug') {
+      await this.say('A plush woven rug warms your farmhouse floor (+5 overnight Fatigue recovery).', 'Farmhouse Rug');
     } else if (tile === 'table' && this.mapname === 'house') {
       await this.house_table_menu();
     } else if (tile === 'stamp_bench' && this.mapname === 'house') {
       await this.stamp_bench_menu();
     } else if (tile === 'pantry') {
       await this.pantry_menu();
-    } else if (tile === 'pasture_gate') {
-      await this.pasture_menu();
     } else if (tile === 'perch') {
       await this.say('A sturdy cedar perch by the coop. Your chickens love hopping onto it on sunny days (+2 daily chicken affection).', 'Chicken Perch');
     } else if (tile === 'shade_tree') {
@@ -4293,7 +4340,7 @@ export class Game {
     } else if (sel === 1) {
       await this.say(`Brackenford News:${this.fest_news() || ' All is peaceful in Brackenford today.'}`, 'News Channel');
     } else if (sel === 2) {
-      if (this.season === 0 && this.day <= 5) {
+      if ((this.season === 0 && this.day <= 5) || this.mapname === 'in_cottage') {
         const win = py_rng().random() < 0.7;
         if (win) {
           this.give('Relaxation Tea Leaves', 1);
@@ -5450,6 +5497,9 @@ export class Game {
     if (item === 'Waystone') {
       sub.push('Teleport');
     }
+    if (item === 'Record Player') {
+      sub.push('Play Record');
+    }
     const recipe = this.seed_recipe(item);
     if (recipe) sub.push(`Save seeds (${recipe.need} → ${recipe.bags} bag)`);
     if (ITEMS[item]?.[2] === 'crop') {
@@ -5495,6 +5545,8 @@ export class Game {
     } else if (sub[s2] === 'Teleport') {
       await this.use_teleport_stone();
       return 'close';
+    } else if (sub[s2] === 'Play Record') {
+      await this.music_menu();
     } else if (sub[s2].startsWith('Save seeds')) {
       await this.seed_saving_menu(item);
     } else if (sub[s2] === 'Compost one') {
@@ -6389,7 +6441,7 @@ export class Game {
     const grass = this.pasture[patch];
     const patchName = patch === 'west' ? 'West Meadow' : 'East Meadow';
     if (grass <= 0) {
-      await this.say(`${patchName} is grazed bare (0% grass)! Open the Pasture Gate or Manage Rotating Pasture to switch patches.`, null);
+      await this.say(`${patchName} is grazed bare (0% grass)! Open Manage Rotating Pasture in the Barn Menu to switch patches.`, null);
       return;
     }
     this.animals_grazing = true;
@@ -6870,6 +6922,19 @@ export class Game {
         this.give_truth_jewel('library');
       }
       await this.say(py_rng().choice(BOOKS), 'Book');
+      return;
+    }
+    if (tile === 'furn') {
+      if (bid === 'mayor' && p[0] === 1 && p[1] === 1) {
+        if (!this.berry_sources.includes('truth:mayor_fridge')) {
+          await this.say("You peek inside Mayor Ambrose's pantry shelf... Something glints behind the jars!", "Ambrose's Manor");
+          this.give_truth_jewel('mayor_fridge');
+        } else {
+          await this.say("Mayor Ambrose's pantry shelves are neat and well-stocked.", "Ambrose's Manor");
+        }
+        return;
+      }
+      await this.say('Nothing unusual here.', BUILDINGS[bid] || null);
       return;
     }
     if (!bid) return;
@@ -7499,6 +7564,9 @@ export class Game {
     if (q) {
       this.gold -= q * price;
       this.give(item, q);
+      if (item === 'Record Player') {
+        this.sync_house_furniture();
+      }
       this.msg(`Bought ${q} ${item} for ${q * price}G.`, '09');
     }
   }
@@ -8493,14 +8561,20 @@ export class Game {
     if (tile.startsWith('pocket_')) return { label: 'LOOK', summary: 'Look at the sealed side chamber' };
     if (tile === 'pantry') return { label: 'PANTRY', summary: `Community Pantry (${this.pantry.items.length}/${PANTRY_GOAL})` };
     if (tile === 'stamp_bench') return { label: 'PRINT', summary: 'Stamp-printing bench (winter hobby)' };
-    if (tile === 'pasture_gate') return { label: 'GATE', summary: `Pasture Gate (${this.pasture.active === 'west' ? 'West' : 'East'} ${this.pasture[this.pasture.active]}%)` };
+    if (tile === 'clock') return { label: 'CLOCK', summary: 'Farmhouse Clock' };
+    if (tile === 'mirror') return { label: 'MIRROR', summary: 'Mirror (check self)' };
+    if (tile === 'fridge') return { label: 'FRIDGE', summary: 'Refrigerator (store food)' };
+    if (tile === 'cabinet') return { label: 'CABINET', summary: 'Cabinet (store gear & ores)' };
+    if (tile === 'record_player') return { label: 'MUSIC', summary: 'Record Player (play tracks)' };
+    if (tile === 'rug') return { label: 'LOOK', summary: 'Plush Farmhouse Rug (+5 recovery)' };
+    if (tile === 'lamp') return { label: 'LOOK', summary: 'Inspect the streetlight' };
     if (tile === 'perch') return { label: 'LOOK', summary: 'Chicken Perch (+2 daily affection)' };
     if (tile === 'shade_tree') return { label: 'LOOK', summary: 'Pasture Shade Tree (+2 daily affection)' };
     if (tile === 'table' && this.mapname === 'house') return { label: 'TABLE', summary: 'Farmhouse Table (notes & dinner)' };
     if (tile === 'orchard_tree') return { label: this.orchard_due(pKey) !== null ? 'PICK' : 'CHECK', summary: this.orchard_due(pKey) !== null ? 'Pick ripe Orchard Pear' : 'Check orchard pear tree' };
     if (tile === 'rain_barrel') return { label: 'BARREL', summary: this.farm_works.channel ? `Rain Barrel (${this.farm_works.water}/${BARREL_CAP}d stored)` : 'Inspect / repair rain barrel' };
     if (tile === 'greenhouse_frame') return { label: 'GLASS', summary: this.farm_works.greenhouse ? 'Inspect greenhouse' : 'Build greenhouse frame' };
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
+    if (['counter', 'bookcase', 'furn', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { label: 'USE', summary: 'Use the object' };
     }
     if (isFarmPiece(this.tool) && this.mapname === 'farm') {
@@ -8581,10 +8655,15 @@ export class Game {
     if (tile.startsWith('pocket_')) return { key: 'x', label: 'LOOK' };
     if (tile === 'pantry') return { key: 'x', label: 'PANTRY' };
     if (tile === 'stamp_bench') return { key: 'x', label: 'PRINT' };
-    if (tile === 'pasture_gate') return { key: 'x', label: 'GATE' };
+    if (tile === 'clock') return { key: 'x', label: 'CLOCK' };
+    if (tile === 'mirror') return { key: 'x', label: 'MIRROR' };
+    if (tile === 'fridge') return { key: 'x', label: 'FRIDGE' };
+    if (tile === 'cabinet') return { key: 'x', label: 'CABINET' };
+    if (tile === 'record_player') return { key: 'x', label: 'MUSIC' };
+    if (tile === 'rug' || tile === 'lamp') return { key: 'x', label: 'LOOK' };
     if (tile === 'perch' || tile === 'shade_tree') return { key: 'x', label: 'LOOK' };
     if (tile === 'table' && this.mapname === 'house') return { key: 'x', label: 'TABLE' };
-    if (['counter', 'bookcase', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
+    if (['counter', 'bookcase', 'furn', 'kitchen', 'bath', 'shelf', 'vase', 'fireplace', 'sign', 'doghouse', 'stable', 'mill', 'trash', 'phone', 'mantel', 'bench', 'plotsign', ...FARM_USE_TILES].includes(tile)) {
       return { key: 'x', label: 'USE' };
     }
     if (this.tool === 'Fishing Rod' && (tile === 'water' || tile === 'pond')) return { key: 'space', label: 'CAST' };
@@ -9533,7 +9612,7 @@ export class Game {
 
   async fest_closed(bid: string): Promise<boolean> {
     const f = this.fest_on();
-    if (!f || bid === 'church' || bid === 'sprites') {
+    if (!f || bid === 'church' || bid === 'sprites' || bid === 'cottage') {
       return false;
     }
     await this.say(`A sign on the door: 'Closed today for the ${f[0]}. See you in Market Cross!'`, null);
@@ -9615,6 +9694,10 @@ export class Game {
 
   /** The calendar on the wall: the date, what's coming up, and the days you pinned. */
   async calendar_menu(): Promise<void> {
+    if (this.mapname === 'in_cottage' && !this.berry_sources.includes('truth:cottage_cal')) {
+      await this.say('Tucked behind your Town Cottage wall calendar is a hidden Jewel of Truth!', 'Town Cottage');
+      this.give_truth_jewel('cottage_cal');
+    }
     while (true) {
       const left = 30 - this.day;
       const nxt = SEASONS[(this.season + 1) % 4];
@@ -10286,6 +10369,10 @@ export class Game {
       if (item === 'Heartseed') {
         this.give_power_berry('tv_shopping');
         report.push('Otto delivered your TV Shopping Heartseed!');
+      } else if (['Clock', 'Mirror', 'Refrigerator', 'Cabinet', 'Rug'].includes(item)) {
+        if (!this.house_flags.includes(item)) this.house_flags.push(item);
+        this.rebuild_house();
+        report.push(`Otto delivered & installed your ${item} in the Farmhouse!`);
       } else {
         this.give(item, 1);
         report.push(`Otto delivered your ${item} from TV Shopping!`);
@@ -10378,8 +10465,9 @@ export class Game {
     this.prayed = false;
     this.fest_new_day(report);
 
-    // Sleep Stamina & Fatigue Recovery (with Vase flower & Fireplace bonuses)
+    // Sleep Stamina & Fatigue Recovery (with Vase flower, Rug & Fireplace bonuses)
     const vaseBonus = this.vase_flower ? 15 : 0;
+    const rugBonus = this.house_flags.includes('Rug') ? 5 : 0;
     const fireBonus = this.fireplace_lit && this.season === 3 ? 20 : 0;
     this.fireplace_lit = false;
     if (reason === 'passout') {
@@ -10387,12 +10475,12 @@ export class Game {
       this.fatigue = 30;
       report.push('You woke up aching from collapsing yesterday. (Half Stamina, 30 Fatigue)');
     } else if (late) {
-      this.stamina = Math.min(this.max_stamina, Math.floor((this.max_stamina * 3) / 4) + vaseBonus);
-      this.fatigue = Math.max(0, this.fatigue - 25 - fireBonus);
+      this.stamina = Math.min(this.max_stamina, Math.floor((this.max_stamina * 3) / 4) + vaseBonus + rugBonus);
+      this.fatigue = Math.max(0, this.fatigue - 25 - rugBonus - fireBonus);
       report.push('You stayed up past midnight, so you did not fully recover.');
     } else {
       this.stamina = this.max_stamina;
-      this.fatigue = Math.max(0, this.fatigue - 50 - vaseBonus - fireBonus);
+      this.fatigue = Math.max(0, this.fatigue - 50 - vaseBonus - rugBonus - fireBonus);
     }
 
     this.minutes = 6 * 60;
@@ -11061,7 +11149,13 @@ export class Game {
     pair(y++, 'STAMINA', `${this.stamina}/${this.max_stamina}`, staminaCol);
     if (y < end) this.draw_almanac_meter(x, y, w, fraction, staminaCol);
     y++;
-    pair(y++, 'FATIGUE', `${this.fatigue}/100`, this.fatigue < 50 ? '04' : this.fatigue < 80 ? '09' : '08');
+    const hasTruthGem = Boolean(this.inv['Gem of Truth'] || this.truth_jewels >= 9);
+    pair(
+      y++,
+      hasTruthGem ? 'FATIGUE ★' : 'FATIGUE',
+      `${this.fatigue}/100`,
+      this.fatigue < 50 ? (hasTruthGem ? '0C' : '04') : this.fatigue < 80 ? '09' : '08',
+    );
     y += gap;
     ledger(y++, 'GOLD', `${this.gold}G`, '09');
     const binValue = py_sum(Object.entries(this.bin).map(([item, qty]) => (ITEMS[item] ? ITEMS[item][0] : 0) * qty));
@@ -11921,9 +12015,10 @@ export class Game {
     for (let i = 0; i < bw; i++) s.tag(x + i, y, { t: 'ui', k: i < filled ? 'bar' : 'bar:empty' });
     x += bw;
     seg(`${num} `, col);
-    if (this.fatigue >= 50) {
+    const hasTruthGem = Boolean(this.inv['Gem of Truth'] || this.truth_jewels >= 9);
+    if (hasTruthGem || this.fatigue >= 50) {
       x += 1;
-      seg(` Fatg ${this.fatigue} `, this.fatigue < 80 ? '09' : '08');
+      seg(` Fatg ${this.fatigue} `, this.fatigue < 50 ? '0C' : this.fatigue < 80 ? '09' : '08');
     }
     const bCount = getBasketTotal(this.basket);
     const held = this.held === 'Basket' ? `Basket ${bCount}/${BASKET_CAPACITY}` : this.held ? `${this.held} x${this.inv[this.held] || 0}` : '';
@@ -12005,13 +12100,14 @@ export class Game {
     y += 1;
 
     // Fatigue Bar + Berries
+    const hasTruthGem = Boolean(this.inv['Gem of Truth'] || this.truth_jewels >= 9);
     const fatCol = this.fatigue < 50 ? '0C' : this.fatigue < 80 ? '09' : '08';
     icon(y, 'fatigue');
     s.put(x, y, 'Fatg', '02');
     s.put(
       x + 5,
       y,
-      `${this.fatigue}/100  Berries:${this.power_berries}${this.has_mystic_berry ? '+B' : ''}`.slice(0, w - 5),
+      `${this.fatigue}/100  Berries:${this.power_berries}${this.has_mystic_berry ? '+B' : ''}${hasTruthGem ? ' ★Truth' : ''}`.slice(0, w - 5),
       fatCol
     );
     y += 2;
@@ -12697,6 +12793,33 @@ export class Game {
     this.maps['house'] = build_house_upgraded(this.house_flags);
   }
 
+  sync_house_furniture(): void {
+    const furnishings = ['Clock', 'Mirror', 'Refrigerator', 'Cabinet', 'Rug'] as const;
+    for (const item of furnishings) {
+      if ((this.inv[item] || 0) > 0) {
+        delete this.inv[item];
+        if (!this.house_flags.includes(item)) this.house_flags.push(item);
+      }
+    }
+    if ((this.inv['Record Player'] || 0) > 0 && !this.house_flags.includes('Record Player')) {
+      this.house_flags.push('Record Player');
+    }
+    this.rebuild_house();
+  }
+
+  apply_town_cottage(): void {
+    const m = this.maps['town'];
+    if (!m) return;
+    const built = this.house_flags.includes('Town Cottage');
+    applyTownCottagePlot(m, built);
+    if (built && !this.interiors['cottage']) {
+      const [im, entry, spots] = build_interior('cottage', ['town', COTTAGE_DOOR[0], COTTAGE_DOOR[1] + 1]);
+      this.maps[im.name] = im;
+      this.interiors['cottage'] = { map: im.name, entry, spots };
+      this.interior_bid[im.name] = 'cottage';
+    }
+  }
+
   coop_cap(): number {
     return this.house_flags.includes('Coop Expansion') ? 16 : 8;
   }
@@ -12712,6 +12835,7 @@ export class Game {
       this.house_flags.push(name);
     }
     if (name === 'Big Bed') this.recompute_max_stamina();
+    if (name === 'Town Cottage') this.apply_town_cottage();
     this.rebuild_house();
     return [`Ingrid finished building your ${name}! ${EXPANSIONS[name]?.[3] || ''}`];
   }
@@ -13405,6 +13529,103 @@ export class Game {
     return true;
   }
 
+  async cedar_spirit_event(): Promise<void> {
+    if (this.berry_sources.includes('mountain_tree')) {
+      await this.say('The ancient cedar whispers warmly in the mountain breeze.', 'Ancient Cedar');
+      return;
+    }
+    const sel = await this.menu(
+      'Ancient Cedar: "Please spare my trunk, young farmer!"',
+      ['Spare the Ancient Cedar', 'Swing the Axe anyway'],
+      0,
+      ['  The old cedar on Beacon Hill summit speaks in a deep, trembling voice.'],
+    );
+    if (sel === 0) {
+      this.give_power_berry('mountain_tree');
+      await this.say('"Thank you, kind soul! Accept this Heartseed in gratitude."', 'Ancient Cedar');
+    } else if (sel === 1) {
+      this.stamina = Math.max(0, this.stamina - 30);
+      this.fatigue = Math.min(100, this.fatigue + 20);
+      await this.say('"How cruel...!" A sharp gust knocks you back (-30 Stamina, +20 Fatigue).', 'Ancient Cedar');
+    }
+  }
+
+  async storage_menu(kind: 'fridge' | 'cabinet'): Promise<void> {
+    const store = kind === 'fridge' ? this.fridge_inv : this.cabinet_inv;
+    const label = kind === 'fridge' ? 'Refrigerator' : 'Cabinet';
+    const cats =
+      kind === 'fridge'
+        ? new Set(['crop', 'forage', 'fish', 'animal', 'ingredient', 'food', 'dish'])
+        : new Set(['ore', 'relic', 'material', 'tool', 'utensil', 'special', 'seed']);
+    const excluded = new Set(['Truth Jewel', 'Gem of Truth', 'Heartseed', 'Basket']);
+    while (true) {
+      const storeCount = Object.values(store).reduce((a, b) => a + b, 0);
+      const sel = await this.menu(`${label} (${storeCount} stored)`, [
+        'Store from Rucksack',
+        'Withdraw to Rucksack',
+        'Close',
+      ]);
+      if (sel === null || sel === 2) return;
+      if (sel === 0) {
+        const eligible = py_sorted(Object.keys(this.inv)).filter(
+          (i) => (this.inv[i] || 0) > 0 && cats.has(ITEMS[i]?.[2] || '') && !excluded.has(i),
+        );
+        if (!eligible.length) {
+          await this.say(`No matching items in your rucksack to store in the ${label}.`, label);
+          continue;
+        }
+        const pick = await this.menu(
+          `Store in ${label}`,
+          [...eligible.map((i) => `${i} x${this.inv[i]}`), 'Back'],
+        );
+        if (pick === null || pick >= eligible.length) continue;
+        const item = eligible[pick];
+        const q = (this.inv[item] || 0) === 1 ? 1 : await this.ask_qty(`Store how many ${item}?`, this.inv[item], ITEMS[item]?.[0] || 0, 'Value');
+        if (q > 0) {
+          this.take(item, q);
+          store[item] = (store[item] || 0) + q;
+          this.msg(`Stored ${q} ${item} in the ${label}.`, '0C');
+        }
+      } else if (sel === 1) {
+        const stored = py_sorted(Object.keys(store)).filter((i) => (store[i] || 0) > 0);
+        if (!stored.length) {
+          await this.say(`The ${label} is empty.`, label);
+          continue;
+        }
+        const pick = await this.menu(
+          `Withdraw from ${label}`,
+          [...stored.map((i) => `${i} x${store[i]}`), 'Back'],
+        );
+        if (pick === null || pick >= stored.length) continue;
+        const item = stored[pick];
+        const q = (store[item] || 0) === 1 ? 1 : await this.ask_qty(`Take how many ${item}?`, store[item], ITEMS[item]?.[0] || 0, 'Value');
+        if (q > 0) {
+          store[item] -= q;
+          if (store[item] <= 0) delete store[item];
+          this.give(item, q);
+          this.msg(`Took ${q} ${item} from the ${label}.`, '0B');
+        }
+      }
+    }
+  }
+
+  async music_menu(): Promise<void> {
+    if (!this.inv['Record Player'] && !this.house_flags.includes('Record Player')) {
+      await this.say("Buy the Record Player from Ferreira at Otto's Beach House to listen to Mineral Valley records!", 'Record Player');
+      return;
+    }
+    const sel = await this.menu(
+      '♪ Record Player — Choose a Record',
+      [...TRACKS.map((t) => t.title), 'Close'],
+      0,
+      ['  Spin a melody from across Brackenford.'],
+    );
+    if (sel === null || sel >= TRACKS.length) return;
+    const track = TRACKS[sel];
+    playMelody(track.id);
+    this.msg(`♪ Now playing: ${track.title}`, '0E');
+  }
+
   // ---------------------------------------------------------------- Task 26, 27, 28 & G15: Ranch menus
   async pasture_menu(): Promise<void> {
     while (true) {
@@ -13416,7 +13637,7 @@ export class Game {
         'Graze barn animals on active meadow',
         'Leave',
       ];
-      const sel = await this.menu('╪ Rotating Pasture Gate', opts, 0, [
+      const sel = await this.menu('Rotating Pasture', opts, 0, [
         `  ${wLabel}`,
         `  ${eLabel}`,
         '  Resting meadow regrows overnight (+30%/day in warm seasons, +10% in Winter).',

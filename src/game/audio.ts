@@ -93,13 +93,84 @@ function getContext(): AudioContext | null {
   return audioCtx;
 }
 
-/** Play a brief synthesized sound cue if audio is enabled and available in the browser. */
-export function playSfx(kind: SfxKind): boolean {
+export const TRACKS: readonly { id: string; title: string; notes: readonly NoteStep[] }[] = [
+  {
+    id: 'spring',
+    title: 'Spring Meadow',
+    notes: [
+      { freq: 523.25, dur: 0.14, type: 'triangle', gain: 0.06, delay: 0 },
+      { freq: 659.25, dur: 0.14, type: 'triangle', gain: 0.06, delay: 0.15 },
+      { freq: 783.99, dur: 0.16, type: 'triangle', gain: 0.06, delay: 0.3 },
+      { freq: 659.25, dur: 0.14, type: 'triangle', gain: 0.05, delay: 0.48 },
+      { freq: 880, dur: 0.18, type: 'triangle', gain: 0.06, delay: 0.64 },
+      { freq: 783.99, dur: 0.24, type: 'sine', gain: 0.06, delay: 0.84 },
+    ],
+  },
+  {
+    id: 'summer',
+    title: 'Summer Breeze',
+    notes: [
+      { freq: 587.33, dur: 0.13, type: 'square', gain: 0.04, delay: 0 },
+      { freq: 739.99, dur: 0.13, type: 'square', gain: 0.04, delay: 0.14 },
+      { freq: 880, dur: 0.15, type: 'triangle', gain: 0.06, delay: 0.28 },
+      { freq: 987.77, dur: 0.16, type: 'triangle', gain: 0.06, delay: 0.45 },
+      { freq: 880, dur: 0.14, type: 'triangle', gain: 0.05, delay: 0.63 },
+      { freq: 1174.66, dur: 0.26, type: 'sine', gain: 0.06, delay: 0.8 },
+    ],
+  },
+  {
+    id: 'fall',
+    title: 'Autumn Harvest',
+    notes: [
+      { freq: 440, dur: 0.16, type: 'triangle', gain: 0.06, delay: 0 },
+      { freq: 523.25, dur: 0.16, type: 'triangle', gain: 0.06, delay: 0.17 },
+      { freq: 659.25, dur: 0.18, type: 'sine', gain: 0.06, delay: 0.35 },
+      { freq: 587.33, dur: 0.16, type: 'triangle', gain: 0.05, delay: 0.55 },
+      { freq: 493.88, dur: 0.16, type: 'triangle', gain: 0.05, delay: 0.72 },
+      { freq: 440, dur: 0.28, type: 'sine', gain: 0.06, delay: 0.9 },
+    ],
+  },
+  {
+    id: 'winter',
+    title: 'Winter Hearth',
+    notes: [
+      { freq: 659.25, dur: 0.18, type: 'sine', gain: 0.06, delay: 0 },
+      { freq: 587.33, dur: 0.18, type: 'sine', gain: 0.06, delay: 0.2 },
+      { freq: 523.25, dur: 0.2, type: 'sine', gain: 0.06, delay: 0.4 },
+      { freq: 493.88, dur: 0.18, type: 'sine', gain: 0.05, delay: 0.62 },
+      { freq: 523.25, dur: 0.28, type: 'triangle', gain: 0.05, delay: 0.82 },
+    ],
+  },
+  {
+    id: 'town',
+    title: 'Brackenford Town',
+    notes: [
+      { freq: 392, dur: 0.12, type: 'triangle', gain: 0.06, delay: 0 },
+      { freq: 493.88, dur: 0.12, type: 'triangle', gain: 0.06, delay: 0.13 },
+      { freq: 587.33, dur: 0.14, type: 'triangle', gain: 0.06, delay: 0.26 },
+      { freq: 783.99, dur: 0.16, type: 'triangle', gain: 0.06, delay: 0.41 },
+      { freq: 659.25, dur: 0.14, type: 'triangle', gain: 0.05, delay: 0.58 },
+      { freq: 783.99, dur: 0.24, type: 'sine', gain: 0.06, delay: 0.74 },
+    ],
+  },
+  {
+    id: 'goddess',
+    title: 'Wellkeeper Pond',
+    notes: [
+      { freq: 523.25, dur: 0.15, type: 'sine', gain: 0.06, delay: 0 },
+      { freq: 659.25, dur: 0.15, type: 'sine', gain: 0.06, delay: 0.16 },
+      { freq: 783.99, dur: 0.15, type: 'sine', gain: 0.06, delay: 0.32 },
+      { freq: 1046.5, dur: 0.2, type: 'sine', gain: 0.06, delay: 0.48 },
+      { freq: 987.77, dur: 0.16, type: 'sine', gain: 0.05, delay: 0.7 },
+      { freq: 1046.5, dur: 0.3, type: 'sine', gain: 0.06, delay: 0.88 },
+    ],
+  },
+];
+
+function playSteps(steps: readonly NoteStep[]): boolean {
   if (!sfxEnabled) return false;
   const ctx = getContext();
   if (!ctx) return false;
-  const steps = SFX_PATTERNS[kind];
-  if (!steps) return false;
   const base = ctx.currentTime;
   for (const step of steps) {
     try {
@@ -118,4 +189,16 @@ export function playSfx(kind: SfxKind): boolean {
     }
   }
   return true;
+}
+
+/** Play a brief synthesized sound cue if audio is enabled and available in the browser. */
+export function playSfx(kind: SfxKind): boolean {
+  const steps = SFX_PATTERNS[kind];
+  return steps ? playSteps(steps) : false;
+}
+
+/** Play a short chiptune melody for the Record Player if audio is enabled. */
+export function playMelody(trackId: string): boolean {
+  const track = TRACKS.find((t) => t.id === trackId);
+  return track ? playSteps(track.notes) : false;
 }

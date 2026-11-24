@@ -75,9 +75,9 @@ describe('animals & ranching (tasks 25, 26, 27, 28 & G8, G15)', () => {
     assert.ok(bookLines.some((l) => l.includes('CloverJr') && l.includes('Clover')));
   });
 
-  test('task 27: rotating pasture tracks two meadows, drains active patch, regrows resting patch, and blocks grazing at 0%', async () => {
+  test('task 27: rotating pasture tracks two meadows, drains active patch, regrows resting patch, and blocks grazing at 0% (no stray pasture gate tile)', async () => {
     const g = fresh();
-    assert.equal(g.maps.farm.tile(PASTURE_GATE_SPOT[0], PASTURE_GATE_SPOT[1]), 'pasture_gate');
+    assert.equal(g.maps.farm.tile(PASTURE_GATE_SPOT[0], PASTURE_GATE_SPOT[1]), 'grass');
     g.animals.push({ name: 'Bess', kind: 'cow', aff: 30, fed: false, ready: false, wool: 0, talked: false, brushed: false, wonFestival: false, pregnantDays: 0 });
     g.weather = 'Sunny';
 

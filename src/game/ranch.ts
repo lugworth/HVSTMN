@@ -15,7 +15,7 @@ export const PERSONALITY_NOTES: Record<AnimalPersonality, { chicken: string; liv
   },
   curious: {
     chicken: 'pecks right up to the fence line',
-    livestock: 'trots over to greet you at the pasture gate',
+    livestock: 'trots over to greet you by the barn fence',
     talk: 'sniffs your sleeves eagerly for treats!',
   },
   calm: {
@@ -119,7 +119,7 @@ export function animalYardSpot(
     return [33 + (index % 2), 7]; // shaded beside the shade tree (34, 8)
   }
   if (personality === 'curious') {
-    // Curious cows/sheep wander up near the pasture gate (27, 8) or toward the player
+    // Curious cows/sheep wander toward the barn yard or the player
     const nearGateX = playerPos && Math.abs(playerPos[0] - 28) <= 4 ? 28 : 28 + (tick % 2);
     return [nearGateX, 7];
   }

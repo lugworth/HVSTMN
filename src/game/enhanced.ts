@@ -710,7 +710,8 @@ function isTorch(F: Frame, x: number, y: number, tag: CellTag): boolean {
 const INTEREST = new Set([
   'bin', 'sign', 'doghouse', 'stable', 'mill', 'maker', 'incub', 'phone', 'vase', 'cave', 'bath', 'stall',
   'mantel', 'bench', 'plotsign', 'pocket_seam', 'pocket_geode', 'pocket_moss',
-  'pantry', 'stamp_bench', 'pasture_gate', 'perch', 'shade_tree', 'pet_bowl', 'scarf',
+  'pantry', 'stamp_bench', 'perch', 'shade_tree', 'pet_bowl', 'scarf',
+  'clock', 'mirror', 'fridge', 'cabinet', 'record_player', 'lamp',
 ]);
 
 const isRainy = (F: Frame) => !F.indoor && (F.weather === 'Rain' || F.weather === 'Typhoon');
@@ -1068,6 +1069,20 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       return { ch: hs < 0.5 ? '▌' : '▐', fg: pick(['#c04848', '#4868c8', '#48a868', '#c8a848', '#9858c0'], hash(wx * 2, wy, 60)), bg: '#2a1a0e', bold: false };
     case 'bath':
       return { ch: hs < 0.5 ? '≈' : '∼', fg: '#3a90d8', bg: '#d8e6ee', bold: false };
+    case 'clock':
+      return { ch: '◷', fg: '#7fe8ff', bg: '#3a2818', bold: true, accent: true };
+    case 'mirror':
+      return { ch: '▯', fg: '#d8f4ff', bg: '#2a3848', bold: true, accent: true };
+    case 'fridge':
+      return { ch: '▤', fg: '#e8eef8', bg: '#5a6878', bold: true, accent: true };
+    case 'cabinet':
+      return { ch: '▤', fg: '#d89a54', bg: '#3a2414', bold: true, accent: true };
+    case 'record_player':
+      return { ch: '♪', fg: '#ff70cc', bg: '#3a2414', bold: true, glow: '#cc60ff', glowR: 4, accent: true };
+    case 'rug':
+      return { ch: (wx + wy) % 2 ? '░' : '▒', fg: '#d04878', bg: '#5a1e32', bold: false };
+    case 'lamp':
+      return { ch: '✶', fg: '#ffd860', bg: groundBg(F, tag), bold: true, glow: '#ffaa30', glowR: 8, accent: true };
     case 'up':
     case 'down':
     case 'exit':
@@ -2724,7 +2739,10 @@ function titleScene(out: OutCell[][], buf: Cell[][], tags: (CellTag | null)[][],
   }
 }
 
-const INDOOR_SURFACES = new Set(['floor', 'iwall', 'table', 'bed', 'counter', 'shelf', 'bookcase', 'cal', 'kitchen', 'tv', 'fireplace', 'bath', 'exit']);
+const INDOOR_SURFACES = new Set([
+  'floor', 'iwall', 'table', 'bed', 'counter', 'shelf', 'bookcase', 'cal', 'kitchen', 'tv', 'fireplace', 'bath', 'exit',
+  'clock', 'mirror', 'fridge', 'cabinet', 'record_player', 'rug',
+]);
 
 /**
  * Indoor daytime sunbeams & nighttime warm lamp pools. Only touches real indoor room tiles

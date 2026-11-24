@@ -1,6 +1,5 @@
 import { TILES, INTERIOR_LAYOUTS, INTERIOR_LEGEND, BUILDINGS, STALL_SPOT, pkey } from './constants';
 import { PANTRY_SPOT } from './town-life';
-import { PASTURE_GATE_SPOT } from './ranch';
 import prebuiltMaps from './prebuilt_maps.json';
 import { py_rng } from './runtime_helpers';
 
@@ -195,9 +194,21 @@ export function build_farm(): GameMap {
   m.rect(30, 22, 3, 4, 'path');
   m.set(29, 24, 'sign');
   m.signs[pkey(29, 24)] = 'Signpost — SOUTH: Cedar Hollow (Feathercote, Highmeadow Dairy, Thornvale Vineyard). EAST: the road to town. WEST: Ironwood Grove.';
-  // rotating pasture gate between coop and barn (mechanics task 27)
-  m.set(PASTURE_GATE_SPOT[0], PASTURE_GATE_SPOT[1], 'pasture_gate');
   return m;
+}
+
+export const COTTAGE_PLOT = [56, 15, 5, 5] as const;
+export const COTTAGE_DOOR: [number, number] = [58, 19];
+
+export function applyTownCottagePlot(m: GameMap, built: boolean): void {
+  const [px, py, w, h] = COTTAGE_PLOT;
+  clearPlot(m, px, py, w, h);
+  if (built) {
+    m.building(px, py, w, h, 2, 'cottage', 'VLA', '0A');
+  } else {
+    m.set(COTTAGE_DOOR[0], COTTAGE_DOOR[1], 'sign');
+    m.signs[pkey(COTTAGE_DOOR[0], COTTAGE_DOOR[1])] = 'cottage_plot';
+  }
 }
 
 export function build_town(): GameMap {
@@ -205,9 +216,13 @@ export function build_town(): GameMap {
   // The forge, the poultry farm and Highmeadow Dairy have moved out to the countryside (see
   // build_grove and build_woods), and the library has moved across town.
   for (const plot of Object.values(TOWN_PLOTS)) clearPlot(m, plot[0], plot[1], plot[2], plot[3]);
-  // The south-east block is the town's quiet corner: the Library and the Museum side by side.
+  // The south-east block is the town's quiet corner: the Library, Town Cottage plot, and Museum.
   placeBuilding(m, townBuilding('library'), 45, 15);
+  applyTownCottagePlot(m, false);
   m.building(61, 15, 8, 5, 4, 'museum', 'MUSEUM', '0C');
+  // Town Streetlight between Ambrose's Manor and the Church (holds a Jewel of Truth).
+  m.set(61, 8, 'lamp');
+  m.signs[pkey(61, 8)] = 'town_lamp';
 
   // Town Green, on the north row west of the hill road: a pond ringed with flowers and trees.
   m.rect(21, 3, 8, 2, 'water');
@@ -277,6 +292,9 @@ export function build_mountain(): GameMap {
   m.rect(25, 7, 11, 1, 'path');
   m.rect(25, 1, 1, 7, 'path');
   m.rect(23, 1, 3, 1, 'path');
+  // Talking Cedar Spirit tree by the summit trail (grants the 10th Heartseed)
+  m.set(26, 2, 'tree');
+  m.signs[pkey(26, 2)] = 'cedar_spirit';
   // Copperseam Mine: deep floors west of the pond
   m.set(51, 4, 'sign');
   m.signs[pkey(51, 4)] = 'Copperseam Mine — Step down on floor tiles to delve deeper; each floor holds ore, gems and side chambers. Bring a lamp.';
@@ -843,6 +861,13 @@ export function build_interior(bid: string, exit_to: [string, number, number]): 
     m.set(14, 2, 'phone');
     m.signs[pkey(14, 2)] = 'inn_phone';
   }
+  if (bid === 'cottage') {
+    m.set(1, 1, 'bed');
+    m.set(2, 1, 'bed');
+    m.set(5, 1, 'tv');
+    m.set(8, 1, 'cal');
+    m.set(10, 1, 'bookcase');
+  }
 
   return [m, entry, spots];
 }
@@ -858,15 +883,33 @@ export function build_house_upgraded(flags: Set<string> | string[]): GameMap {
     m.set(3, 1, 'bed');
   }
   m.set(5, 1, 'tv');
+  if (fset.has('Clock')) {
+    m.set(6, 1, 'clock');
+  }
+  if (fset.has('Mirror')) {
+    m.set(7, 1, 'mirror');
+  }
   m.set(8, 1, 'cal');
+  if (fset.has('Refrigerator')) {
+    m.set(9, 1, 'fridge');
+  }
   m.set(12, 1, 'bin');
+  if (fset.has('Cabinet')) {
+    m.set(13, 1, 'cabinet');
+  }
   // the mantel for festival souvenirs and keepsakes (mechanics task 45)
   m.set(14, 1, 'mantel');
   // indoor winter hobby stamp-printing bench (mechanics task 48)
   m.set(13, 8, 'stamp_bench');
+  if (fset.has('Rug')) {
+    m.rect(7, 4, 3, 2, 'rug');
+  }
   m.rect(3, 4, 3, 2, 'table');
   // Flower Vase on the table
   m.set(3, 4, 'vase');
+  if (fset.has('Record Player')) {
+    m.set(5, 4, 'record_player');
+  }
   if (fset.has('Kitchen')) {
     m.set(10, 1, 'kitchen');
     m.set(11, 1, 'kitchen');
