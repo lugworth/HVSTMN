@@ -2010,7 +2010,7 @@ export class Game {
       const labels: Record<PaletteMode, string> = {
         mono: 'Contour Mono',
         duotone: 'Seasonal Duotone',
-        isotope: 'Full Isotope',
+        isotope: 'Seasonal Isotope',
       };
       const next = order[(order.indexOf(this.scr.paletteMode) + 1) % order.length];
       this.scr.setPaletteMode(next);
@@ -2123,15 +2123,6 @@ export class Game {
       ...(dawns.length
         ? [{ key: 'dawn', raw: 'Restore a Morning Backup', label: 'Restore a Morning Backup', icon: '☼', iconCol: '0A', right: `${dawns.length} kept`, rightCol: '0A' }]
         : []),
-      {
-        key: 'hires',
-        raw: `Graphics: High-res Detail ${this.scr.hires ? 'On' : 'Off'}`,
-        label: 'High-res Detail',
-        icon: '❖',
-        iconCol: '0C',
-        right: this.scr.hires ? 'ON' : 'OFF',
-        rightCol: this.scr.hires ? '0B' : '03',
-      },
       {
         key: 'cues',
         raw: `Accessible Cues: ${this.scr.accessibleCues ? 'On' : 'Off'}`,
@@ -2254,9 +2245,6 @@ export class Game {
         this.row_reserve = ROW_RESERVES[selected];
         this.msg(`Row work keeps ${this.row_reserve} stamina in reserve.`, '0C');
       }
-    } else if (key === 'hires') {
-      this.scr.setHires(!this.scr.hires);
-      this.msg(`High-res detail: ${this.scr.hires ? 'On' : 'Off'}.`, '0C');
     } else if (key === 'cues') {
       this.scr.accessibleCues = !this.scr.accessibleCues;
       this.msg(`Accessible state cues: ${this.scr.accessibleCues ? 'On' : 'Off'}.`, '0C');

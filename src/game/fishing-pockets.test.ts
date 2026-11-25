@@ -51,8 +51,7 @@ describe('reading the water', () => {
       const sy = s.tags.findIndex((row) => row.some((tag) => tag?.fishPocket === p.glyph));
       assert.ok(sy >= 0, 'pocket appears on the map');
       const sx = s.tags[sy].findIndex((tag) => tag?.fishPocket === p.glyph);
-      for (const hires of [false, true]) for (const time of [0, 3, 12]) {
-        s.hires = hires;
+      for (const time of [0, 3, 12]) {
         assert.equal(computeFrame(s, time)[sy][sx].ch, p.glyph);
       }
       assert.equal(s.buf[sy][sx][0], p.glyph, 'classic path shows it too');

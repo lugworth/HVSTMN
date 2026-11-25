@@ -59,49 +59,6 @@ export type OutCell = {
   label?: HudLabel;
   /** Thin bottom-edge progress rule along a panel row (e.g. Tool XP). */
   subBar?: { frac: number; pos: number; len: number; col: string; track: string };
-  /** Sub-cell high-resolution architectural & terrain micro-detail (strictly inside the cell). */
-  micro?: MicroDetail;
-};
-
-export type MicroKind =
-  | 'grass'
-  | 'flower'
-  | 'field'
-  | 'soil'
-  | 'soil_wet'
-  | 'crop'
-  | 'path'
-  | 'sand'
-  | 'bridge'
-  | 'water'
-  | 'roof'
-  | 'roof_edge'
-  | 'wall'
-  | 'window'
-  | 'door'
-  | 'cliff'
-  | 'mwall'
-  | 'floor'
-  | 'rug'
-  | 'mfloor'
-  | 'iwall'
-  | 'bed'
-  | 'table'
-  | 'counter'
-  | 'fireplace'
-  | 'bookcase'
-  | 'shelf'
-  | 'bath'
-  | 'dock_step';
-
-export type MicroDetail = {
-  kind: MicroKind;
-  seed: number;
-  mask?: number;
-  hi: string;
-  lo: string;
-  acc?: string;
-  v?: number;
 };
 
 // ---------------------------------------------------------------- colour math
@@ -227,14 +184,6 @@ function snapFrame(frame: OutCell[][]) {
       if (o.aoeCol) o.aoeCol = toIsotope(o.aoeCol);
       if (o.detail) o.detail = { ch: o.detail.ch, fg: toIsotope(o.detail.fg) };
       if (o.subBar) o.subBar = { ...o.subBar, col: toIsotope(o.subBar.col), track: toIsotope(o.subBar.track) };
-      if (o.micro) {
-        o.micro = {
-          ...o.micro,
-          hi: toIsotope(o.micro.hi),
-          lo: toIsotope(o.micro.lo),
-          acc: o.micro.acc ? toIsotope(o.micro.acc) : undefined,
-        };
-      }
     }
   }
 }
@@ -378,14 +327,6 @@ function monochrome(out: OutCell[][], boxes: Screen['boxes'], tone?: Tone) {
       if (o.token) o.token = toned(o.token, t);
       if (o.foamCol) o.foamCol = toned(o.foamCol, t);
       if (o.plotCol) o.plotCol = toned(o.plotCol, t);
-      if (o.micro) {
-        o.micro = {
-          ...o.micro,
-          hi: toned(o.micro.hi, t),
-          lo: toned(o.micro.lo, t),
-          acc: o.micro.acc ? (o.accent ? neon(o.micro.acc, 0.35) : toned(o.micro.acc, t)) : undefined,
-        };
-      }
       if (o.accent) {
         o.fg = neon(o.fg, 0.35);
         continue;
@@ -430,11 +371,23 @@ type Theme = {
   grassBg2: string;
   grassDetail: string;
   tuft: string;
+  contourFg: string;
   trees: string[];
+  evergreenTrees: string[];
   treeBg: string;
   soilBg: string;
   soilDot: string;
   weed: string;
+  pathBg: string;
+  pathBg2: string;
+  pathFg: string;
+  sandBg: string;
+  sandBg2: string;
+  sandFg: string;
+  cliffFg: string;
+  cliffBg: string;
+  bridgeFg: string;
+  bridgeBg: string;
   waterBg: string;
   waterBg2: string;
   waterFg: string;
@@ -447,35 +400,51 @@ type Theme = {
 
 export const THEMES: Theme[] = [
   {
-    // Spring
-    grassBg: '#0c1f0b', grassBg2: '#11290f', grassDetail: '#2c6e1e', tuft: '#4fc12c',
-    trees: ['#3fe01a', '#2fb814', '#24910f'], treeBg: '#071606',
-    soilBg: '#231910', soilDot: '#4a3826', weed: '#3fa52a',
-    waterBg: '#03204e', waterBg2: '#062c66', waterFg: '#3d8cff',
-    blossom: ['#ffa8d8', '#ffd0ec', '#ff80c0'], wildflowers: ['#ffe27a', '#ff9ad0', '#ffffff', '#b8a0ff'],
+    // Spring — fresh sprout green (0B), sakura pink (0A), sky-azure water (0D), warm loam
+    grassBg: '#071809', grassBg2: '#0f3a10', grassDetail: '#40aa26', tuft: '#66e838', contourFg: '#288618',
+    trees: ['#44e822', '#32c418', '#269e12'], evergreenTrees: ['#1e8a2c', '#166e22', '#289e36'], treeBg: '#051406',
+    soilBg: '#28180e', soilDot: '#604228', weed: '#44ba2c',
+    pathBg: '#2e2923', pathBg2: '#3d362c', pathFg: '#857660',
+    sandBg: '#534a3c', sandBg2: '#6b5f4d', sandFg: '#ccb593',
+    cliffFg: '#919191', cliffBg: '#26201a',
+    bridgeFg: '#cc8e48', bridgeBg: '#3c2614',
+    waterBg: '#06367e', waterBg2: '#0848a4', waterFg: '#38b8ff',
+    blossom: ['#ff5ec0', '#ff90dc', '#ff0099'], wildflowers: ['#ff66c4', '#ffe27a', '#ffffff', '#cc70ff'],
   },
   {
-    // Summer
-    grassBg: '#0a2408', grassBg2: '#0f300b', grassDetail: '#2f8a1a', tuft: '#62dc2c',
-    trees: ['#2fd010', '#22aa0c', '#188a08'], treeBg: '#041404',
-    soilBg: '#22180e', soilDot: '#55402a', weed: '#48b82a',
-    waterBg: '#022456', waterBg2: '#053272', waterFg: '#45a0ff',
-    fruit: '#ff4a3a', wildflowers: ['#ffe27a', '#ff6a6a', '#ffffff'],
+    // Summer — lush sun-drenched emerald (0B upper), sun-gold paths & sand (09), turquoise sea (0C), scarlet orchard fruit (08)
+    grassBg: '#124811', grassBg2: '#196b13', grassDetail: '#38e868', tuft: '#5afb27', contourFg: '#229711',
+    trees: ['#2bcc0a', '#1d8013', '#155913'], evergreenTrees: ['#0a7e72', '#065c54', '#109c8e'], treeBg: '#05180c',
+    soilBg: '#2c1c0c', soilDot: '#7a5428', weed: '#39fe06',
+    pathBg: '#4c2b11', pathBg2: '#5c3413', pathFg: '#b36a0e',
+    sandBg: '#6f4013', sandBg2: '#834c13', sandFg: '#ffb038',
+    cliffFg: '#ce7a0a', cliffBg: '#2e1b0a',
+    bridgeFg: '#e09a3a', bridgeBg: '#422810',
+    waterBg: '#03485a', waterBg2: '#046b7e', waterFg: '#20f0ff',
+    fruit: '#ff2a2a', wildflowers: ['#ff4040', '#ffb830', '#00e8ff', '#ffffff'],
   },
   {
-    // Fall
-    grassBg: '#1f1a0b', grassBg2: '#272010', grassDetail: '#6e5a22', tuft: '#b0902c',
-    trees: ['#ff9900', '#ff5a1a', '#e8b400', '#c8361a', '#ff7a10'], treeBg: '#170c04',
-    soilBg: '#1f140c', soilDot: '#4a3424', weed: '#a8a030',
-    waterBg: '#0a2040', waterBg2: '#0e2a52', waterFg: '#4a88d8',
-    leaves: ['#ff9900', '#ff5a1a', '#e8b400'],
+    // Fall — warm amber-russet meadow (09), blazing crimson/flame/rose maples (08/09/0A), deep forest pines, autumn indigo water (0F)
+    grassBg: '#301b0e', grassBg2: '#4c2b11', grassDetail: '#b36a0e', tuft: '#ff9900', contourFg: '#834c13',
+    trees: ['#ff9900', '#ff3814', '#ffb820', '#ff1a55', '#e85808'], evergreenTrees: ['#1c7c28', '#14621e', '#248c32'], treeBg: '#1e0e04',
+    soilBg: '#22120a', soilDot: '#683e22', weed: '#c88424',
+    pathBg: '#3d1512', pathBg2: '#4c1b15', pathFg: '#a85a38',
+    sandBg: '#4e3420', sandBg2: '#5e4028', sandFg: '#b88454',
+    cliffFg: '#c85038', cliffBg: '#281410',
+    bridgeFg: '#b86834', bridgeBg: '#32180c',
+    waterBg: '#0f004a', waterBg2: '#15006b', waterFg: '#6a88ff',
+    leaves: ['#ff9900', '#ff3814', '#ff5ec0', '#ffb820'], wildflowers: ['#cc50ff', '#ff9900', '#ff4040'],
   },
   {
-    // Winter
-    grassBg: '#4a5464', grassBg2: '#566072', grassDetail: '#eef2fa', tuft: '#c4ceda',
-    trees: ['#9ab8c8', '#c8d8e8', '#7a98a8'], treeBg: '#121820',
-    soilBg: '#394049', soilDot: '#a4aebc', weed: '#d0d8e0',
-    waterBg: '#10304e', waterBg2: '#143a5c', waterFg: '#8ac8ff',
+    // Winter — frosted silver-blue snowpack (COOL_TONE), glacier cyan (0C), bare silver timber, sapphire icy water (0D)
+    grassBg: '#556276', grassBg2: '#697a92', grassDetail: '#eef6ff', tuft: '#75f6e8', contourFg: '#96add0',
+    trees: ['#96add0', '#c0d4ee', '#7486a1'], evergreenTrees: ['#047e8e', '#08a4b8', '#035c6a'], treeBg: '#121d2c',
+    soilBg: '#3a4452', soilDot: '#a6bcde', weed: '#c8e8ff',
+    pathBg: '#424c5b', pathBg2: '#4b5768', pathFg: '#96add0',
+    sandBg: '#4b5768', sandBg2: '#5f6e84', sandFg: '#b8d0e4',
+    cliffFg: '#96add0', cliffBg: '#1c2636',
+    bridgeFg: '#8aa0c0', bridgeBg: '#223044',
+    waterBg: '#031d5a', waterBg2: '#042b7e', waterFg: '#75f6e8',
     snow: true,
   },
 ];
@@ -497,11 +466,23 @@ export function themeFor(season: number, day?: number): Theme {
     grassBg2: mix(cur.grassBg2, next.grassBg2, k),
     grassDetail: mix(cur.grassDetail, next.grassDetail, k),
     tuft: mix(cur.tuft, next.tuft, k),
+    contourFg: mix(cur.contourFg, next.contourFg, k),
     trees: cur.trees.map((c, i) => mix(c, next.trees[i % next.trees.length], k)),
+    evergreenTrees: cur.evergreenTrees.map((c, i) => mix(c, next.evergreenTrees[i % next.evergreenTrees.length], k)),
     treeBg: mix(cur.treeBg, next.treeBg, k),
     soilBg: mix(cur.soilBg, next.soilBg, k),
     soilDot: mix(cur.soilDot, next.soilDot, k),
     weed: mix(cur.weed, next.weed, k),
+    pathBg: mix(cur.pathBg, next.pathBg, k),
+    pathBg2: mix(cur.pathBg2, next.pathBg2, k),
+    pathFg: mix(cur.pathFg, next.pathFg, k),
+    sandBg: mix(cur.sandBg, next.sandBg, k),
+    sandBg2: mix(cur.sandBg2, next.sandBg2, k),
+    sandFg: mix(cur.sandFg, next.sandFg, k),
+    cliffFg: mix(cur.cliffFg, next.cliffFg, k),
+    cliffBg: mix(cur.cliffBg, next.cliffBg, k),
+    bridgeFg: mix(cur.bridgeFg, next.bridgeFg, k),
+    bridgeBg: mix(cur.bridgeBg, next.bridgeBg, k),
     waterBg: mix(cur.waterBg, next.waterBg, k),
     waterBg2: mix(cur.waterBg2, next.waterBg2, k),
     waterFg: mix(cur.waterFg, next.waterFg, k),
@@ -640,6 +621,8 @@ type Frame = {
   sea: boolean;
   /** Which map is drawn (regions dress some tiles their own way). */
   map: string;
+  /** Current season (0=Spring, 1=Summer, 2=Fall, 3=Winter). */
+  season: number;
 };
 
 const roofShades = (fgCode: string) => {
@@ -668,9 +651,9 @@ function groundBg(F: Frame, tag: CellTag): string {
     case 'field':
       return mix(F.theme.soilBg, '#000000', mottle(wx, wy, 5) * 0.14);
     case 'path':
-      return mix('#2a2622', '#34302a', hash(wx, wy, 6));
+      return mix(F.theme.pathBg, F.theme.pathBg2, hash(wx, wy, 6));
     case 'sand':
-      return mix('#3a3020', '#443826', hash(wx, wy, 6));
+      return mix(F.theme.sandBg, F.theme.sandBg2, hash(wx, wy, 6));
     case 'floor':
       return wy % 2 ? '#3a2a1a' : '#36271a';
     case 'mfloor':
@@ -736,19 +719,21 @@ function rockFace(F: Frame, x: number, y: number, wx: number, wy: number): OutCe
   while (down < 6 && cliff(down + 1)) down++;
   const snow = !!F.theme.snow;
   const depth = up + down ? up / (up + down) : 1; // 0 at the brow, 1 at the base
-  const face = mix('#5e5548', '#26211c', depth);
+  const topFace = mix('#5e5548', F.theme.cliffFg, 0.22);
+  const botFace = mix('#26211c', F.theme.cliffBg, 0.35);
+  const face = mix(topFace, botFace, depth);
   if (!up) {
     const cap = snow && hash(wx * 2, wy, 160) < 0.85;
     const weathered = valueNoise(wx / 4, wy, 164) * 0.45; // the lit brow is not one even line
-    const rock = mix('#aca08a', '#6a6052', weathered);
+    const rock = mix(mix('#aca08a', F.theme.cliffFg, 0.25), '#6a6052', weathered);
     // winter: a thin line of snow lying on the lit rock, not a solid white band
-    if (cap) return { ch: '▔', fg: '#eef2f8', bg: mix(rock, '#26211c', 0.25), bold: false };
-    return { ch: '▀', fg: rock, bg: down ? face : '#26211c', bold: false };
+    if (cap) return { ch: '▔', fg: '#eef2f8', bg: mix(rock, botFace, 0.25), bold: false };
+    return { ch: '▀', fg: rock, bg: down ? face : botFace, bold: false };
   }
   // bedding planes run along the band, each stretch with its own kind of layer
   const bed = valueNoise(wx / 6, wy, 161);
   let ch = bed < 0.36 ? '─' : bed < 0.7 ? '═' : '≡';
-  let fg = mix(face, '#b0a48e', 0.6 - depth * 0.25);
+  let fg = mix(face, mix('#b0a48e', F.theme.cliffFg, 0.28), 0.6 - depth * 0.25);
   if (!down) {
     // the foot of the face falls away into shadow through a blue-noise dither
     const bn = blueNoise(wx, wy);
@@ -881,23 +866,35 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       const gb = grassBg(F, wx, wy);
       const above = F.tags[y - 1]?.[x];
       if (above && above.t === 'tree' && hash(wx, wy, 72) < 0.6) {
-        return { ch: '╿', fg: th.snow ? '#6a5a4a' : '#6a4a2c', bg: gb, bold: false }; // trunk under the canopy
+        return { ch: '╿', fg: th.snow ? '#78889c' : '#6a4a2c', bg: gb, bold: false }; // trunk under the canopy
       }
       if (th.snow) {
-        if (hs < 0.18) return { ch: hs < 0.08 ? '∙' : '·', fg: th.grassDetail, bg: gb, bold: false };
+        if (hs < 0.045) return { ch: '▁', fg: '#eef6ff', bg: gb, bold: false }; // snowdrift ridge
+        if (hs < 0.085) return { ch: hs < 0.065 ? '❆' : '❄', fg: hs < 0.065 ? '#eef6ff' : th.tuft, bg: gb, bold: false }; // frost crystals
+        if (hs < 0.22) return { ch: hs < 0.14 ? '∙' : '·', fg: th.grassDetail, bg: gb, bold: false };
         return { ch: ' ', fg: th.grassDetail, bg: gb, bold: false };
       }
-      // the engine's own tufts (',' and '"') stay, centred in their tile
+      // the engine's own tufts (',' and '"') stay, centred in their tile, shaped by season
       if (g === ',' || g === '"') {
-        // tufts sway in a slow breeze
         const sway = Math.floor(F.t * 0.8 + hash(wx, wy, 66) * 4) % 4 === 0;
+        if (F.season === 2) {
+          return { ch: g === '"' ? (sway ? 'ʸ' : ',') : (sway ? ',' : 'ʸ'), fg: th.tuft, bg: gb, bold: false }; // dry autumn stalks
+        }
         return { ch: g === '"' ? (sway ? '"' : 'ʷ') : sway ? '`' : ',', fg: th.tuft, bg: gb, bold: false };
       }
       const nearTree = th.leaves && [[-1, 0], [1, 0], [0, 1], [0, -1], [-1, 1], [1, 1]].some(([dx, dy]) => F.tags[y + dy]?.[x + dx]?.t === 'tree');
-      if (nearTree && hs < 0.32) return { ch: pick(['•', '❦', ','], hash(wx, wy, 9)), fg: pick(th.leaves!, hash(wx, wy, 4)), bg: gb, bold: false, accent: true }; // leaf litter
-      if (th.leaves && hs < 0.07) return { ch: pick(['•', '❦', ','], hash(wx, wy, 9)), fg: pick(th.leaves, hash(wx, wy, 4)), bg: gb, bold: false };
-      if (th.wildflowers && hs > 0.975) return { ch: '·', fg: pick(th.wildflowers, hash(wx, wy, 31)), bg: gb, bold: true };
-      if (th.fruit && hs > 0.93) return { ch: 'ʷ', fg: th.tuft, bg: gb, bold: false }; // tall summer grass
+      if (nearTree && hs < 0.34) return { ch: pick(['•', '❦', ','], hash(wx, wy, 9)), fg: pick(th.leaves!, hash(wx, wy, 4)), bg: gb, bold: false, accent: true }; // autumn leaf litter
+      if (th.leaves && hs < 0.11) return { ch: pick(['❦', '❧', '•', ','], hash(wx, wy, 9)), fg: pick(th.leaves, hash(wx, wy, 4)), bg: gb, bold: false };
+      if (F.season === 2 && hs > 0.89 && hs <= 0.945) return { ch: 'ʸ', fg: th.tuft, bg: gb, bold: false }; // dry autumn grass
+      if (F.season === 0) {
+        if (hs > 0.91 && hs <= 0.955) return { ch: '☘', fg: th.tuft, bg: gb, bold: false }; // spring clover
+        if (th.wildflowers && hs > 0.968) return { ch: hs > 0.984 ? '❀' : '✿', fg: pick(th.wildflowers, hash(wx, wy, 31)), bg: gb, bold: true };
+      } else if (F.season === 1) {
+        if (hs > 0.89 && hs <= 0.965) return { ch: hs > 0.945 ? '☘' : 'ʷ', fg: th.tuft, bg: gb, bold: false }; // lush tall summer grass & clover
+        if (th.wildflowers && hs > 0.972) return { ch: '✿', fg: pick(th.wildflowers, hash(wx, wy, 31)), bg: gb, bold: true };
+      } else if (th.wildflowers && hs > 0.975) {
+        return { ch: '❀', fg: pick(th.wildflowers, hash(wx, wy, 31)), bg: gb, bold: true };
+      }
       const dewy = !th.snow && !F.indoor && F.weather === 'Sunny' && F.minutes >= 360 && F.minutes < 480;
       if (dewy && hs < 0.03 && hash(wx * 2, wy, 140 + (Math.floor(F.t * 2) % 20)) > 0.45) {
         return { ch: '✧', fg: '#ffffff', bg: gb, bold: true }; // morning dew twinkling
@@ -909,58 +906,77 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
     }
     case 'flower': {
       const gb = grassBg(F, wx, wy);
-      if (th.snow || g === '.') return { ch: '·', fg: th.grassDetail, bg: gb, bold: false };
+      if (th.snow) return { ch: hs < 0.45 ? '❄' : '·', fg: hs < 0.45 ? th.tuft : th.grassDetail, bg: gb, bold: false };
+      if (g === '.') return { ch: '·', fg: th.grassDetail, bg: gb, bold: false };
+      if (F.season === 2) return { ch: pick(['❀', '❦'], hash(wx, wy, 2)), fg: pick(th.wildflowers ?? ['#cc50ff', '#ff9900'], hash(wx, wy, 3)), bg: gb, bold: true, accent: true };
       return { ch: pick(['✿', '❀'], hash(wx, wy, 2)), fg: pal(fg), bg: gb, bold: true, accent: true };
     }
     case 'tree': {
       // World coordinates keep a tree recognizable as the view and seasons change.
       const hive = F.map === 'farm' && wx === HIVE_SPOT[0] && wy === HIVE_SPOT[1];
       const deciduous = hive || hs >= (F.map === 'ridge' ? 0.82 : 0.54);
-      const ch = deciduous
-        ? (th.snow ? FARM_SYMBOLS.bareTree : FARM_SYMBOLS.broadleaf)
-        : (hs < 0.29 ? FARM_SYMBOLS.fir : FARM_SYMBOLS.pine);
+      const crownVar = hash(wx * 3, wy, 43);
+      let ch: string;
+      if (deciduous) {
+        if (th.snow) ch = FARM_SYMBOLS.bareTree;
+        else if (F.season === 1 && crownVar < 0.38) ch = '♣'; // dense summer foliage
+        else if (F.season === 2) ch = crownVar < 0.36 ? '❦' : crownVar < 0.56 ? FARM_SYMBOLS.bareTree : FARM_SYMBOLS.broadleaf; // autumn maples & thinning branches
+        else ch = FARM_SYMBOLS.broadleaf;
+      } else {
+        ch = hs < 0.29 ? FARM_SYMBOLS.fir : FARM_SYMBOLS.pine;
+      }
       const bg = mix(th.treeBg, '#000000', hash(wx, wy, 2) * 0.5);
-      let fgc = pick(th.trees, hash(wx * 2, wy, 1));
+      // Evergreens keep deep pine/glacier tones while deciduous crowns blaze in Fall or bloom in Spring.
+      let fgc = pick(deciduous ? th.trees : th.evergreenTrees, hash(wx * 2, wy, 1));
       // canopies are lit from above: bright crown, shaded underside
       const up = F.tags[y - 1]?.[x];
       const dn = F.tags[y + 1]?.[x];
       if (!up || up.t !== 'tree') fgc = mix(fgc, '#ffffff', 0.2);
       else if (!dn || dn.t !== 'tree') fgc = mix(fgc, '#000000', 0.32);
-      // seasonal accents: spring blossom, summer fruit, winter snow on the tips
+      // seasonal accents: spring sakura blossom, summer orchard fruit, fall maple detail, winter frost tips
       const acc = hash(wx * 2, wy, 41);
-      // Deciduous crowns carry the existing blossom, fruit and fall accents.
       if (deciduous) {
-        if (th.blossom && acc < 0.23) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
-        if (th.fruit && acc < 0.13) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
-        if (th.leaves && acc < 0.36) return { ch, fg: fgc, bg, bold: true, accent: true };
+        if (th.blossom && acc < 0.24) return { ch, fg: fgc, bg, bold: true, detail: { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) } };
+        if (th.fruit && acc < 0.16) return { ch, fg: fgc, bg, bold: true, detail: { ch: '●', fg: th.fruit } };
+        if (th.leaves && acc < 0.24) return { ch, fg: fgc, bg, bold: true, accent: true, detail: { ch: '❧', fg: pick(th.leaves, hash(wx, wy, 42)) } };
+        if (th.leaves && acc < 0.42) return { ch, fg: fgc, bg, bold: true, accent: true };
       }
-      if (th.snow && acc < 0.3) fgc = '#eef4fc';
+      if (th.snow) {
+        if (acc < 0.34) fgc = '#eef6ff';
+        else if (!deciduous && acc < 0.58) fgc = mix(fgc, '#ccf4ff', 0.45);
+      }
       return { ch, fg: fgc, bg, bold: true };
     }
     case 'field': {
       const soil = groundBg(F, tag);
       if (isWet(F) && hash(wx, wy, 70) < 0.06 * Math.max(0.25, F.wetness)) return puddle(F, wx, wy, soil, F.wetness || 1);
-      if (th.snow) return { ch: hs < 0.35 ? '·' : ' ', fg: th.soilDot, bg: soil, bold: false };
+      if (th.snow) return { ch: hs < 0.05 ? '❄' : hs < 0.35 ? '·' : ' ', fg: hs < 0.05 ? th.tuft : th.soilDot, bg: soil, bold: false };
+      if (F.season === 2 && th.leaves && hs < 0.07) return { ch: hs < 0.035 ? '❦' : ',', fg: pick(th.leaves, hash(wx, wy, 4)), bg: soil, bold: false };
       return { ch: hs < 0.45 ? '·' : ' ', fg: th.soilDot, bg: soil, bold: false };
     }
     case 'path': {
       const pb = groundBg(F, tag);
-      if (th.snow && hs < 0.1) return { ch: '▁', fg: '#eef4fc', bg: pb, bold: false };
+      if (th.snow) {
+        if (hs < 0.14) return { ch: '▁', fg: '#eef6ff', bg: pb, bold: false };
+        if (hs < 0.2) return { ch: '❆', fg: th.tuft, bg: pb, bold: false };
+      }
       if (isWet(F) && hash(wx, wy, 70) < 0.16 * Math.max(0.3, F.wetness)) return puddle(F, wx, wy, pb, F.wetness || 1);
-      return { ch: hs < 0.25 ? '▪' : hs < 0.55 ? '·' : ' ', fg: th.snow ? '#7a8494' : '#5a534b', bg: pb, bold: false };
+      if (F.season === 0 && th.blossom && hs < 0.025) return { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)), bg: pb, bold: false };
+      if (F.season === 2 && th.leaves && hs < 0.085) return { ch: hs < 0.045 ? '❦' : ',', fg: pick(th.leaves, hash(wx, wy, 4)), bg: pb, bold: false };
+      return { ch: hs < 0.25 ? '▪' : hs < 0.55 ? '·' : ' ', fg: th.pathFg, bg: pb, bold: false };
     }
     case 'sand':
-      return { ch: hs < 0.4 ? '·' : hs < 0.5 ? '∙' : ' ', fg: '#a08a5a', bg: groundBg(F, tag), bold: false };
+      if (th.snow && hs < 0.12) return { ch: '▁', fg: '#eef6ff', bg: groundBg(F, tag), bold: false };
+      return { ch: hs < 0.4 ? '·' : hs < 0.5 ? '∙' : ' ', fg: th.sandFg, bg: groundBg(F, tag), bold: false };
     case 'bridge':
-      return { ch: '═', fg: '#c08a4a', bg: '#3a2614', bold: false };
+      return { ch: '═', fg: th.snow && hs < 0.25 ? '#d0f0ff' : th.bridgeFg, bg: th.bridgeBg, bold: false };
     case 'ice':
       return { ch: hs < 0.3 ? '╱' : ' ', fg: '#d8f0ff', bg: mix('#5a8aa8', '#6a9ab8', hash(wx, wy, 7)), bold: false };
     case 'cliff': {
       if (F.map === 'ridge') return rockFace(F, x, y, wx, wy);
-      const rock = th.snow ? '#c8d0dc' : '#8a8070';
       const above = F.tags[y - 1]?.[x];
       const exposed = !above || above.t !== 'cliff';
-      return { ch: exposed ? '▔' : hs < 0.25 ? '▴' : '▲', fg: rock, bg: '#24201c', bold: false };
+      return { ch: exposed ? '▔' : hs < 0.25 ? '▴' : '▲', fg: th.cliffFg, bg: th.cliffBg, bold: false };
     }
     case 'cave':
       return { ch: '●', fg: '#050505', bg: '#3a342c', bold: false };
@@ -975,8 +991,13 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       if (!(above && above.t === 'roof')) {
         return { ch: '▄', fg: rc.mid, bg: outside, bold: false };
       }
-      const snowCap = th.snow && hash(wx * 2, wy, 12) < 0.5;
-      return { ch: wy % 2 ? '▒' : '░', fg: snowCap ? '#e8eef8' : rc.lit, bg: rc.mid, bold: false };
+      const snowCap = th.snow && hash(wx * 2, wy, 12) < 0.62;
+      const roofDetail = !th.snow && F.season === 0 && th.blossom && hash(wx * 2, wy, 13) < 0.05
+        ? { ch: '✿', fg: pick(th.blossom, hash(wx, wy, 42)) }
+        : !th.snow && F.season === 2 && th.leaves && hash(wx * 2, wy, 13) < 0.06
+          ? { ch: '❦', fg: pick(th.leaves, hash(wx, wy, 4)) }
+          : undefined;
+      return { ch: wy % 2 ? '▒' : '░', fg: snowCap ? '#eef6ff' : rc.lit, bg: rc.mid, bold: false, detail: roofDetail };
     }
     case 'wall': {
       if (tag.k === 'deco' && tag.dch === '=') {
@@ -1107,6 +1128,10 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       if (tint) bg = mix(bg, tint, 0.6);
       const dk = WATER_DEPTH[depth];
       bg = dk > 0 ? mix(bg, '#3a6ab0', dk) : mix(bg, '#000000', -dk);
+      // Winter shore ice rims shallow inland ponds and rivers (not open sea or hot springs)
+      if (th.snow && depth <= 1 && !F.sea && tag.t !== 'spring' && tag.t !== 'fountain' && hash(wx, wy, 29) < 0.42) {
+        return { ch: hs < 0.5 ? '╱' : '░', fg: '#ccf0ff', bg: mix(bg, '#70a8d8', 0.45), bold: false };
+      }
       // Willow Bend's river runs south, so its surface moves with the current
       const flow = F.map === 'river' && tag.t === 'water' ? riverFlow(F, x, y) : null;
       // the surface colour wanders a little around its depth colour, never drifting away from it
@@ -1201,6 +1226,8 @@ const MONO_OBJECT_LIFT = 0.45;
 const MONO_WATER_LIFT = 0.13;
 const MONO_WATER_RIPPLE = 0.3;
 
+const SEASONAL_FLORA = new Set(['☘', '❀', '✿', 'ʷ', '"', 'ʸ', '❦', '❧', '•', ',', '▁', '❆', '❄']);
+
 function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 'mono'): OutCell {
   const fullCol = palette === 'isotope';
   const x = tag.wx ?? 0;
@@ -1215,12 +1242,20 @@ function contourTile(F: Frame, tag: CellTag, o: OutCell, palette: PaletteMode = 
   if (!fullCol && !F.indoor && !o.accent && tag.k?.startsWith('obj:')) return { ...o, fg: mix(o.fg, '#ffffff', MONO_OBJECT_LIFT), bold: true };
   if (F.indoor || tag.ent || o.accent || o.glow || o.ch === '˙' || o.ch === '✧' || tag.k?.startsWith('obj:') || tag.k?.startsWith('crop:') || tag.k?.startsWith('soil')) return o;
   if (['grass', 'field', 'sand'].includes(tag.t) && o.ch !== '╿' && o.ch !== '◦' && !F.theme.snow) {
-    const texture: ContourTexture = { x, y, kind: tag.t === 'sand' ? 'sand' : 'ground' };
-    if (fullCol) return { ...o, ch: contourPattern(texture, 1), fg: mix(o.fg, '#ffffff', 0.16), bold: false, texture };
+    const keepFlora = SEASONAL_FLORA.has(o.ch);
+    if (fullCol) {
+      if (keepFlora) return o;
+      const texture: ContourTexture = { x, y, kind: tag.t === 'sand' ? 'sand' : 'ground' };
+      const contourCol = tag.t === 'sand' ? mix(F.theme.sandFg, o.bg, 0.2) : F.theme.contourFg;
+      return { ...o, ch: contourPattern(texture, 1), fg: contourCol, bold: false, texture };
+    }
     // In black and white the grounds differ by value: pale combed sand, mid-grey meadow, and a
     // dark, quiet field that leaves the eye free for what grows and lies on it.
     const g = MONO_GROUND[tag.t as 'grass' | 'field' | 'sand'];
-    return { ...o, ch: contourPattern(texture, 1), fg: g.fg, bg: g.lift >= 0 ? mix(o.bg, '#ffffff', g.lift) : mix(o.bg, '#000000', -g.lift), bold: false, texture };
+    const bg = g.lift >= 0 ? mix(o.bg, '#ffffff', g.lift) : mix(o.bg, '#000000', -g.lift);
+    if (keepFlora) return { ...o, bg };
+    const texture: ContourTexture = { x, y, kind: tag.t === 'sand' ? 'sand' : 'ground' };
+    return { ...o, ch: contourPattern(texture, 1), fg: g.fg, bg, bold: false, texture };
   }
   if (tag.t === 'roof') {
     const texture: ContourTexture = { x, y, kind: 'roof' };
@@ -1490,7 +1525,7 @@ function applyStep(out: OutCell[][], step: RenderCtx['step'], t: number, W: numb
 }
 
 export function computeFrame(
-  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'hires' | 'highContrast'>>,
+  scr: Pick<Screen, 'buf' | 'tags' | 'ctx' | 'w' | 'h'> & Partial<Pick<Screen, 'scene' | 'boxes' | 'paletteMode' | 'reducedMotion' | 'highContrast'>>,
   t: number,
 ): OutCell[][] {
   const { buf, tags, ctx } = scr;
@@ -1502,7 +1537,7 @@ export function computeFrame(
   const motion = !(ctx?.reducedMotion ?? scr.reducedMotion);
   const skyNow = ctx ? skyFor(ctx) : null;
   // with reduced motion every tile animation (sway, ripples, twinkles) holds its first frame
-  const F: Frame = { buf, tags, theme: themeFor(season, ctx?.day), t: motion ? t : 0, indoor: !!ctx?.indoor, weather: ctx?.weather ?? 'Sunny', amb: skyNow?.amb ?? 1, minutes: ctx?.minutes ?? 720, wetness: ctx?.wetness ?? 0, sea: SEA_MAPS.has(ctx?.mapName ?? ''), map: ctx?.mapName ?? '' };
+  const F: Frame = { buf, tags, theme: themeFor(season, ctx?.day), t: motion ? t : 0, indoor: !!ctx?.indoor, weather: ctx?.weather ?? 'Sunny', amb: skyNow?.amb ?? 1, minutes: ctx?.minutes ?? 720, wetness: ctx?.wetness ?? 0, sea: SEA_MAPS.has(ctx?.mapName ?? ''), map: ctx?.mapName ?? '', season };
   const out: OutCell[][] = new Array(H);
 
   for (let y = 0; y < H; y++) {
@@ -1831,14 +1866,14 @@ export function computeFrame(
         if (rain) {
           const drift = w === 'Typhoon' ? 2 : 1;
           if (hash(wx - f * drift, wy - f, 11) < dens) {
-            out[y][x] = { ...o, ch: w === 'Typhoon' ? '─' : '╲', fg: mix(o.bg, '#9cc8ff', 0.6), bold: false, glow: undefined };
+            out[y][x] = { ...o, ch: w === 'Typhoon' ? '─' : '╲', fg: mix(o.bg, '#9cc8ff', 0.6), bold: false, glow: undefined, texture: undefined, textureGlyph: undefined };
           } else if (WATERY.has(tag.t) && hash(wx, wy, 30 + (f % 50)) < 0.05) {
-            out[y][x] = { ...o, ch: '◦', fg: '#cfe6ff', bold: false };
+            out[y][x] = { ...o, ch: '◦', fg: '#cfe6ff', bold: false, texture: undefined, textureGlyph: undefined };
           }
         } else {
           const drift = w === 'Blizzard' ? 2 : 0;
           if (hash(wx + f * drift, wy - f, 13) < dens) {
-            out[y][x] = { ...o, ch: pick(['·', '*', '∙'], hash(wx, wy, 14)), fg: '#f0f4ff', bold: w === 'Blizzard', glow: undefined };
+            out[y][x] = { ...o, ch: pick(['·', '*', '∙'], hash(wx, wy, 14)), fg: '#f0f4ff', bold: w === 'Blizzard', glow: undefined, texture: undefined, textureGlyph: undefined };
           }
         }
       }
@@ -2033,8 +2068,6 @@ export function computeFrame(
   if (outdoor && ctx.weather === 'Sunny') reflections(out, tags, v, t, W, H);
   shoreFoam(out, tags, v, W, H, motion ? t : 0);
   connectedBorders(out, tags, v, W, H, ctx.toolTier ?? 0);
-  // vector micro-detail only exists for the dormant high-res look; skip the work otherwise
-  if (scr.hires) worldMicroDetail(out, tags, v, F, W, H, boxes, season, lightMap);
   if (ctx.fx?.length) drawFx(out, ctx.fx, v, W, H, motion);
   if (!ctx.indoor) worldMargin(out, tags, buf, v, ctx.divX, ctx.divY, boxes);
   else if (ctx.mapName !== 'mine') indoorFrame(out, tags, buf, v, ctx.divX, ctx.divY, boxes);
@@ -2457,14 +2490,23 @@ function chimneys(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
   }
 }
 
-/** Butterflies on fair spring/summer days, falling leaves in autumn. */
+/** Butterflies on fair spring/summer days, falling leaves in autumn, snow flurries in winter. */
 function critters(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['view'], t: number, W: number, H: number, season: number, weather: string, amb: number) {
   const day = amb > 0.85;
   const butterflies = day && weather === 'Sunny' && (season === 0 || season === 1);
   const leaves = season === 2 && weather !== 'Typhoon';
-  if (!butterflies && !leaves) return;
-  const n = butterflies ? Math.max(3, Math.round((v.w * v.h) / 500)) : Math.max(6, Math.round((v.w * v.h) / 160));
-  const cols = butterflies ? ['#ffe27a', '#ffffff', '#ff9ad0', '#9ad0ff'] : ['#ff9900', '#ff5a1a', '#e8b400'];
+  const flurries = season === 3 && weather !== 'Blizzard' && weather !== 'Typhoon';
+  if (!butterflies && !leaves && !flurries) return;
+  const n = butterflies
+    ? Math.max(3, Math.round((v.w * v.h) / 500))
+    : flurries
+      ? Math.max(4, Math.round((v.w * v.h) / 280))
+      : Math.max(6, Math.round((v.w * v.h) / 160));
+  const cols = butterflies
+    ? ['#ffe27a', '#ffffff', '#ff9ad0', '#9ad0ff']
+    : flurries
+      ? ['#eef6ff', '#98e8ff', '#ffffff']
+      : ['#ff9900', '#ff5a1a', '#e8b400', '#ff5ec0'];
   for (let i = 0; i < n; i++) {
     const a = hash(i, 1, 101);
     const b = hash(i, 2, 102);
@@ -2473,6 +2515,9 @@ function critters(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
     if (butterflies) {
       fx = a * v.w + Math.sin(t * 0.45 + i * 1.7) * 9 + Math.sin(t * 1.9 + i) * 1.5;
       fy = b * v.h + Math.sin(t * 0.6 + i * 2.3) * 3 + Math.cos(t * 2.3 + i) * 0.6;
+    } else if (flurries) {
+      fx = a * v.w + Math.sin(t * 0.6 + i * 1.3) * 2.2 + t * 0.5;
+      fy = b * v.h + t * (0.65 + b * 0.4);
     } else {
       fx = a * v.w + Math.sin(t * 0.7 + i) * 3 + t * 1.2;
       fy = b * v.h + t * (0.9 + b * 0.6);
@@ -2483,16 +2528,16 @@ function critters(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
     const tg = tags[y][x];
     if (!tg || tg.t === 'ui' || tg.ent) continue;
     if (butterflies && !(GROUND.has(tg.t) || (tg.k || '').startsWith('soil') || (tg.k || '').startsWith('crop:'))) continue;
-    if (leaves && !(GROUND.has(tg.t) || WATERY.has(tg.t) || (tg.k || '').startsWith('soil'))) continue;
+    if ((leaves || flurries) && !(GROUND.has(tg.t) || WATERY.has(tg.t) || (tg.k || '').startsWith('soil'))) continue;
     const o = out[y][x];
     const flap = Math.floor(t * 6 + i) % 2 === 0;
     out[y][x] = {
       ...o,
-      ch: butterflies ? (flap ? 'ж' : '×') : '❦',
+      ch: butterflies ? (flap ? 'ж' : '×') : flurries ? (i % 2 === 0 ? '❆' : '·') : (i % 3 === 0 ? '❧' : '❦'),
       fg: cols[i % cols.length],
-      bold: true,
+      bold: !flurries || i % 2 === 0,
       glow: undefined,
-      accent: true,
+      accent: !flurries,
     };
   }
   // Gentle drifting sakura petals on sunny Spring days
@@ -2524,9 +2569,11 @@ function critters(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['vi
   }
 }
 
-/** Reeds and lily pads: small signs that the water is alive. */
+/** Reeds and lily pads: small signs that the water is alive, tinted by season. */
 function waterLife(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['view'], season: number, sea: boolean) {
   if (sea || season === 3) return; // nothing grows on the open sea, and winter water is bare
+  const padCol = season === 2 ? '#c88424' : season === 1 ? '#1c8848' : '#28a040';
+  const reedCol = season === 2 ? '#d89a30' : season === 1 ? '#34b868' : '#4ec858';
   for (let y = v.y; y < v.y + v.h && y < tags.length; y++) {
     for (let x = v.x; x < v.x + v.w && x < tags[y].length; x++) {
       const tg = tags[y][x];
@@ -2537,11 +2584,13 @@ function waterLife(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['v
         if ((tg.t === 'water' || tg.t === 'pond') && hash(wx, wy, 190) < 0.035) {
           const o = out[y][x];
           o.ch = hash(wx, wy, 193) < 0.6 ? '◡' : '⌓';
-          o.fg = '#256a34';
+          o.fg = padCol;
           o.bold = false;
           o.accent = true;
           o.plain = true;
           o.seed = undefined;
+          if (season === 0 && hash(wx, wy, 194) < 0.18) o.detail = { ch: '✿', fg: '#ff8ad8' };
+          else if (season === 1 && hash(wx, wy, 194) < 0.24) o.detail = { ch: '✿', fg: '#ff6ec8' };
         }
         continue;
       }
@@ -2553,7 +2602,7 @@ function waterLife(out: OutCell[][], tags: (CellTag | null)[][], v: RenderCtx['v
       if (nearWater && hash(wx, wy, 191) < 0.08) {
         const o = out[y][x];
         o.ch = pick(['¦', 'ʸ', '╽'], hash(wx, wy, 192));
-        o.fg = '#4a8a52';
+        o.fg = reedCol;
         o.bold = false;
         o.accent = true;
         o.plain = true;
@@ -2918,404 +2967,6 @@ function connectedBorders(
   }
 }
 
-/**
- * Populate sub-cell architectural & terrain micro-detail metadata on world cells.
- * Trees keep their full-size silhouettes.
- */
-function worldMicroDetail(
-  out: OutCell[][],
-  tags: (CellTag | null)[][],
-  v: RenderCtx['view'],
-  F: Frame,
-  W: number,
-  H: number,
-  boxes: Screen['boxes'],
-  season: number,
-  lightMap: Float32Array | null,
-) {
-  const inBox = (x: number, y: number) => inAnyBox(boxes, x, y);
-  const Tstep = Math.floor(F.t * 3);
-  const rugAt = (x: number, y: number) => {
-    const tg = tags[y]?.[x];
-    if (!tg || tg.t !== 'floor') return false;
-    return [[-2, 0], [2, 0], [0, -1], [0, 1], [-2, 1], [2, 1], [-2, -1], [2, -1]].some(
-      ([dx, dy]) => tags[y + dy]?.[x + dx]?.t === 'table',
-    );
-  };
-  const sideMask = (x: number, y: number, pred: (n: CellTag | null | undefined, nx: number, ny: number) => boolean) => {
-    let m = 0;
-    if (pred(tags[y - 1]?.[x], x, y - 1)) m |= 1;
-    if (pred(tags[y]?.[x + 1], x + 1, y)) m |= 2;
-    if (pred(tags[y + 1]?.[x], x, y + 1)) m |= 4;
-    if (pred(tags[y]?.[x - 1], x - 1, y)) m |= 8;
-    return m;
-  };
-
-  for (let y = v.y; y < v.y + v.h && y < H; y++) {
-    for (let x = v.x; x < v.x + v.w && x < W; x++) {
-      const tg = tags[y][x];
-      if (!tg || tg.t === 'ui' || tg.t === 'void' || tg.t === 'tree' || inBox(x, y)) continue;
-      const o = out[y][x];
-      if (o.ui) continue;
-      const wx = tg.wx ?? x;
-      const wy = tg.wy ?? y;
-      const seed = hash(wx * 3, wy * 5, 219);
-      const k = tg.k || '';
-      const litBoost = lightMap ? Math.min(1, F.amb + lightMap[y * W + x] * 0.75) : F.amb;
-      const snow = !!F.theme.snow;
-      const up = tags[y - 1]?.[x];
-
-      // Doorstep stone apron on ground right below any exterior door
-      if ((tg.t === 'grass' || tg.t === 'field' || tg.t === 'path') && !k && up?.t === 'door') {
-        o.micro = {
-          kind: 'dock_step',
-          seed,
-          mask: 0,
-          hi: mix(o.bg, '#d8d0c4', 0.34 * litBoost + 0.08),
-          lo: mix(o.bg, '#000000', 0.36),
-          acc: mix(o.bg, '#9e9688', 0.28 * litBoost + 0.06),
-        };
-        continue;
-      }
-
-      if (k.startsWith('soil')) {
-        const wet = k.endsWith(':wet');
-        const isBed = (n: CellTag | null | undefined) => {
-          const nk = n?.k || '';
-          return nk.startsWith('soil') || nk.startsWith('crop:');
-        };
-        o.micro = {
-          kind: wet ? 'soil_wet' : 'soil',
-          seed,
-          mask: sideMask(x, y, (n) => !isBed(n)),
-          hi: mix(o.bg, wet ? '#705038' : '#b87e4c', 0.36 * litBoost + 0.12),
-          lo: mix(o.bg, '#000000', wet ? 0.56 : 0.42),
-          acc: wet ? mix(o.bg, '#6ec8ff', 0.38 * litBoost + 0.08) : mix(o.bg, '#9a683a', 0.25),
-        };
-        continue;
-      }
-
-      if (k.startsWith('crop:')) {
-        const wet = k.endsWith(':wet');
-        const stage = k.startsWith('crop:ripe') ? 3 : k.startsWith('crop:young') ? 2 : k.startsWith('crop:sprout') ? 1 : 0;
-        const isBed = (n: CellTag | null | undefined) => {
-          const nk = n?.k || '';
-          return nk.startsWith('soil') || nk.startsWith('crop:');
-        };
-        o.micro = {
-          kind: 'crop',
-          seed,
-          mask: sideMask(x, y, (n) => isBed(n)),
-          hi: mix(o.bg, wet ? '#6a4c36' : '#a87444', 0.3 * litBoost + 0.08),
-          lo: mix(o.bg, '#000000', 0.48),
-          acc: mix(o.bg, o.fg, 0.55),
-          v: stage,
-        };
-        continue;
-      }
-
-      switch (tg.t) {
-        case 'grass': {
-          const edgeMask = sideMask(x, y, (n) => !!n && (n.t === 'path' || WATERY.has(n.t) || n.t === 'sand'));
-          o.micro = {
-            kind: 'grass',
-            seed,
-            mask: edgeMask,
-            hi: mix(o.bg, snow ? '#eef4fc' : F.theme.tuft, (snow ? 0.34 : 0.24) * litBoost + 0.06),
-            lo: mix(o.bg, '#000000', snow ? 0.22 : 0.32),
-            acc: F.theme.wildflowers && !snow ? mix(o.bg, F.theme.wildflowers[Math.floor(seed * F.theme.wildflowers.length)], 0.35 * litBoost) : undefined,
-            v: season,
-          };
-          break;
-        }
-        case 'flower': {
-          o.micro = {
-            kind: 'flower',
-            seed,
-            hi: mix(o.bg, snow ? '#eef4fc' : '#58d838', 0.32 * litBoost + 0.08),
-            lo: mix(o.bg, '#0a2008', 0.44),
-            acc: mix(o.bg, o.fg, 0.65),
-            v: season,
-          };
-          break;
-        }
-        case 'field': {
-          const edgeGrass = sideMask(x, y, (n) => !!n && (n.t === 'grass' || n.t === 'flower'));
-          o.micro = {
-            kind: 'field',
-            seed,
-            mask: edgeGrass,
-            hi: mix(o.bg, F.theme.soilDot, 0.38 * litBoost + 0.08),
-            lo: mix(o.bg, '#000000', 0.36),
-            acc: edgeGrass ? mix(o.bg, F.theme.tuft, 0.25 * litBoost) : undefined,
-            v: snow ? 1 : 0,
-          };
-          break;
-        }
-        case 'path': {
-          const kerb = sideMask(x, y, (n) => !!n && (n.t === 'grass' || n.t === 'flower' || n.t === 'field'));
-          o.micro = {
-            kind: 'path',
-            seed,
-            mask: kerb,
-            hi: mix(o.bg, snow ? '#dde8f8' : '#b8b0a2', 0.16 * litBoost + 0.04),
-            lo: mix(o.bg, '#000000', 0.32),
-            acc: mix(o.bg, snow ? '#ffffff' : '#8a8275', 0.1 * litBoost + 0.03),
-            v: (wx + wy * 2) & 3,
-          };
-          break;
-        }
-        case 'sand': {
-          const damp = sideMask(x, y, (n) => !!n && WATERY.has(n.t)) !== 0;
-          o.micro = {
-            kind: 'sand',
-            seed,
-            mask: damp ? 1 : 0,
-            hi: mix(o.bg, '#f0d8a8', (damp ? 0.16 : 0.28) * litBoost + 0.06),
-            lo: mix(o.bg, '#000000', damp ? 0.38 : 0.26),
-            acc: hash(wx, wy, 223) < 0.14 ? mix(o.bg, '#ffd8d0', 0.4 * litBoost + 0.1) : undefined,
-            v: damp ? 1 : 0,
-          };
-          break;
-        }
-        case 'bridge': {
-          const exposed = sideMask(x, y, (n) => !n || n.t !== 'bridge');
-          o.micro = {
-            kind: 'bridge',
-            seed,
-            mask: exposed,
-            hi: mix(o.bg, '#e4aa64', 0.46 * litBoost + 0.1),
-            lo: mix(o.bg, '#000000', 0.56),
-            acc: mix(o.bg, '#f2d8b0', 0.4 * litBoost + 0.1),
-            v: wx & 1,
-          };
-          break;
-        }
-        case 'water':
-        case 'pond':
-        case 'spring':
-        case 'fountain': {
-          if (tg.k === 'deco' && tg.dch) break;
-          const shore = sideMask(x, y, (n) => !!n && n.t !== 'ui' && !WATERY.has(n.t) && n.t !== 'bridge' && n.t !== 'void');
-          const lily = o.ch === '◡' || o.ch === '⌓';
-          o.micro = {
-            kind: 'water',
-            seed,
-            mask: shore,
-            hi: mix(o.bg, o.fg, 0.36),
-            lo: mix(o.bg, '#000000', 0.34),
-            acc: lily
-              ? mix(o.bg, '#33b848', 0.55)
-              : shore
-                ? mix(o.bg, '#b8c4d4', 0.22 * litBoost)
-                : undefined,
-            v: (Tstep + Math.floor(seed * 8)) & 15,
-          };
-          break;
-        }
-        case 'roof': {
-          const edge = sideMask(x, y, (n) => !n || n.t !== 'roof');
-          // the roof outline: contourTile has already turned the solid ◢◣▄ eaves into ╱╲─ lines,
-          // and those must stay drawn (they are what makes a building read as a building)
-          const sloped = '◢◣▄╱╲─'.includes(o.ch);
-          o.micro = {
-            kind: sloped ? 'roof_edge' : 'roof',
-            seed,
-            mask: edge,
-            hi: mix(o.bg, '#ffffff', 0.12 * litBoost + 0.03),
-            lo: mix(o.bg, '#000000', 0.34),
-            acc: snow ? mix(o.bg, '#f0f6ff', 0.55 * litBoost + 0.15) : mix(o.bg, o.fg, 0.2),
-            v: (wy & 1) | (snow ? 4 : 0),
-          };
-          break;
-        }
-        case 'wall': {
-          if (tg.k === 'deco' && tg.dch === '=') {
-            o.micro = {
-              kind: 'window',
-              seed,
-              hi: mix(o.bg, '#c89050', 0.48 * litBoost + 0.14),
-              lo: mix(o.bg, '#000000', 0.55),
-              acc: o.fg,
-              v: o.glow ? 1 : 0,
-            };
-            break;
-          }
-          if (tg.k === 'deco' && tg.dch !== undefined) break;
-          const walled = (n: CellTag | null | undefined) => !!n && (n.t === 'wall' || n.t === 'door');
-          let wmask = 0;
-          if (up?.t === 'roof') wmask |= 1;
-          if (!walled(tags[y]?.[x + 1])) wmask |= 2;
-          const dn = tags[y + 1]?.[x];
-          if (!walled(dn)) wmask |= 4;
-          if (!walled(tags[y]?.[x - 1])) wmask |= 8;
-          o.micro = {
-            kind: 'wall',
-            seed,
-            mask: wmask,
-            hi: mix(o.bg, '#d49a60', 0.2 * litBoost + 0.05),
-            lo: mix(o.bg, '#000000', 0.34),
-            acc: snow && (wmask & 1) ? mix(o.bg, '#e8f2ff', 0.65) : undefined,
-            v: snow ? 1 : 0,
-          };
-          break;
-        }
-        case 'door': {
-          const open = o.ch === '▯';
-          o.micro = {
-            kind: 'door',
-            seed,
-            hi: mix(o.bg, open ? '#ffd078' : '#e09a48', 0.55),
-            lo: mix(o.bg, '#000000', 0.55),
-            acc: mix(o.bg, open ? '#fff0c0' : '#f0c850', 0.72),
-            v: open ? 1 : 0,
-          };
-          break;
-        }
-        case 'cliff': {
-          const exposed = sideMask(x, y, (n) => !n || n.t !== 'cliff');
-          o.micro = {
-            kind: 'cliff',
-            seed,
-            mask: exposed,
-            hi: mix(o.bg, snow ? '#eef4fc' : '#d8cbb4', 0.34 * litBoost + 0.08),
-            lo: mix(o.bg, '#000000', 0.52),
-            acc: snow ? mix('#eef4fc', o.bg, 0.25) : mix(o.bg, '#b8aa92', 0.25 * litBoost),
-            v: snow ? 1 : 0,
-          };
-          break;
-        }
-        case 'mwall': {
-          if (isTorch(F, x, y, tg)) break;
-          o.micro = {
-            kind: 'mwall',
-            seed,
-            mask: sideMask(x, y, (n) => !!n && n.t !== 'mwall'),
-            hi: mix(o.bg, '#8a7e70', 0.34 * litBoost + 0.08),
-            lo: mix(o.bg, '#000000', 0.54),
-            acc: hash(wx, wy, 227) < 0.14 ? mix(o.bg, '#70e8ff', 0.32 * litBoost + 0.1) : undefined,
-          };
-          break;
-        }
-        case 'floor': {
-          if (rugAt(x, y)) {
-            const rugEdge = sideMask(x, y, (_n, nx, ny) => !rugAt(nx, ny));
-            o.micro = {
-              kind: 'rug',
-              seed,
-              mask: rugEdge,
-              hi: mix(o.bg, '#ff80c0', 0.34),
-              lo: mix(o.bg, '#000000', 0.38),
-              acc: mix(o.bg, '#ffe0a0', 0.42),
-            };
-          } else {
-            o.micro = {
-              kind: 'floor',
-              seed,
-              hi: mix(o.bg, '#a87848', 0.26),
-              lo: mix(o.bg, '#000000', 0.36),
-              v: (wx + wy) & 3,
-            };
-          }
-          break;
-        }
-        case 'mfloor': {
-          o.micro = {
-            kind: 'mfloor',
-            seed,
-            hi: mix(o.bg, '#706458', 0.25 * litBoost + 0.06),
-            lo: mix(o.bg, '#000000', 0.42),
-            v: (wx + wy) & 3,
-          };
-          break;
-        }
-        case 'iwall': {
-          if (tg.k === 'deco' && tg.dch === '=') {
-            o.micro = {
-              kind: 'window',
-              seed,
-              hi: mix(o.bg, '#c89050', 0.5),
-              lo: mix(o.bg, '#000000', 0.52),
-              acc: o.fg,
-              v: 1,
-            };
-            break;
-          }
-          const dn = tags[y + 1]?.[x];
-          const wmask = (!up || up.t !== 'iwall') && dn?.t === 'floor' ? 4 : 0;
-          o.micro = {
-            kind: 'iwall',
-            seed,
-            mask: wmask,
-            hi: mix(o.bg, '#b0865c', 0.22),
-            lo: mix(o.bg, '#000000', 0.36),
-          };
-          break;
-        }
-        case 'bed': {
-          const left = tags[y]?.[x - 1];
-          const head = !left || left.t !== 'bed';
-          o.micro = {
-            kind: 'bed',
-            seed,
-            mask: head ? 8 : 0,
-            hi: mix(o.bg, '#90a8f0', 0.38),
-            lo: mix(o.bg, '#000000', 0.45),
-            acc: head ? '#f2efe8' : mix(o.bg, '#d8e4ff', 0.34),
-          };
-          break;
-        }
-        case 'table':
-        case 'counter': {
-          o.micro = {
-            kind: tg.t,
-            seed,
-            hi: mix(o.bg, tg.t === 'counter' ? '#e8b888' : '#c88c4e', 0.44),
-            lo: mix(o.bg, '#000000', 0.5),
-            acc: mix(o.bg, '#fff0d8', 0.32),
-          };
-          break;
-        }
-        case 'fireplace': {
-          o.micro = {
-            kind: 'fireplace',
-            seed,
-            hi: mix(o.bg, '#908074', 0.38),
-            lo: mix(o.bg, '#000000', 0.58),
-            acc: '#ff9900',
-          };
-          break;
-        }
-        case 'bookcase':
-        case 'shelf': {
-          o.micro = {
-            kind: tg.t,
-            seed,
-            hi: mix(o.bg, '#b87c44', 0.32),
-            lo: mix(o.bg, '#000000', 0.44),
-            acc: tg.t === 'bookcase' ? mix(o.bg, o.fg, 0.45) : mix(o.bg, '#80d8ff', 0.35),
-            v: wx & 3,
-          };
-          break;
-        }
-        case 'bath': {
-          const rim = sideMask(x, y, (n) => !n || n.t !== 'bath');
-          o.micro = {
-            kind: 'bath',
-            seed,
-            mask: rim,
-            hi: mix(o.bg, '#60b8ff', 0.42),
-            lo: mix(o.bg, '#406078', 0.35),
-            acc: '#ffffff',
-            v: Tstep & 7,
-          };
-          break;
-        }
-      }
-    }
-  }
-}
-
 /** Fast radial lantern-iris reveal when stepping between maps. */
 function applyWipe(out: OutCell[][], v: RenderCtx['view'], W: number, H: number, wipe: NonNullable<RenderCtx['wipe']>) {
   const p = wipe.age / Math.max(0.01, wipe.duration);
@@ -3428,14 +3079,6 @@ function decorateBoxes(out: OutCell[][], boxes: Screen['boxes'], W: number, H: n
       const cell = out[y][x];
       cell.bg = mix(cell.bg, '#000000', 0.45);
       cell.fg = mix(cell.fg, '#000000', 0.4);
-      if (cell.micro) {
-        cell.micro = {
-          ...cell.micro,
-          hi: mix(cell.micro.hi, '#000000', 0.45),
-          lo: mix(cell.micro.lo, '#000000', 0.45),
-          acc: cell.micro.acc ? mix(cell.micro.acc, '#000000', 0.45) : undefined,
-        };
-      }
     };
     for (let y = b.y + 1; y <= b.y + b.h; y++) shadow(b.x + b.w, y);
     for (let x = b.x + 1; x < b.x + b.w; x++) shadow(x, b.y + b.h);
@@ -3455,7 +3098,6 @@ export type Metrics = {
   /** True after the bundled farm symbol font has loaded. */
   farmSymbols?: boolean;
   dpr?: number;
-  hires?: boolean;
   crt?: boolean;
 };
 
@@ -3496,10 +3138,7 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
         p.label?.text !== n.label?.text || p.label?.scale !== n.label?.scale ||
         p.label?.w !== n.label?.w || p.label?.h !== n.label?.h ||
         p.subBar?.frac !== n.subBar?.frac || p.subBar?.pos !== n.subBar?.pos ||
-        p.subBar?.col !== n.subBar?.col || p.subBar?.track !== n.subBar?.track ||
-        p.micro?.kind !== n.micro?.kind || p.micro?.seed !== n.micro?.seed ||
-        p.micro?.mask !== n.micro?.mask || p.micro?.v !== n.micro?.v ||
-        p.micro?.hi !== n.micro?.hi || p.micro?.lo !== n.micro?.lo || p.micro?.acc !== n.micro?.acc
+        p.subBar?.col !== n.subBar?.col || p.subBar?.track !== n.subBar?.track
       ) {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -3536,139 +3175,19 @@ export function frameDirtyRect(prev: OutCell[][] | null, next: OutCell[][]): Dir
 }
 
 /** Paint a computed frame. Block shapes are drawn as rects/paths so they tile without seams. */
-// ---------------------------------------------------------------- high-resolution textures
-//
-// Texture cells (grass, specks, cobbles, water, foliage, shingles, planks, furrows, rock) are
-// drawn as a 2x2 grid of half-size glyphs: four times the detail per cell. Sprites, text and
-// the HUD stay full size so everything stays readable. Each entry lists 4-glyph variants
-// (top-left, top-right, bottom-left, bottom-right), picked by the cell's world seed.
-const SUBPIX: Record<string, string[]> = {
-  "'": ["'  `", " '` ", "` ' ", "'' `"],
-  '`': ["`  '", " `' ", "' ` ", "`` '"],
-  '·': ['·  ·', ' ·· ', '·   ', '  · '],
-  '∙': ['∙  ·', ' ·∙ '],
-  '▪': ['▪▫▫▪', '▫▪▪▫', '▪▪ ▫', '▫ ▪▪'],
-  '≈': ['∼≈≈∼', '≈∼∼≈', '∼∼≈≈'],
-  '∼': ['∼  ∼', ' ∼∼ ', '∼ ∼ '],
-  '♣': ['♣♠♣♣', '♣♣♠♣', '♠♣♣♣', '♣♣♣♠'],
-  '♠': ['♠♠♣♠', '♠♣♠♠', '♠♠♠♣'],
-  '░': ['░░░░'],
-  '▒': ['▒▒▒▒', '▒░▒▒', '▒▒░▒'],
-  '▓': ['▓▒▒▓', '▒▓▓▒'],
-  '═': ['════'],
-  '≡': ['≡≡≡≡'],
-  '─': ['────', '── ─', '─ ──'],
-  '˙': ['˙  ˙', ' ˙  ', '  ˙ ', '˙   ', ' ˙˙ '],
-};
-
-// Small things drawn as clusters across their tile: [centre pool, edge pool].
-const SPRITE_POOLS: Record<string, [string, string]> = {
-  'ψ': [' ', '    ʷ, '],
-  '✿': ['✿❀✿', '  ·, '],
-  '❀': ['❀✿❀', '  ·, '],
-  '∴': ['·∙', ' ·'],
-  ',': [',ʷ,', '  , '],
-  '"': ['"ʷ"', '  , '],
-  'ʷ': ['ʷ,ʷ', '   ,'],
-  '•': [' ', '     · '],
-};
-/** Field obstacles keep their full-size glyph at the centre (they must stay easy to spot). */
-export const SPRITE_KEEP = new Set(['ψ', '•']);
-
-/**
- * Rows of a small-object cluster spanning the object's tile (2 cells wide when centred in Large
- * mode): `level` rows of `level * width` glyphs, denser toward the middle. Null when the object
- * should stay a single glyph (glowing crops, tokens, the HUD, small fonts).
- */
-export function spritePattern(o: OutCell, fontPx: number, level: number): string[] | null {
-  if (level < 2 || fontPx < HIRES_MIN_FONT || o.ui || o.plain || o.token || o.glow) return null;
-  const pools = SPRITE_POOLS[o.ch];
-  if (!pools) return null;
-  const seed = o.seed ?? 0;
-  const rows: string[] = [];
-  for (let r = 0; r < level; r++) {
-    let row = '';
-    for (let c = 0; c < level; c++) {
-      const dx = (c + 0.5) / level - 0.5;
-      const dy = (r + 0.5) / level - 0.5;
-      const pool = Math.sqrt(dx * dx * 1.6 + dy * dy) < 0.3 ? pools[0] : pools[1];
-      const j = Math.sin(seed * 6151 + r * 17.3 + c * 41.9) * 43758.5453;
-      row += pool[Math.floor((j - Math.floor(j)) * pool.length) % pool.length];
-    }
-    rows.push(row);
-  }
-  return rows;
-}
-/** Smallest font size at which the half-size texture glyphs are still legible. */
-export const HIRES_MIN_FONT = 12;
-
-/** Glyph pools for the 3x3 level: every variant's glyphs (spaces included, so density is kept). */
-const SUBPOOL: Record<string, string[]> = Object.fromEntries(Object.entries(SUBPIX).map(([k, v]) => [k, [...v.join('')]]));
-
-/**
- * Texture detail level for a font size: 2 (2x2 half-size glyphs) where those are still legible,
- * otherwise 1 (plain glyph). The pixel ratio is accepted but no longer raises it: a 3x3 grid of
- * third-size glyphs read as static on every screen, even at 2x and 3x, so it is not used.
- */
-export function hiresLevel(fontPx: number, _dpr = 1): number {
-  return fontPx >= HIRES_MIN_FONT ? 2 : 1;
-}
-
-/** The texture detail level after applying the player's high-res-detail preference. */
-export function effectiveHiresLevel(fontPx: number, dpr = 1, hires = true): number {
-  return hires ? hiresLevel(fontPx, dpr) : 1;
-}
-
-/** The n x n high-resolution pattern for a cell (n*n glyphs, row by row), or null for a plain glyph. */
-export function subPattern(o: OutCell, fontPx: number, n = 2): string | null {
-  if (n < 2 || fontPx < HIRES_MIN_FONT || o.ui || o.plain || o.token || o.glow) return null;
-  if (o.texture && o.ch === o.textureGlyph) return contourPattern(o.texture, n);
-  const v = SUBPIX[o.ch];
-  if (!v) return null;
-  const seed = o.seed ?? 0;
-  if (n === 2) return v[Math.floor(seed * v.length) % v.length];
-  const pool = SUBPOOL[o.ch];
-  let out = '';
-  for (let k = 0; k < n * n; k++) {
-    const j = Math.sin(seed * 7919 + k * 31.7) * 43758.5453;
-    out += pool[Math.floor((j - Math.floor(j)) * pool.length) % pool.length];
-  }
-  return out;
-}
-
-/** Textures with form are lit from the top-left; the rest get a gentle per-glyph jitter. */
-const LIT_SUB = new Set(['♣', '♠', '░', '▒', '▓', '═', '≡', '─']);
-const LIT_ALPHA = [1, 0.84, 0.8, 0.62];
-
-/** Brightness (as alpha over the cell background) for mini-glyph k (0..3) of a high-res cell. */
-export function subAlpha(ch: string, seed: number, k: number): number {
-  if (LIT_SUB.has(ch)) return LIT_ALPHA[k];
-  const j = Math.sin(seed * 9301 + k * 49.3) * 43758.5453;
-  return 0.6 + 0.4 * (j - Math.floor(j));
-}
-
-/** Row brightness for the 3x3 level: lit textures fade from top to bottom, others jitter per row. */
-export function rowAlpha(ch: string, seed: number, r: number, n: number): number {
-  if (LIT_SUB.has(ch)) return 1 - (0.36 * r) / Math.max(1, n - 1);
-  return subAlpha(ch, seed, r);
-}
-
 export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Metrics, dirty?: DirtyRect) {
   const { cw, ch, fontPx, font } = m;
-  const level = effectiveHiresLevel(fontPx, m.dpr ?? 1, m.hires ?? true);
   const fallback = m.farmSymbols ? undefined : FARM_SYMBOL_FALLBACK;
   const X0 = Math.max(0, dirty?.x0 ?? 0);
   const Y0 = Math.max(0, dirty?.y0 ?? 0);
   const X1 = Math.min(frame[0]?.length ?? 0, dirty?.x1 ?? frame[0]?.length ?? 0);
   const Y1 = Math.min(frame.length, dirty?.y1 ?? frame.length);
-  const mx: number[] = [];
-  const my: number[] = [];
-  const ms: string[] = [];
-  const mf: string[] = [];
-  const ma: number[] = [];
-  const mb: boolean[] = [];
-  const mini = (x: number, y: number, str: string, fg: string, a: number, b: boolean) => {
-    mx.push(x); my.push(y); ms.push(str); mf.push(fg); ma.push(a); mb.push(b);
+  const dx: number[] = [];
+  const dy: number[] = [];
+  const ds: string[] = [];
+  const df: string[] = [];
+  const detail = (x: number, y: number, str: string, fg: string) => {
+    dx.push(x); dy.push(y); ds.push(str); df.push(fg);
   };
   const sliding: [OutCell, number, number][] = [];
   /** A villager, animal or player disc: fill, rim and the facing dot. */
@@ -3707,8 +3226,6 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       x0 = x;
     }
   }
-  // sub-cell architectural & terrain micro-detail pass (sits cleanly beneath glyphs & overlays)
-  const hiresMicro = (m.hires ?? true) && cw >= 6 && ch >= 10;
   let curFont = '';
   let glowOn = false;
   for (let y = Y0; y < Y1; y++) {
@@ -3722,14 +3239,9 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         sliding.push([o, px + o.shift[0] * cw, py + o.shift[1] * ch]);
         continue;
       }
-      let skipFillerGlyph = false;
-      if (hiresMicro && o.micro && !o.ui) {
-        skipFillerGlyph = paintMicroDetail(g, o, px, py, cw, ch);
-      }
-      // two-tone cells: the detail glyph sits small on the upper right, drawn with the batch
-      if (o.detail) mini(px + cw * 0.48, py + ch * 0.3, o.detail.ch, o.detail.fg, 1, true);
-      if (skipFillerGlyph && !o.plain && !o.token && !o.label) continue;
-      if (o.ch === ' ' && !(o.texture && o.ch === o.textureGlyph)) continue;
+      // two-tone cells: the detail glyph sits small on the upper right, drawn in one batch
+      if (o.detail) detail(px + cw * 0.48, py + ch * 0.3, o.detail.ch, o.detail.fg);
+      if (o.ch === ' ') continue;
       if (o.label) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
         const label = o.label;
@@ -3762,16 +3274,6 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         }
         g.closePath();
         g.fill();
-        if (hiresMicro && o.micro?.kind === 'roof_edge') {
-          const steps = 3;
-          g.fillStyle = o.micro.hi;
-          for (let i = 0; i < steps; i++) {
-            const sy = Math.floor(py + ((i + 0.5) * ch) / steps);
-            const rx = Math.round(px + (o.ch === '◢' ? cw * (1 - (i + 0.6) / steps) : cw * 0.08));
-            const rw = Math.max(2, Math.round(cw * ((i + 0.5) / steps) * 0.72));
-            g.fillRect(rx, sy, rw, 1);
-          }
-        }
         continue;
       }
       // Seamless vector box-drawing rules & rounded modal corners (no vertical/horizontal font gaps)
@@ -3840,32 +3342,6 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
         g.stroke();
         continue;
       }
-      // Small glyphs are queued and drawn in one batch after this loop, so the canvas font
-      // switches once per frame instead of once per cell.
-      const spr = spritePattern(o, fontPx, level);
-      if (spr) {
-        for (let r = 0; r < spr.length; r++) {
-          if (spr[r].trim() !== '') mini(px, py + r * (ch / level) + ch / (2 * level) + 0.5, spr[r], o.fg, 1, o.bold);
-        }
-        if (!SPRITE_KEEP.has(o.ch)) continue; // obstacles also draw their full-size glyph below
-      }
-      // A cell with vector micro-detail already has its high-res texture; a grid of tiny glyphs on
-      // top of it turns into noise, so it keeps its one full-size glyph instead.
-      const pat = spr || (hiresMicro && o.micro) ? null : subPattern(o, fontPx, level);
-      if (pat) {
-        if (level === 2) {
-          for (let k = 0; k < 4; k++) {
-            if (pat[k] !== ' ') mini(px + (k & 1) * (cw / 2), py + (k >> 1) * (ch / 2) + ch / 4 + 0.5, pat[k], o.fg, o.texture ? 1 : subAlpha(o.ch, o.seed ?? 0, k), o.bold);
-          }
-        } else {
-          // one call per row: a monospace font at size fontPx/n advances exactly cw/n per glyph
-          for (let r = 0; r < level; r++) {
-            const rowStr = pat.slice(r * level, r * level + level);
-            if (rowStr.trim() !== '') mini(px, py + r * (ch / level) + ch / (2 * level) + 0.5, rowStr, o.fg, rowAlpha(o.ch, o.seed ?? 0, r, level), o.bold);
-          }
-        }
-        continue;
-      }
       if (o.token) {
         if (glowOn) { g.shadowBlur = 0; glowOn = false; }
         drawToken(o, px, py);
@@ -3887,22 +3363,16 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
       g.fillText(fallback?.[o.ch] ?? o.ch, px, py + ch / 2 + 1);
     }
   }
-  // a glyph's glow must not leak into the passes below (small glyphs, overlays, CRT scanlines)
+  // a glyph's glow must not leak into the passes below (detail accents, overlays, CRT scanlines)
   g.shadowBlur = 0;
   glowOn = false;
-  // batched small glyphs (high-res textures and clusters)
-  if (ms.length) {
-    g.shadowBlur = 0;
-    for (const bold of [false, true]) {
-      g.font = `${bold ? 'bold ' : ''}${fontPx / Math.max(2, level)}px ${font}`;
-      for (let i = 0; i < ms.length; i++) {
-        if (mb[i] !== bold) continue;
-        g.globalAlpha = ma[i];
-        g.fillStyle = mf[i];
-        g.fillText(ms[i], mx[i], my[i]);
-      }
+  // batched two-tone detail accents (blossoms, fruit, companion marks, crop foliage)
+  if (ds.length) {
+    g.font = `bold ${fontPx / 2}px ${font}`;
+    for (let i = 0; i < ds.length; i++) {
+      g.fillStyle = df[i];
+      g.fillText(ds[i], dx[i], dy[i]);
     }
-    g.globalAlpha = 1;
   }
   // the player mid-step, over the cells it is crossing
   for (const [o, px, py] of sliding) {
@@ -3917,7 +3387,7 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
     g.fillText(o.ch, px, py + ch / 2 + 1);
     g.shadowBlur = 0;
     if (o.detail) {
-      g.font = `bold ${fontPx / Math.max(2, level)}px ${font}`;
+      g.font = `bold ${fontPx / 2}px ${font}`;
       g.fillStyle = o.detail.fg;
       g.fillText(o.detail.ch, px + cw * 0.48, py + ch * 0.3);
     }
@@ -4007,719 +3477,9 @@ export function drawFrame(g: CanvasRenderingContext2D, frame: OutCell[][], m: Me
   g.restore();
 }
 
-/**
- * Paint sub-cell high-resolution textures & architectural details strictly inside [px, px+cw] x [py, py+ch].
- * Returns true if this vector geometry replaces an otherwise stretched structural filler glyph (`≡`, `═`, `▒`, etc.).
- */
-function paintMicroDetail(
-  g: CanvasRenderingContext2D,
-  o: OutCell,
-  px: number,
-  py: number,
-  cw: number,
-  ch: number,
-): boolean {
-  const m = o.micro;
-  if (!m) return false;
-  const X = Math.floor(px);
-  const Y = Math.floor(py);
-  const W = Math.max(2, Math.ceil(cw));
-  const H = Math.max(2, Math.ceil(ch));
-  const mask = m.mask ?? 0;
-  const s = m.seed;
-  const v = m.v ?? 0;
-  const u1 = Math.max(1, Math.round(W / 8));
-  const h1 = Math.max(1, Math.round(H / 16));
-
-  switch (m.kind) {
-    case 'soil':
-    case 'soil_wet': {
-      const padL = mask & 8 ? Math.max(1, u1) : 0;
-      const padR = mask & 2 ? Math.max(1, u1) : 0;
-      const span = Math.max(2, W - padL - padR);
-      for (let r = 0; r < 4; r++) {
-        const ry = Y + Math.round((r * H) / 4);
-        const ridgeH = Math.max(1, Math.round(H / 9));
-        g.fillStyle = m.hi;
-        g.fillRect(X + padL, ry + 1, span, ridgeH);
-        g.fillStyle = m.lo;
-        g.fillRect(X + padL, ry + 1 + ridgeH, span, Math.max(1, Math.round(H / 10)));
-        if (m.kind === 'soil_wet' && m.acc && ((r + Math.floor(s * 7)) % 2 === 0)) {
-          const sx = X + padL + Math.round(((s * 19 + r * 0.37) % 1) * Math.max(1, span - u1 * 3));
-          g.fillStyle = m.acc;
-          g.fillRect(sx, ry + 1 + ridgeH, Math.max(2, u1 * 2), 1);
-        }
-      }
-      // small soil clods
-      g.fillStyle = m.lo;
-      const cx0 = X + padL + Math.round(((s * 13) % 1) * Math.max(1, span - 2));
-      g.fillRect(cx0, Y + Math.round(H * 0.32), u1, h1);
-      if (m.acc) {
-        g.fillStyle = m.acc;
-        const cx1 = X + padL + Math.round(((s * 29) % 1) * Math.max(1, span - 2));
-        g.fillRect(cx1, Y + Math.round(H * 0.74), u1, h1);
-      }
-      return !o.plain && (o.ch === '≡' || o.ch === '═');
-    }
-
-    case 'crop': {
-      // soft furrow extensions at left/right if connected to soil neighbors
-      const ry0 = Y + Math.round(H * 0.25);
-      const ry1 = Y + Math.round(H * 0.72);
-      g.fillStyle = m.lo;
-      if (mask & 8) g.fillRect(X, ry0, Math.max(2, u1 * 2), 1);
-      if (mask & 2) g.fillRect(X + W - Math.max(2, u1 * 2), ry0, Math.max(2, u1 * 2), 1);
-      // rounded loam planting mound beneath crop glyph
-      const mw = Math.max(4, Math.round(W * 0.72));
-      const mx = X + Math.floor((W - mw) / 2);
-      const mh = Math.max(2, Math.round(H * 0.2));
-      g.fillStyle = m.lo;
-      g.fillRect(mx, ry1, mw, mh);
-      g.fillStyle = m.hi;
-      g.fillRect(mx + 1, Math.max(Y, ry1 - 1), Math.max(2, mw - 2), 1);
-      // tiny basal leaf flecks once sprouted
-      if (v >= 1 && m.acc) {
-        g.fillStyle = m.acc;
-        g.fillRect(Math.max(X, mx - 1), ry1, u1, h1);
-        g.fillRect(Math.min(X + W - u1, mx + mw), ry1, u1, h1);
-      }
-      return false;
-    }
-
-    case 'grass': {
-      // organic turf strip or winter snow drift
-      if (v === 3) {
-        if (s < 0.55) {
-          const sx = X + Math.round(((s * 17) % 1) * Math.max(1, W - 4));
-          const sy = Y + Math.round(((s * 23) % 1) * Math.max(1, H - 3));
-          const sw = Math.max(3, Math.round(W * 0.42));
-          g.fillStyle = m.hi;
-          g.fillRect(sx, sy, Math.min(sw, X + W - sx), 1);
-          g.fillStyle = m.lo;
-          g.fillRect(sx + 1, Math.min(Y + H - 1, sy + 1), Math.max(1, Math.min(sw - 1, X + W - sx - 1)), 1);
-        }
-        return false;
-      }
-      // soft meadow turf micro-patch
-      if (s > 0.35 && s < 0.72) {
-        const px0 = X + Math.round(((s * 19) % 1) * Math.max(1, W - 4));
-        const py0 = Y + Math.round(((s * 31) % 1) * Math.max(1, H - 4));
-        const pw = Math.max(2, Math.round(W * 0.38));
-        g.fillStyle = m.lo;
-        g.fillRect(px0, py0 + 1, Math.min(pw, X + W - px0), h1);
-      }
-      // crisp paired grass blades on ~45% of meadow cells
-      if (((s * 11) % 1) < 0.45 && o.ch === ' ') {
-        const bx = X + 1 + Math.round(((s * 37) % 1) * Math.max(1, W - 4));
-        const by = Y + Math.round(H * 0.42) + Math.round(((s * 43) % 1) * Math.max(1, H * 0.35));
-        const bh = Math.max(2, Math.round(H * 0.16));
-        g.fillStyle = m.hi;
-        g.fillRect(bx, by, 1, bh);
-        if (bx + 2 < X + W) g.fillRect(bx + 2, by + 1, 1, Math.max(1, bh - 1));
-      }
-      // wild clover / blossom micro-buds
-      if (m.acc && s > 0.86) {
-        g.fillStyle = m.acc;
-        const fx = X + Math.round(((s * 53) % 1) * Math.max(1, W - 2));
-        const fy = Y + Math.round(((s * 61) % 1) * Math.max(1, H - 2));
-        g.fillRect(fx, fy, Math.max(1, u1), Math.max(1, h1));
-      }
-      // border grass overhang next to paths or water
-      if (mask) {
-        g.fillStyle = m.hi;
-        if (mask & 1) g.fillRect(X + 1, Y, Math.max(2, Math.round(W * 0.3)), h1);
-        if (mask & 4) g.fillRect(X + Math.round(W * 0.4), Y + H - h1, Math.max(2, Math.round(W * 0.3)), h1);
-        if (mask & 8) g.fillRect(X, Y + Math.round(H * 0.3), u1, Math.max(2, Math.round(H * 0.25)));
-        if (mask & 2) g.fillRect(X + W - u1, Y + Math.round(H * 0.45), u1, Math.max(2, Math.round(H * 0.25)));
-      }
-      return false;
-    }
-
-    case 'flower': {
-      // basal emerald rosette leaves + diagonal secondary buds
-      const cy = Y + Math.round(H * 0.62);
-      const cx = X + Math.round(W * 0.5);
-      g.fillStyle = m.lo;
-      g.fillRect(Math.max(X, cx - u1 * 3), cy, Math.min(W, u1 * 6), Math.max(2, h1 * 2));
-      g.fillStyle = m.hi;
-      g.fillRect(Math.max(X, cx - u1 * 2), cy, Math.max(1, u1 * 2), h1);
-      g.fillRect(Math.min(X + W - u1 * 2, cx + 1), cy + h1, Math.max(1, u1 * 2), h1);
-      if (m.acc && v !== 3) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + u1, Y + Math.round(H * 0.22), Math.max(1, u1), Math.max(1, h1));
-        g.fillRect(X + W - u1 * 2, Y + Math.round(H * 0.72), Math.max(1, u1), Math.max(1, h1));
-      }
-      return false;
-    }
-
-    case 'field': {
-      // scattered loam clods & tiny surface stones
-      const px0 = X + Math.round(((s * 23) % 1) * Math.max(1, W - 3));
-      const py0 = Y + Math.round(((s * 31) % 1) * Math.max(1, H - 3));
-      const px1 = X + Math.round(((s * 47) % 1) * Math.max(1, W - 3));
-      const py1 = Y + Math.round(((s * 59) % 1) * Math.max(1, H - 3));
-      g.fillStyle = m.lo;
-      g.fillRect(px0, py0, Math.max(1, u1 + 1), h1);
-      g.fillStyle = m.hi;
-      g.fillRect(px1, py1, u1, h1);
-      if (mask && m.acc) {
-        g.fillStyle = m.acc;
-        if (mask & 8) g.fillRect(X, Y + Math.round(H * 0.35), u1, Math.max(2, h1 * 2));
-        if (mask & 2) g.fillRect(X + W - u1, Y + Math.round(H * 0.55), u1, Math.max(2, h1 * 2));
-      }
-      return false;
-    }
-
-    case 'path': {
-      // staggered 2x3 hand-laid cobblestones with crisp non-wrapping mortar seams & subtle upper bevels
-      const rows = 3;
-      const rowH = H / rows;
-      for (let r = 0; r < rows; r++) {
-        const y0 = Y + Math.round(r * rowH);
-        const y1 = Y + Math.round((r + 1) * rowH);
-        const bh = Math.max(2, y1 - y0 - 1);
-        const split = ((r + v) & 1) ? Math.round(W * 0.38) : Math.round(W * 0.62);
-        const stones: [number, number][] = [
-          [X, Math.max(2, split - 1)],
-          [X + split, Math.max(2, W - split - 1)],
-        ];
-        for (let c = 0; c < stones.length; c++) {
-          const [sx, sw] = stones[c];
-          if (sx + sw > X + W) continue;
-          const tone = (r * 3 + c + Math.floor(s * 11)) % 3;
-          if (tone !== 0) {
-            g.fillStyle = tone === 1 ? m.hi : (m.acc ?? m.hi);
-            g.fillRect(sx, y0 + 1, sw, 1);
-          }
-          g.fillStyle = m.lo;
-          g.fillRect(sx, y0 + bh, sw, 1);
-        }
-        // vertical mortar joint cleanly between the two stones
-        g.fillStyle = m.lo;
-        g.fillRect(X + Math.max(1, split - 1), y0, 1, bh);
-      }
-      return !o.plain && o.ch === '▪';
-    }
-
-    case 'sand': {
-      // wind-rippled beach dune lines + occasional seashell speck
-      const yA = Y + Math.round(H * (0.28 + (s % 0.14)));
-      const yB = Y + Math.round(H * (0.68 + ((s * 3) % 0.14)));
-      const xA = X + Math.round(W * 0.12);
-      const xB = X + Math.round(W * 0.25);
-      g.fillStyle = m.hi;
-      g.fillRect(xA, yA, Math.max(2, Math.round(W * 0.55)), 1);
-      g.fillStyle = m.lo;
-      g.fillRect(xA + 1, Math.min(Y + H - 1, yA + 1), Math.max(2, Math.round(W * 0.5)), 1);
-      g.fillStyle = m.hi;
-      g.fillRect(xB, Math.min(Y + H - 2, yB), Math.max(2, Math.round(W * 0.5)), 1);
-      if (v === 1) {
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y + Math.round(H * 0.82), W, Math.max(1, Math.round(H * 0.18)));
-      }
-      if (m.acc) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + Math.round(W * 0.65), Y + Math.round(H * 0.45), Math.max(2, u1), Math.max(1, h1));
-      }
-      return false;
-    }
-
-    case 'bridge': {
-      // 4 vertical wood plank slats + nailheads + exposed timber guardrails
-      const railTop = (mask & 1) ? Math.max(2, Math.round(H * 0.18)) : 0;
-      const railBot = (mask & 4) ? Math.max(2, Math.round(H * 0.18)) : 0;
-      const deckY = Y + railTop;
-      const deckH = Math.max(2, H - railTop - railBot);
-      const planks = 4;
-      for (let i = 0; i < planks; i++) {
-        const px0 = X + Math.round((i * W) / planks);
-        const px1 = X + Math.round(((i + 1) * W) / planks);
-        const pw = Math.max(1, px1 - px0 - 1);
-        g.fillStyle = ((i + v) & 1) ? m.hi : m.lo;
-        g.fillRect(px0, deckY, pw, deckH);
-        // plank gap
-        g.fillStyle = m.lo;
-        if (px1 - 1 >= px0) g.fillRect(px1 - 1, deckY, 1, deckH);
-        // nailheads near ends
-        if (m.acc && pw >= 2) {
-          g.fillStyle = m.acc;
-          g.fillRect(px0 + 1, deckY + 1, 1, 1);
-          g.fillRect(px0 + 1, deckY + Math.max(1, deckH - 2), 1, 1);
-        }
-      }
-      if (railTop) {
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y, W, Math.max(1, railTop - 1));
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y + railTop - 1, W, 1);
-        g.fillStyle = m.acc ?? m.hi;
-        g.fillRect(X + 1, Y, Math.max(1, u1), railTop);
-      }
-      if (railBot) {
-        const ry = Y + H - railBot;
-        g.fillStyle = m.hi;
-        g.fillRect(X, ry, W, Math.max(1, railBot - 1));
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y + H - 1, W, 1);
-        g.fillStyle = m.acc ?? m.hi;
-        g.fillRect(X + W - Math.max(2, u1 + 1), ry, Math.max(1, u1), railBot);
-      }
-      if (mask & 8) {
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y, Math.max(1, u1), H);
-      }
-      if (mask & 2) {
-        g.fillStyle = m.hi;
-        g.fillRect(X + W - Math.max(1, u1), Y, Math.max(1, u1), H);
-      }
-      return !o.plain && o.ch === '═';
-    }
-
-    case 'water': {
-      // stepped shallow shelf + rounded lily-pad leaf + drifting caustic ribbons
-      if (mask) {
-        g.fillStyle = m.hi;
-        const bandX = Math.max(2, Math.round(W * 0.25));
-        const bandY = Math.max(2, Math.round(H * 0.16));
-        if (mask & 1) g.fillRect(X, Y, W, bandY);
-        if (mask & 4) g.fillRect(X, Y + H - bandY, W, bandY);
-        if (mask & 8) g.fillRect(X, Y, bandX, H);
-        if (mask & 2) g.fillRect(X + W - bandX, Y, bandX, H);
-      }
-      if (o.ch === '◡' || o.ch === '⌓') {
-        if (m.acc) {
-          const pw = Math.max(4, Math.round(W * 0.72));
-          const ph = Math.max(3, Math.round(H * 0.34));
-          const lx = X + Math.floor((W - pw) / 2);
-          const ly = Y + Math.floor((H - ph) / 2);
-          g.fillStyle = m.acc;
-          g.fillRect(lx, ly, pw, ph);
-          g.fillStyle = m.lo;
-          g.fillRect(lx + Math.floor(pw * 0.65), ly, Math.max(1, u1), Math.max(1, Math.floor(ph / 2)));
-        }
-        return false;
-      }
-      // animated subtle wave caustic bars
-      const phase = ((v * 2 + Math.floor(s * 16)) % 8) / 8;
-      const rw = Math.max(2, Math.round(W * 0.48));
-      const rx1 = X + Math.round(phase * Math.max(1, W - rw));
-      const rx2 = X + Math.round(((phase + 0.5) % 1) * Math.max(1, W - rw));
-      g.fillStyle = m.hi;
-      g.fillRect(rx1, Y + Math.round(H * 0.3), rw, 1);
-      g.fillRect(rx2, Y + Math.round(H * 0.72), Math.max(2, rw - 1), 1);
-      if (mask && m.acc && s < 0.4) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + Math.round(W * 0.3), Y + Math.round(H * 0.52), Math.max(2, u1 * 2), h1);
-      }
-      return false;
-    }
-
-    case 'roof': {
-      // 3 staggered shingle/tile courses with crisp 1px overhang shadows, sunlit lip highlights & snow
-      const courses = 3;
-      const snow = (v & 4) !== 0;
-      for (let r = 0; r < courses; r++) {
-        const y0 = Y + Math.round((r * H) / courses);
-        const y1 = Y + Math.round(((r + 1) * H) / courses);
-        const ch0 = Math.max(2, y1 - y0);
-        const split = ((r + v + Math.floor(s * 5)) & 1) ? Math.round(W * 0.38) : Math.round(W * 0.66);
-        const hl = (r + Math.floor(s * 13)) % 3;
-        if (hl === 0) {
-          g.fillStyle = m.hi;
-          g.fillRect(X, y0, Math.max(2, split - 1), 1);
-        } else if (hl === 1 && m.acc) {
-          g.fillStyle = m.acc;
-          g.fillRect(X + split, y0, Math.max(2, W - split), 1);
-        }
-        // course overhang shadow & staggered vertical seam
-        g.fillStyle = m.lo;
-        g.fillRect(X, y0 + ch0 - 1, W, 1);
-        g.fillRect(X + Math.min(W - 1, split), y0, 1, ch0);
-      }
-      if (mask & 1) {
-        // sunlit roof ridge beam
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y, W, Math.max(1, h1));
-      }
-      if (mask & 4) {
-        // overhanging eaves shadow & fascia lip
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y + H - Math.max(2, h1 * 2), W, 1);
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y + H - 1, W, 1);
-      }
-      if (snow && m.acc && s < 0.6) {
-        const sw = Math.max(3, Math.round(W * 0.55));
-        g.fillStyle = m.acc;
-        g.fillRect(X + Math.round(((s * 7) % 1) * Math.max(1, W - sw)), Y + 1, sw, Math.max(1, h1));
-      }
-      return !o.plain && o.ch !== '▐' && !'◢◣▄'.includes(o.ch);
-    }
-
-    case 'roof_edge': {
-      // ridge bar bevels for horizontal '▄' ridge caps (triangles '◢'/'◣' get beveled right after fill)
-      if (o.ch === '▄') {
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y + Math.floor(H / 2), W, Math.max(1, h1));
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y + H - 1, W, 1);
-      }
-      return false;
-    }
-
-    case 'wall': {
-      const foundation = (mask & 4) !== 0;
-      if (foundation) {
-        // ashlar stone foundation masonry (2 rows of offset stone blocks)
-        for (let r = 0; r < 2; r++) {
-          const y0 = Y + Math.round((r * H) / 2);
-          const bh = Math.max(2, Math.round(H / 2));
-          const cut = r === 0 ? Math.round(W * 0.55) : Math.round(W * 0.35);
-          g.fillStyle = m.hi;
-          g.fillRect(X, y0 + 1, W, 1);
-          g.fillStyle = m.lo;
-          g.fillRect(X, y0 + bh - 1, W, 1);
-          g.fillRect(X + cut, y0, 1, bh);
-        }
-      } else {
-        // horizontal timber clapboard siding (3 courses)
-        for (let r = 0; r < 3; r++) {
-          const y0 = Y + Math.round((r * H) / 3);
-          const bh = Math.max(2, Math.round(H / 3));
-          g.fillStyle = m.hi;
-          g.fillRect(X, y0, W, 1);
-          g.fillStyle = m.lo;
-          g.fillRect(X, y0 + bh - 1, W, 1);
-        }
-      }
-      // eaves cast shadow at top of wall under roof
-      if (mask & 1) {
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.28)));
-        if (v === 1 && m.acc && s < 0.55) {
-          // crisp snow/icicle tips under eaves
-          g.fillStyle = m.acc;
-          g.fillRect(X + Math.round(W * 0.25), Y + 1, Math.max(1, u1), Math.max(2, h1 * 2));
-          g.fillRect(X + Math.round(W * 0.72), Y + 1, Math.max(1, u1), Math.max(2, h1 * 2));
-        }
-      }
-      // heavy corner timber posts on exposed left/right ends
-      if (mask & 8) {
-        const pw = Math.max(2, Math.round(W * 0.28));
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y, pw, H);
-        g.fillStyle = m.hi;
-        g.fillRect(X + pw - 1, Y, 1, H);
-      }
-      if (mask & 2) {
-        const pw = Math.max(2, Math.round(W * 0.28));
-        g.fillStyle = m.lo;
-        g.fillRect(X + W - pw, Y, pw, H);
-        g.fillStyle = m.hi;
-        g.fillRect(X + W - pw, Y, 1, H);
-      }
-      return !o.plain && (o.ch === '═' || o.ch === '║' || o.ch === '▀');
-    }
-
-    case 'window': {
-      // framed 4-pane window with wooden mullions, sill & interior warm/sky reflection
-      const fw = Math.max(1, Math.round(W * 0.14));
-      const fh = Math.max(2, Math.round(H * 0.12));
-      const gx = X + fw;
-      const gy = Y + fh;
-      const gw = Math.max(3, W - fw * 2);
-      const gh = Math.max(4, H - fh * 2 - 1);
-      // outer shadow + wooden surround frame
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y, W, H);
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y + fh, W, gh + fh);
-      // glass panes
-      g.fillStyle = m.acc ?? m.hi;
-      g.fillRect(gx, gy, gw, gh);
-      // subtle pane shading on bottom-right pane + sky glint on top-left
-      if (!v) {
-        g.fillStyle = m.lo;
-        g.fillRect(gx, gy + Math.floor(gh / 2), gw, Math.ceil(gh / 2));
-      }
-      // cross mullions
-      g.fillStyle = m.lo;
-      g.fillRect(gx + Math.floor(gw / 2), gy, 1, gh);
-      g.fillRect(gx, gy + Math.floor(gh / 2), gw, 1);
-      // prominent timber window sill at bottom
-      g.fillStyle = m.hi;
-      g.fillRect(X, Math.min(Y + H - 2, gy + gh), W, Math.max(1, fh));
-      return !o.plain && o.ch === '▦';
-    }
-
-    case 'door': {
-      const open = v === 1;
-      const jw = Math.max(1, Math.round(W * 0.16));
-      const lintel = Math.max(2, Math.round(H * 0.14));
-      // door frame jambs + header lintel
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y, W, H);
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y, W, lintel);
-      g.fillRect(X, Y, jw, H - 1);
-      g.fillRect(X + W - jw, Y, jw, H - 1);
-      const ix = X + jw;
-      const iy = Y + lintel;
-      const iw = Math.max(2, W - jw * 2);
-      const ih = Math.max(3, H - lintel - 2);
-      if (open) {
-        // warm golden room interior + swung inner door leaf on left
-        g.fillStyle = m.acc ?? m.hi;
-        g.fillRect(ix, iy, iw, ih);
-        g.fillStyle = m.lo;
-        g.fillRect(ix, iy, Math.max(2, Math.round(iw * 0.34)), ih);
-      } else {
-        // paneled wood door leaf + recessed upper/lower panels + brass latch
-        g.fillStyle = m.hi;
-        g.fillRect(ix, iy, iw, ih);
-        g.fillStyle = m.lo;
-        const pw = Math.max(1, iw - 2);
-        const pH = Math.max(2, Math.round(ih * 0.3));
-        g.fillRect(ix + 1, iy + 1, pw, pH);
-        g.fillRect(ix + 1, iy + Math.round(ih * 0.56), pw, pH);
-        if (m.acc) {
-          g.fillStyle = m.acc;
-          g.fillRect(ix + Math.max(1, iw - 2), iy + Math.round(ih * 0.48), Math.max(1, u1), Math.max(1, h1));
-        }
-      }
-      // threshold sill
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y + H - 2, W, 1);
-      return !o.plain && (o.ch === '▮' || o.ch === '▯');
-    }
-
-    case 'cliff': {
-      // stratified sedimentary rock ledges + vertical fissures + exposed top brow highlight
-      for (let r = 0; r < 3; r++) {
-        const y0 = Y + Math.round((r * H) / 3);
-        const bh = Math.max(2, Math.round(H / 3));
-        g.fillStyle = m.lo;
-        g.fillRect(X, y0 + bh - 1, W, 1);
-        const cut = Math.round(((s * (r + 3) * 19) % 1) * Math.max(1, W - 2));
-        g.fillRect(X + cut, y0, 1, bh);
-        if ((r + Math.floor(s * 7)) % 2 === 0 && m.acc) {
-          g.fillStyle = m.acc;
-          g.fillRect(X + Math.round(W * 0.15), y0 + 1, Math.max(2, Math.round(W * 0.45)), 1);
-        }
-      }
-      if (mask & 1) {
-        g.fillStyle = v === 1 && m.acc ? m.acc : m.hi;
-        g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.2)));
-      }
-      return !o.plain && (o.ch === '▔' || o.ch === '▀');
-    }
-
-    case 'mwall': {
-      // rough-hewn cavern masonry + occasional ore glint
-      for (let r = 0; r < 2; r++) {
-        const y0 = Y + Math.round((r * H) / 2);
-        const bh = Math.max(2, Math.round(H / 2));
-        const cut = r === 0 ? Math.round(W * (0.3 + s * 0.4)) : Math.round(W * (0.65 - s * 0.3));
-        g.fillStyle = m.hi;
-        g.fillRect(X + 1, y0 + 1, Math.max(2, W - 2), 1);
-        g.fillStyle = m.lo;
-        g.fillRect(X, y0 + bh - 1, W, 1);
-        g.fillRect(X + cut, y0, 1, bh);
-      }
-      if (m.acc) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + Math.round(W * 0.55), Y + Math.round(H * 0.32), Math.max(1, u1), Math.max(1, h1));
-      }
-      return false;
-    }
-
-    case 'floor': {
-      // 2 smooth hardwood plank lanes per cell with staggered plank end joints
-      for (let r = 0; r < 2; r++) {
-        const y0 = Y + Math.round((r * H) / 2);
-        const bh = Math.max(2, Math.round(H / 2));
-        g.fillStyle = m.hi;
-        g.fillRect(X, y0 + 1, Math.max(2, W - 1), 1);
-        g.fillStyle = m.lo;
-        g.fillRect(X, y0 + bh - 1, W, 1);
-        if (((v + r) & 3) === 0) {
-          g.fillRect(X + Math.round(W * 0.45), y0, 1, bh);
-        }
-      }
-      return !o.plain && o.ch === '─';
-    }
-
-    case 'rug': {
-      // woven tapestry inner motif + crisp 1px border trim along exposed edges
-      g.fillStyle = m.hi;
-      g.fillRect(X + Math.round(W * 0.25), Y + Math.round(H * 0.28), Math.max(1, u1), Math.max(1, h1));
-      g.fillRect(X + Math.round(W * 0.68), Y + Math.round(H * 0.64), Math.max(1, u1), Math.max(1, h1));
-      if (mask) {
-        g.fillStyle = m.acc ?? m.hi;
-        if (mask & 1) g.fillRect(X, Y + 1, W, 1);
-        if (mask & 4) g.fillRect(X, Y + H - 2, W, 1);
-        if (mask & 8) g.fillRect(X + 1, Y, 1, H);
-        if (mask & 2) g.fillRect(X + W - 2, Y, 1, H);
-        g.fillStyle = m.lo;
-        if (mask & 1) g.fillRect(X, Y, W, 1);
-        if (mask & 4) g.fillRect(X, Y + H - 1, W, 1);
-      }
-      return !o.plain && o.ch === '░';
-    }
-
-    case 'mfloor': {
-      // cracked stone floor + subtle pebbles
-      if (v === 0) {
-        g.fillStyle = m.lo;
-        g.fillRect(X + Math.round(W * 0.2), Y + Math.round(H * 0.5), Math.max(2, Math.round(W * 0.5)), 1);
-        g.fillRect(X + Math.round(W * 0.5), Y + Math.round(H * 0.25), 1, Math.max(2, Math.round(H * 0.4)));
-      } else if (s < 0.4) {
-        g.fillStyle = m.hi;
-        g.fillRect(X + Math.round(W * 0.6), Y + Math.round(H * 0.65), Math.max(1, u1), Math.max(1, h1));
-      }
-      return false;
-    }
-
-    case 'iwall': {
-      // wainscoted indoor paneling with mid molding rail
-      const railY = Y + Math.round(H * 0.45);
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y + 1, W, 1);
-      g.fillRect(X, railY, W, Math.max(1, h1));
-      g.fillStyle = m.lo;
-      g.fillRect(X, railY + Math.max(1, h1), W, 1);
-      // lower wainscot vertical ribs
-      const rbh = Math.max(2, Y + H - railY - 2);
-      g.fillRect(X + Math.round(W * 0.32), railY + 2, 1, rbh);
-      g.fillRect(X + Math.round(W * 0.72), railY + 2, 1, rbh);
-      if (mask & 4) {
-        g.fillStyle = m.hi;
-        g.fillRect(X, Y + H - Math.max(2, Math.round(H * 0.16)), W, Math.max(2, Math.round(H * 0.16)));
-      }
-      return !o.plain && (o.ch === '▄' || o.ch === '▓' || o.ch === '▒');
-    }
-
-    case 'bed': {
-      const head = (mask & 8) !== 0;
-      // wooden frame outer trim
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.14)));
-      g.fillRect(X, Y + H - Math.max(2, Math.round(H * 0.14)), W, Math.max(2, Math.round(H * 0.14)));
-      const innerY = Y + Math.max(2, Math.round(H * 0.14));
-      const innerH = Math.max(4, H - Math.max(4, Math.round(H * 0.28)));
-      if (head && m.acc) {
-        // crisp white pillow bolster + headboard wood rail
-        g.fillStyle = m.lo;
-        g.fillRect(X, Y, Math.max(2, Math.round(W * 0.22)), H);
-        g.fillStyle = m.acc;
-        g.fillRect(X + Math.max(2, Math.round(W * 0.26)), innerY + 1, Math.max(3, Math.round(W * 0.56)), Math.max(3, innerH - 2));
-        g.fillStyle = m.hi;
-        g.fillRect(X + Math.max(2, Math.round(W * 0.84)), innerY, Math.max(1, W - Math.round(W * 0.84)), innerH);
-      } else {
-        // quilt blanket fold & stitched squares
-        g.fillStyle = m.hi;
-        g.fillRect(X + 1, innerY + 1, Math.max(2, W - 2), Math.max(1, Math.round(innerH * 0.22)));
-        g.fillStyle = m.acc ?? m.hi;
-        g.fillRect(X + Math.round(W * 0.25), innerY + Math.round(innerH * 0.45), Math.max(2, u1 * 2), Math.max(2, h1 * 2));
-      }
-      return !o.plain && (o.ch === '▀' || o.ch === '░' || o.ch === '▒');
-    }
-
-    case 'table':
-    case 'counter': {
-      // chamfered wooden slab + dark underside shadow
-      const topH = Math.max(3, Math.round(H * 0.56));
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y + 1, W, topH);
-      if (m.acc) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + 1, Y + 1, Math.max(2, W - 2), 1);
-      }
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y + 1 + topH, W, Math.max(2, Math.round(H * 0.22)));
-      return !o.plain && o.ch === '▀';
-    }
-
-    case 'fireplace': {
-      // stone masonry surround + glowing ember bed
-      const jamb = Math.max(2, Math.round(W * 0.18));
-      g.fillStyle = m.hi;
-      g.fillRect(X, Y, W, Math.max(2, Math.round(H * 0.16)));
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y, jamb, H);
-      g.fillRect(X + W - jamb, Y, jamb, H);
-      if (m.acc) {
-        g.fillStyle = m.acc;
-        g.fillRect(X + jamb, Y + H - Math.max(2, Math.round(H * 0.18)), Math.max(2, W - jamb * 2), Math.max(2, Math.round(H * 0.14)));
-      }
-      return false;
-    }
-
-    case 'bookcase':
-    case 'shelf': {
-      // 3 crisp wooden shelf tiers + vertical book spines or jars
-      g.fillStyle = m.lo;
-      g.fillRect(X, Y, W, H);
-      for (let r = 0; r < 3; r++) {
-        const sy = Y + Math.round(((r + 1) * H) / 3) - 2;
-        const sh = Math.max(2, Math.round(H / 3) - 2);
-        const top = Math.max(Y, sy - sh);
-        if (m.kind === 'bookcase') {
-          for (let b = 0; b < 3; b++) {
-            const bx = X + 1 + Math.round((b * (W - 2)) / 3);
-            const bw = Math.max(1, Math.round((W - 2) / 3) - 1);
-            g.fillStyle = ((b + r + v) & 1) ? (m.acc ?? m.hi) : m.hi;
-            g.fillRect(bx, top + 1, bw, Math.max(2, sh - 1));
-          }
-        } else if (m.acc) {
-          g.fillStyle = m.acc;
-          g.fillRect(X + Math.round(W * 0.22), top + 2, Math.max(2, u1 * 2), Math.max(2, sh - 2));
-          g.fillRect(X + Math.round(W * 0.64), top + 3, Math.max(2, u1), Math.max(2, sh - 3));
-        }
-        g.fillStyle = m.hi;
-        g.fillRect(X, sy, W, 2);
-      }
-      return !o.plain && (o.ch === '▤' || o.ch === '▌' || o.ch === '▐');
-    }
-
-    case 'bath': {
-      // ceramic tile coping rim around exposed edges + soft aqua ripples
-      const rimX = Math.max(2, u1 * 2);
-      const rimY = Math.max(2, Math.round(H * 0.16));
-      if (mask && m.acc) {
-        g.fillStyle = m.acc;
-        if (mask & 1) g.fillRect(X, Y, W, rimY);
-        if (mask & 4) g.fillRect(X, Y + H - rimY, W, rimY);
-        if (mask & 8) g.fillRect(X, Y, rimX, H);
-        if (mask & 2) g.fillRect(X + W - rimX, Y, rimX, H);
-      }
-      const rx = X + Math.round(((v & 3) / 4) * Math.max(1, W * 0.35));
-      g.fillStyle = m.hi;
-      g.fillRect(rx + 2, Y + Math.round(H * 0.52), Math.max(2, Math.round(W * 0.42)), 1);
-      return false;
-    }
-
-    case 'dock_step': {
-      // stone doorstep threshold apron in front of doorway
-      const sw = Math.max(4, Math.round(W * 0.84));
-      const sx = X + Math.floor((W - sw) / 2);
-      const sh = Math.max(3, Math.round(H * 0.44));
-      g.fillStyle = m.lo;
-      g.fillRect(sx, Y, sw, sh + 1);
-      g.fillStyle = m.acc ?? m.hi;
-      g.fillRect(sx + 1, Y, Math.max(2, sw - 2), sh - 1);
-      g.fillStyle = m.hi;
-      g.fillRect(sx + 1, Y, Math.max(2, sw - 2), 1);
-      return false;
-    }
-  }
-  return false;
-}
-
 /** Cheap change detection so we only repaint when something visible changed. */
 export function frameSignature(frame: OutCell[][]): string {
   let s = '';
-  // the seed decides which high-res pattern a texture cell shows, so it must trigger repaints too
-  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.shift ? `S${o.shift[0].toFixed(3)},${o.shift[1].toFixed(3)}` : '') + (o.ghost ? `G${o.ghost}` : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '') + (o.micro ? `M${o.micro.kind}:${Math.round(o.micro.seed * 99)}:${o.micro.mask ?? 0}:${o.micro.v ?? 0}:${o.micro.hi}:${o.micro.lo}:${o.micro.acc ?? ''}` : '');
+  for (const row of frame) for (const o of row) s += o.ch + o.fg + o.bg + (o.bold ? 1 : 0) + (o.glow ? 'g' : '') + (o.seed ? (o.seed * 97) | 0 : '') + (o.foam ? 'f' + o.foam + o.foamCol : '') + (o.plot ? 'p' + o.plot + o.plotCol : '') + (o.aoe ? 'a' + o.aoe + o.aoeCol : '') + (o.aoePrimary ? 'P' : '') + (o.actionReticle ? 'A' : '') + (o.face ? `F${o.face[0]},${o.face[1]}` : '') + (o.riding ? 'R' : '') + (o.shift ? `S${o.shift[0].toFixed(3)},${o.shift[1].toFixed(3)}` : '') + (o.ghost ? `G${o.ghost}` : '') + (o.detail ? 'd' + o.detail.ch + o.detail.fg : '') + (o.texture ? `t${o.texture.kind}:${o.texture.x}:${o.texture.y}:${o.textureGlyph}` : '') + (o.label ? `l${o.label.text}:${o.label.scale}:${o.label.w}:${o.label.h}` : '') + (o.subBar ? `b${Math.round(o.subBar.frac * 100)}:${o.subBar.pos}${o.subBar.col}${o.subBar.track}` : '');
   return s;
 }

@@ -240,11 +240,10 @@ export default function GameScreen() {
   const [dpadDir, setDpadDir] = useState<Dir | null>(null);
   const [reducedMotion, setReducedMotionState] = useState(false);
   const reducedMotionRef = useRef(false);
-  const [hires, setHiresState] = useState(false);
   const [crt, setCrtState] = useState(false);
   const crtRef = useRef(false);
-  const [paletteMode, setPaletteModeState] = useState<PaletteMode>('mono');
-  const paletteModeRef = useRef<PaletteMode>('mono');
+  const [paletteMode, setPaletteModeState] = useState<PaletteMode>('isotope');
+  const paletteModeRef = useRef<PaletteMode>('isotope');
   const [haptics, setHapticsState] = useState(true);
   const hapticsRef = useRef(true);
   const [canFullscreen, setCanFullscreen] = useState(false);
@@ -456,14 +455,6 @@ export default function GameScreen() {
     }
   }, []);
 
-  const toggleHires = useCallback(() => {
-    // Screen.setHires -> onHiresChange (set up with the screen) updates the checkbox and storage
-    const s = screenRef.current;
-    if (!s) return;
-    s.setHires(!s.hires);
-    s.onRender?.();
-  }, []);
-
   const toggleCrt = useCallback(() => {
     // Screen.setCrt -> onCrtChange (set up with the screen) updates the checkbox and storage
     screenRef.current?.setCrt(!crtRef.current);
@@ -616,12 +607,12 @@ export default function GameScreen() {
         title: 'View',
         items: [
           {
-            id: 'pal-mono',
-            label: 'Palette: Contour Mono',
+            id: 'pal-isotope',
+            label: 'Palette: Seasonal Isotope',
             shortcut: 'Shift+V',
             kind: 'radio',
-            checked: paletteMode === 'mono',
-            run: () => selectPalette('mono'),
+            checked: paletteMode === 'isotope',
+            run: () => selectPalette('isotope'),
           },
           {
             id: 'pal-duotone',
@@ -631,11 +622,11 @@ export default function GameScreen() {
             run: () => selectPalette('duotone'),
           },
           {
-            id: 'pal-isotope',
-            label: 'Palette: Full Isotope',
+            id: 'pal-mono',
+            label: 'Palette: Contour Mono',
             kind: 'radio',
-            checked: paletteMode === 'isotope',
-            run: () => selectPalette('isotope'),
+            checked: paletteMode === 'mono',
+            run: () => selectPalette('mono'),
           },
           ...(Object.keys(DAY_PACES) as DayPace[]).map((p) => ({
             id: `pace-${p}`,
@@ -653,7 +644,6 @@ export default function GameScreen() {
           })),
           { id: 'contrast', label: 'High contrast', kind: 'checkbox', checked: highContrast, run: () => gameRef.current?.set_high_contrast(!highContrastRef.current) },
           { id: 'sfx', label: 'Sound effects', kind: 'checkbox', checked: sfxOn, run: () => gameRef.current?.set_sfx(!sfxOn) },
-          { id: 'detail', label: 'High-res detail', kind: 'checkbox', checked: hires, run: toggleHires },
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
           ...(isTouch
@@ -719,23 +709,6 @@ export default function GameScreen() {
     screen.reducedMotion = motionOff;
     reducedMotionRef.current = motionOff;
     setReducedMotionState(motionOff);
-    let hiresOn = false;
-    try {
-      hiresOn = window.localStorage.getItem('hrvstmn-hires') === 'on';
-    } catch {
-      hiresOn = false;
-    }
-    screen.hires = hiresOn;
-    setHiresState(hiresOn);
-    screen.onHiresChange = (next) => {
-      setHiresState(next);
-      try {
-        window.localStorage.setItem('hrvstmn-hires', next ? 'on' : 'off');
-      } catch {
-        // storage unavailable; the choice still applies this session
-      }
-      screen.onRender?.();
-    };
     let crtOn = false;
     try {
       crtOn = window.localStorage.getItem('hrvstmn-crt') === 'on';
@@ -754,14 +727,14 @@ export default function GameScreen() {
         // storage unavailable; the choice still applies this session
       }
     };
-    let savedPalette: PaletteMode = 'mono';
+    let savedPalette: PaletteMode = 'isotope';
     try {
       const rawPalette = window.localStorage.getItem('hrvstmn-palette');
       if (rawPalette === 'mono' || rawPalette === 'duotone' || rawPalette === 'isotope') {
         savedPalette = rawPalette;
       }
     } catch {
-      savedPalette = 'mono';
+      savedPalette = 'isotope';
     }
     screen.paletteMode = savedPalette;
     paletteModeRef.current = savedPalette;
@@ -856,7 +829,7 @@ export default function GameScreen() {
 
     let prevBuf: Cell[][] | null = null;
     let prevFrame: OutCell[][] | null = null;
-    // the render-mode prefix (hires/palette/crt/contrast) of the last painted frame; '' forces a full repaint
+    // the render-mode prefix (palette/crt/contrast) of the last painted frame; '' forces a full repaint
     let lastMode = '';
 
     let shaking = false;
@@ -885,15 +858,15 @@ export default function GameScreen() {
           renderEnhanced();
         });
       }
-      // mode changes (detail, palette, CRT, high contrast) force a full repaint
-      const mode = `${screen.hires ? 'h' : 'p'}:${screen.paletteMode}:${screen.crt ? 'c' : ''}:${screen.highContrast ? 'hc' : ''}`;
+      // mode changes (palette, CRT, high contrast) force a full repaint
+      const mode = `${screen.paletteMode}:${screen.crt ? 'c' : ''}:${screen.highContrast ? 'hc' : ''}`;
       const modeChanged = mode !== lastMode;
       const dirty = frameDirtyRect(modeChanged ? null : prevFrame, frame);
       if (prevFrame && !dirty) return;
       lastMode = mode;
       drawFrame(ctx, frame, {
         cw, ch, fontPx, font: FONT, displayFont: DISPLAY_FONT, dpr,
-        hires: screen.hires, crt: screen.crt, farmSymbols: farmSymbolsReady,
+        crt: screen.crt, farmSymbols: farmSymbolsReady,
       }, dirty ?? undefined);
       prevFrame = frame;
     };

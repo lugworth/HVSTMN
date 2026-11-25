@@ -168,19 +168,12 @@ export class Screen {
   style: VisualStyle = 'enhanced';
   paletteMode: PaletteMode = 'mono';
   reducedMotion: boolean = false;
-  /**
-   * High-res detail: half-size texture glyphs and vector micro-detail (contoured roofs, cliffs,
-   * walls, soil rows). Off by default, since the plain glyph look is cheaper to draw; a setting in
-   * the F10 menu and the Diary turns it on, and the choice is remembered on this device.
-   */
-  hires: boolean = false;
   /** Colourblind-safe state cues: ripe/ wet/ ready markers in addition to colour. */
   accessibleCues: boolean = false;
   /** Optional CRT scanline and phosphor bloom pass over the canvas. */
   crt: boolean = false;
   /** High-contrast readability boost (still snapped to Isotope Dark, task 56 / G17). */
   highContrast: boolean = false;
-  onHiresChange?: (hires: boolean) => void;
   onPaletteChange?: (mode: PaletteMode) => void;
   onCrtChange?: (crt: boolean) => void;
   onHighContrastChange?: (highContrast: boolean) => void;
@@ -233,12 +226,6 @@ export class Screen {
   /** Choose a renderer programmatically. The UI never exposes a style switch. */
   setStyle(style: VisualStyle) {
     this.style = style;
-  }
-
-  setHires(hires: boolean) {
-    if (this.hires === hires) return;
-    this.hires = hires;
-    this.onHiresChange?.(hires);
   }
 
   setPaletteMode(mode: PaletteMode) {
