@@ -168,7 +168,7 @@ import { migrateLegacySave } from './legacy_names';
 import type { CatchOdds, MakerStep } from './rules';
 import {
   HYBRIDS, HYBRID_CROPS, HYBRID_RECROSS_FEE, ORCHARD_SPOTS, SAPLING, SAPLING_PRICE, TREE_DAYS, FRUIT_DAYS, BARREL_SPOT, CHANNEL_CELLS, BARREL_CAP, CHANNEL_COST,
-  GLASS_SPOT, GLASS_CELLS, GLASS_SET, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage,
+  GLASS_SPOT, GLASS_CELLS, GLASS_SET, GLASS_COST, PIECE_LIMIT, FARM_PIECES, FARM_PIECE_NAMES, FARM_USE_TILES, isFarmPiece, emptyFarmWorks, restoreFarmWorks, fixtureCoverage, sprinklerCoverage,
 } from './farm-works';
 import type { FarmWorks } from './farm-works';
 import {
@@ -328,7 +328,15 @@ import {
   KEY_ACTION_SPECS, readKeyBindings, writeKeyBindings, keyLabelFor, mapSymbolLegend,
   type TextScale, type KeyBindings,
 } from './accessibility';
-import { playSfx, isSfxEnabled, setSfxEnabled, loadSfxPreference, playMelody, TRACKS } from './audio';
+import {
+  playSfx, playHarvestChime, isSfxEnabled, setSfxEnabled, loadSfxPreference,
+  isMusicEnabled, setMusicEnabled, loadMusicPreference, musicSceneFor, syncAmbientAudio,
+  playMelody, TRACKS,
+} from './audio';
+import { combinedPool, totalAvailable, consumeAcrossStorages, storageSourceNote } from './global-storage';
+import { createFishingState, stepFishingState, renderFishingBar, rollFishingTreasure } from './fishing-game';
+import { mineBiomeFor, rollPitfallDrop, rollMineGeodeDrop, rollGeodeLoot, GEODE_KINDS, CRACK_GEODE_FEE, type GeodeKind } from './mining-depth';
+import { computeTownRank, beeHouseYield, mushroomLogYield, type TownRankStatus } from './town-rank';
 
 type HudSpan = { text: string; fg?: string; bold?: boolean };
 type HudPageLine =
@@ -856,6 +864,10 @@ export class Game {
   onAssist: ((a: AssistSettings) => void) | null = null;
   onKeyBindings: ((b: KeyBindings) => void) | null = null;
   onSfx: ((on: boolean) => void) | null = null;
+  onMusic: ((on: boolean) => void) | null = null;
+  town_rank_seen: string = 'E';
+  private _harvestStreak: number = 0;
+  private _lastHarvestAt: number = 0;
 
   private _hydrating: boolean = false;
   private _saveDirty: boolean = false;
@@ -883,7 +895,7 @@ export class Game {
     'inn_scenes_seen', 'inn_evening_day',
     'stall', 'stall_last', 'stall_earned',
     'gray_quest', 'gray_note_level',
-    'map_pin', 'public_works', 'shortcuts', 'farm_works', 'casks',
+    'map_pin', 'public_works', 'shortcuts', 'farm_works', 'casks', 'town_rank_seen',
     'outings_done', 'dinner_day', 'child_state', 'guest_regulars', 'fest_roles_done',
     'pantry', 'chicken_personalities', 'pasture', 'enrichment', 'trail_encounter',
     'tea_progress', 'tea_last_day', 'spouse_routine', 'prints', 'wall_print',
@@ -984,6 +996,40 @@ export class Game {
     setSfxEnabled(on, getBrowserStorage());
     this.msg(`Sound effects: ${on ? 'On' : 'Off'}.`, '0C');
     this.onSfx?.(on);
+  }
+
+  set_music(on: boolean): void {
+    setMusicEnabled(on, getBrowserStorage());
+    if (on && this.started) {
+      syncAmbientAudio(musicSceneFor(this.mapname, this.season, !!this.map?.indoor));
+    }
+    this.msg(`Music: ${on ? 'On' : 'Off'}.`, '0C');
+    this.onMusic?.(on);
+  }
+
+  town_rank(): TownRankStatus {
+    const goodFriends = Object.values(this.friend || {}).filter((v) => v >= 40).length;
+    const contractsDone = (this.contracts || []).filter((c) => c.done).length;
+    const status = computeTownRank({
+      museumCount: (this.museum || []).length,
+      requestsDone: this.requests_done || 0,
+      publicWorksBuilt: !!this.public_works?.built,
+      shortcutsOpened: (this.shortcuts || []).length,
+      pantryCompleted: this.pantry?.meals || 0,
+      contractsDone,
+      festivalsWon: (this.fest_wins || []).length,
+      goodFriends,
+      shippedKinds: Object.keys(this.shipped_counts || {}).length,
+    });
+    if (this.started && !this._hydrating && status.tier.grade !== this.town_rank_seen) {
+      const order = ['E', 'D', 'C', 'B', 'A', 'S'];
+      if (order.indexOf(status.tier.grade) > order.indexOf(this.town_rank_seen)) {
+        this.town_rank_seen = status.tier.grade;
+        playSfx('rank_up');
+        this.msg(`★ Brackenford reached Town Rank ${status.tier.grade} (${status.tier.title})! ${status.tier.perkSummary}`, '0B');
+      }
+    }
+    return status;
   }
 
   has_perk(id: string): boolean {
@@ -1168,6 +1214,7 @@ export class Game {
     this.public_works = worksState();
     this.farm_works = emptyFarmWorks();
     this.casks = {};
+    this.town_rank_seen = 'E';
     this.outings_done = {};
     this.dinner_day = -1;
     this.child_state = emptyChildState();
@@ -1808,14 +1855,23 @@ export class Game {
     }
   }
 
-  /** What Otto pays for one of `item` today (mastery perks included). */
+  /** What Otto pays for one of `item` today (mastery perks & Town Rank included). */
   bin_price(item: string): number {
     let price = ITEMS[item] ? ITEMS[item][0] : 0;
     const cat = ITEMS[item]?.[2];
+    const isArtisan = item.includes('Honey') || item.includes('Wine') || item.includes('Preserve') || item.includes('Cheese') || item.includes('Mayonnaise') || item.includes('Yarn');
     if (cat === 'crop' && this.has_perk('farm_value')) price = Math.round(price * 1.15);
     else if (cat === 'fish' && this.has_perk('fish_rare')) price = Math.round(price * 1.15);
     else if ((cat === 'animal' || item.includes('Mayonnaise') || item.includes('Cheese') || item.includes('Yarn')) && this.has_perk('ranch_value')) {
       price = Math.round(price * 1.15);
+    }
+    if (isArtisan && this.has_perk('farm_artisan')) price = Math.round(price * 1.2);
+    if ((cat === 'animal' || item.includes('Milk') || item.includes('Cheese') || item.includes('Wool')) && this.has_perk('ranch_golden')) {
+      price = Math.round(price * 1.1);
+    }
+    const rankBonus = this.town_rank().tier.artisanBonus;
+    if (rankBonus > 0 && isArtisan) {
+      price = Math.round(price * (1 + rankBonus));
     }
     return price;
   }
@@ -2542,6 +2598,12 @@ export class Game {
       this.warp(mp, wx, wy);
     } else if (m.tile(nx, ny) === 'down') {
       this.enter_mine(this.mine_floor + 1, this.mine_type);
+    } else if (m.tile(nx, ny) === 'pitfall') {
+      const drop = rollPitfallDrop(this.mine_floor, this.has_perk('mine_prospector'), this.assist.noFaint, () => py_rng().random());
+      playSfx('pitfall');
+      this.enter_mine(drop.targetFloor, this.mine_type);
+      await this.spend(drop.staminaCost);
+      this.msg(`You plunged down a pitfall shaft (-${drop.dropFloors} floors to B${drop.targetFloor}F, -${drop.staminaCost} stamina)!`, '09');
     } else if (m.tile(nx, ny) === 'up') {
       if (this.mine_type === 'lake') {
         this.warp('mountain', 15, 9, [0, 1]);
@@ -2644,7 +2706,8 @@ export class Game {
     this.px = 3;
     this.py = 3;
     this.face = [1, 0];
-    this.msg(`${m.title}. Smash rocks with Hammer or dig soil with Hoe!`, '0C');
+    const biome = mineBiomeFor(this.mine_floor, mineType);
+    this.msg(`${m.title} — ${biome.name}. Smash rocks with Hammer or dig soil with Hoe!`, '0C');
   }
 
   tool_list(): string[] {
@@ -3011,9 +3074,18 @@ export class Game {
           this.give(drop);
           this.msg(`You found ${drop}!`, '0C');
         }
+        const geode = rollMineGeodeDrop(this.mine_floor, this.mine_type, this.effective_luck(), this.has_perk('mine_prospector'), () => py_rng().random());
+        if (geode) {
+          this.give(geode, 1);
+          this.fx_add('sparkle', tx, ty, 0.7);
+          this.msg(`Uncovered a ${geode}! Bring it to Rowan at the Forge to crack open!`, '0E');
+        }
         if (this.ladder && tx === this.ladder[0] && ty === this.ladder[1]) {
           m.set(tx, ty, 'down');
           this.msg("There's a ladder hidden under the rock!", '0A');
+        } else if (this.mine_floor < 255 && !this.pocket?.opened && py_rng().random() < 0.07) {
+          m.set(tx, ty, 'pitfall');
+          this.msg('A dark pitfall shaft (○) opened beneath the rubble!', '09');
         }
       } else if (this.mapname === 'farm' && this.tilled.has(pKey) && !this.crops[pKey]) {
         if (this.assist.confirmDestructive && !(await this.confirm('Flatten this tilled soil tile?'))) {
@@ -3144,10 +3216,13 @@ export class Game {
     if (r < 0.22 && f < 255 && !this.pocket?.opened) {
       m.set(tx, ty, 'down');
       this.msg('Your Hoe uncovered a hidden staircase down (>)', '0A');
-    } else if (r < 0.48) {
+    } else if (r < 0.30 && f < 255 && !this.pocket?.opened) {
+      m.set(tx, ty, 'pitfall');
+      this.msg('Your Hoe opened a pitfall shaft (○)! Step in to drop multiple floors.', '09');
+    } else if (r < 0.52) {
       this.give('Nightshade', 1);
       this.msg('Dug up Nightshade! (+15 Stamina if eaten)', '0B');
-    } else if (r < 0.65) {
+    } else if (r < 0.68) {
       const coins = py_rng().randint(10, 50);
       this.gold += coins;
       this.msg(`Dug up ${coins}G in old coins!`, '09');
@@ -3664,9 +3739,58 @@ export class Game {
         }
       }
     }
+    let hookedTreasure = false;
+    let caughtPreview: string | null = null;
+    if (result === 'catch' && !this.assist.easyFishing) {
+      caughtPreview = this.roll_catch();
+      let fState = createFishingState(caughtPreview, {
+        steadyFloat: this.has_perk('fish_bite'),
+        masterAngler: this.has_perk('fish_angler'),
+        anglerBuff: this.active_buff()?.kind === 'fishing',
+        luck: this.effective_luck(),
+        rng: () => py_rng().random(),
+      });
+      let lastTick = Date.now() / 1000;
+      let reelUntil = lastTick + 0.16;
+      while (fState.status === 'playing') {
+        const now = Date.now() / 1000;
+        const dt = now - lastTick;
+        lastTick = now;
+        const reelHeld = now < reelUntil;
+        fState = stepFishingState(fState, reelHeld, dt, () => py_rng().random());
+        const [W, H] = [this.scr.w, this.scr.h];
+        const bar = renderFishingBar(fState);
+        const [bx, by] = [Math.floor((W - 38) / 2), Math.floor(H / 2) - 4];
+        this.render();
+        this.scr.box(bx, by, 38, 7, '0D', '00', 'Reel It In!');
+        this.scr.put(bx + 3, by + 2, bar.track, fState.onTarget ? '0B' : '08', '00', true);
+        this.scr.put(bx + 3, by + 3, `Catch ${bar.meter}`, fState.onTarget ? '0B' : '09');
+        this.scr.put(
+          bx + 3,
+          by + 4,
+          bar.chestNote ? `Tap SPACE/RIGHT · ${bar.chestNote}` : 'Tap SPACE / RIGHT to reel!',
+          bar.chestNote ? '0A' : '05',
+        );
+        this.scr.flush();
+        const k = await this.scr.getKey(0.05);
+        if (k) {
+          if (CANCEL_KEYS.has(k)) {
+            result = 'quit';
+            break;
+          }
+          if (OK_KEYS.has(k) || k === 'RIGHT' || k === 'UP' || k === 'd' || k === 'D' || k === 'w' || k === 'W') {
+            reelUntil = Date.now() / 1000 + 0.24;
+          }
+        }
+      }
+      if (result !== 'quit') {
+        result = fState.status === 'caught' ? 'catch' : 'miss';
+        hookedTreasure = fState.status === 'caught' && fState.chestClaimed;
+      }
+    }
     this.last = Date.now() / 1000;
     if (result === 'catch') {
-      const caught = this.roll_catch();
+      const caught = caughtPreview ?? this.roll_catch();
       const [tx, ty] = this.target();
       this.give(caught);
       playSfx('fish_catch');
@@ -3677,11 +3801,20 @@ export class Game {
         this.fish_caught[caught] = (this.fish_caught[caught] || 0) + 1;
         this.mastery_add('fishing');
       }
+      let extra = '';
+      if (hookedTreasure) {
+        const loot = rollFishingTreasure(this.season, this.effective_luck(), () => py_rng().random());
+        if (loot.gold) this.gold += loot.gold;
+        if (loot.item) this.give(loot.item, loot.qty ?? 1);
+        playSfx('fanfare');
+        this.fx_add('coin', tx, ty, 0.9);
+        extra = ` + Sunken Treasure: ${loot.label}!`;
+      }
       if (caught === REGION_CATCH[this.mapname]?.rare) {
         this.fx_add('sparkle', tx, ty, 0.9);
-        this.msg(`A rare catch: ${caught}!`, '0C');
+        this.msg(`A rare catch: ${caught}!${extra}`, '0C');
       } else {
-        this.msg(`You caught ${/^[AEIOU]/.test(caught) ? 'an' : 'a'} ${caught}!`, '0C');
+        this.msg(`You caught ${/^[AEIOU]/.test(caught) ? 'an' : 'a'} ${caught}!${extra}`, '0C');
       }
     } else if (result === 'early') {
       this.msg('You reeled in too early.');
@@ -3922,8 +4055,12 @@ export class Game {
         }
         this.mastery_add('farming');
         if (crop === 'Turnip') this.fortnight.picked = true;
-        playSfx('harvest');
+        const nowSec = Date.now() / 1000;
+        this._harvestStreak = nowSec - this._lastHarvestAt < 2.2 ? Math.min(5, this._harvestStreak + 1) : 0;
+        this._lastHarvestAt = nowSec;
+        playHarvestChime(this._harvestStreak);
         this.fx_add('sparkle', tx, ty, 0.7);
+        this.fx_add('text', tx, ty, 0.75, { text: `+${n}` });
       } else {
         this.msg(
           `${crop}: ${days - age} more day${days - age > 1 ? 's' : ''} to go.${this.wet.has(pKey) ? '' : ' (needs water)'}${this.companion_note(pKey)}${this.compost_bonus(pKey) ? ' Composted: +1 at the next picking.' : ''}`,
@@ -6979,8 +7116,10 @@ export class Game {
       ];
     }
     if (bid === 'blacksmith') {
+      const geodeTotal = GEODE_KINDS.reduce((s, g) => s + (this.inv[g] || 0), 0);
       return [
         ['Upgrade a Tool (Copper -> Heirloom)', () => this.upgrade_tool()],
+        [`Crack Geodes (${CRACK_GEODE_FEE}G each${geodeTotal ? ` · ${geodeTotal} ready` : ''})`, () => this.crack_geodes()],
         ['Order Maker Machine (20,000G + Deepiron)', () => this.order_maker()],
         ['Forge Sunbrass Jewelry (1000G + Sunbrass)', () => this.forge_jewelry()],
       ];
@@ -7145,6 +7284,30 @@ export class Game {
     }
   }
 
+  async crack_geodes(): Promise<void> {
+    while (true) {
+      const held = GEODE_KINDS.filter((g) => (this.inv[g] || 0) > 0);
+      if (!held.length) {
+        await this.say('Bring any Geode, Frozen Geode, or Magma Geode from the mines or fishing — I will crack it open for 25G!', 'Rowan');
+        return;
+      }
+      const opts = [...held.map((g) => `Crack ${g} (x${this.inv[g]}) — ${CRACK_GEODE_FEE}G`), 'Done'];
+      const sel = await this.menu(`Rowan's Anvil — Crack Geodes   ${this.gold}G`, opts);
+      if (sel === null || sel >= held.length) return;
+      if (this.gold < CRACK_GEODE_FEE) {
+        await this.say(`You need ${CRACK_GEODE_FEE}G to crack a geode.`, 'Rowan');
+        return;
+      }
+      const kind = held[sel] as GeodeKind;
+      this.gold -= CRACK_GEODE_FEE;
+      this.take(kind, 1);
+      const loot = rollGeodeLoot(kind, this.effective_luck(), () => py_rng().random());
+      this.give(loot.item, loot.qty);
+      playSfx('geode_crack');
+      this.msg(`CLANG! Rowan cracked the ${kind}: ${loot.qty > 1 ? `${loot.qty}x ` : ''}${loot.item}!${loot.rare ? ' (Museum-worthy!)' : ''}`, loot.rare ? '0B' : '0C');
+    }
+  }
+
   async confession_booth(): Promise<void> {
     const opts = [
       'Remove Equipped Fey Tool (1000G)',
@@ -7202,6 +7365,46 @@ export class Game {
   /** Farm pieces, orchard trees and the barrel/greenhouse frames are drawn over the stored farm tiles. */
   hook_farm(): void {
     this.maps.farm.overlay = (x, y, k) => this.farm_overlay(x, y, k);
+    if (this.maps.town) {
+      this.maps.town.overlay = (x, y) => this.town_overlay(x, y);
+    }
+  }
+
+  /** Visible Market Cross upgrades as Brackenford Town Rank climbs (lanterns at D+, flower boxes at C+). */
+  town_overlay(x: number, y: number): string | undefined {
+    const visuals = this.town_rank().tier.visuals;
+    if (!visuals.lanterns && !visuals.flowerBoxes) return undefined;
+    const base = this.maps.town?.t[y]?.[x];
+    if (base !== 'path' && base !== 'grass') return undefined;
+    if (visuals.lanterns && ((x === 33 || x === 39) && (y === 11 || y === 16))) return 'town_lantern';
+    if (visuals.flowerBoxes && (((x === 34 || x === 38) && y === 15) || ((x === 32 || x === 40) && y === 19))) return 'town_flowerbox';
+    return undefined;
+  }
+
+  /** Count trees/orchard tiles adjacent to a farm cell for Mushroom Log growth speed & rarity. */
+  private adjacent_farm_trees(key: string): number {
+    const [x, y] = key.split(',').map(Number);
+    const m = this.maps.farm;
+    let n = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const t = m.t[y + dy]?.[x + dx];
+        if (t === 'tree' || this.farm_works.orchard[pkey(x + dx, y + dy)]) n += 1;
+      }
+    }
+    return n;
+  }
+
+  private artisan_yield(key: string, piece: 'Bee House' | 'Mushroom Log') {
+    const fw = this.farm_works;
+    const last = fw.artisanDays?.[key] ?? Math.max(0, this.absday() - 3);
+    if (piece === 'Bee House') {
+      return beeHouseYield(key, this.crops, (c) => CROPS[c]?.[2] ?? 4, this.season, this.absday(), last);
+    }
+    const [x, y] = key.split(',').map(Number);
+    const rainBoost = this.weather === 'Rain' || this.weather === 'Typhoon' ? 1 : 0;
+    return mushroomLogYield(this.adjacent_farm_trees(key), this.season, rainBoost, this.has_perk('forage_bounty'), this.absday(), last, x * 13 + y * 29);
   }
 
   farm_overlay(x: number, y: number, key?: string): string | undefined {
@@ -7211,6 +7414,8 @@ export class Game {
       const k = key ?? pkey(x, y);
       const piece = fw.pieces[k];
       if (piece === CASK_RACK) return this.cask_tile(k);
+      if (piece === 'Bee House') return this.artisan_yield(k, 'Bee House').ready ? 'farm_bee_ready' : 'farm_bee';
+      if (piece === 'Mushroom Log') return this.artisan_yield(k, 'Mushroom Log').ready ? 'farm_mlog_ready' : 'farm_mlog';
       if (piece) return FARM_PIECES[piece].tile;
       if (fw.orchard[k]) return 'orchard_tree';
     }
@@ -7253,7 +7458,11 @@ export class Game {
     }
     this.take(name);
     fw.pieces[k] = name;
-    this.msg(`Placed the ${name}. Face it and press X to pick it up.`, '0B');
+    if (name === 'Bee House' || name === 'Mushroom Log') {
+      fw.artisanDays = fw.artisanDays ?? {};
+      fw.artisanDays[k] = this.absday();
+    }
+    this.msg(`Placed the ${name}. Face it and press X to interact or pick it up.`, '0B');
     return true;
   }
 
@@ -7311,6 +7520,32 @@ export class Game {
       await this.cask_menu(k);
       return true;
     }
+    if (piece === 'Bee House' || piece === 'Mushroom Log') {
+      const yld = this.artisan_yield(k, piece);
+      const status = yld.dormant
+        ? '  Dormant in Winter. Bees wake again in Spring.'
+        : yld.ready
+          ? `  Ready to harvest: ${yld.item} (${ITEMS[yld.item]?.[0] ?? 150}G)!`
+          : `  Working on ${yld.item} (${yld.daysLeft} more day${yld.daysLeft === 1 ? '' : 's'}).`;
+      const opts = [...(yld.ready ? [`Harvest ${yld.item}`] : []), 'Pick it up', 'Leave it'];
+      const sel = await this.menu(piece, opts, 0, [status, `  ${FARM_PIECES[piece].info}`]);
+      const choice = sel === null ? 'Leave it' : opts[sel];
+      if (choice.startsWith('Harvest')) {
+        fw.artisanDays = fw.artisanDays ?? {};
+        fw.artisanDays[k] = this.absday();
+        this.give(yld.item, 1);
+        playHarvestChime(2);
+        this.fx_add('sparkle', x, y, 0.7);
+        this.mastery_add(piece === 'Bee House' ? 'farming' : 'foraging');
+        this.msg(`Harvested fresh ${yld.item} from the ${piece}!`, '0A');
+      } else if (choice === 'Pick it up') {
+        delete fw.pieces[k];
+        if (fw.artisanDays) delete fw.artisanDays[k];
+        this.give(piece);
+        this.msg(`Picked up the ${piece}.`);
+      }
+      return true;
+    }
     if (piece) {
       if ((await this.menu(piece, ['Pick it up', 'Leave it'], 0, [`  ${FARM_PIECES[piece].info}`])) === 0) {
         delete fw.pieces[k];
@@ -7330,14 +7565,14 @@ export class Game {
     return false;
   }
 
-  /** Charge gold and lumber together, or nothing at all. */
+  /** Charge gold and lumber together (pulling Lumber from Pockets + Cabinet), or nothing at all. */
   private pay_works(cost: { gold: number; lumber: number }): boolean {
-    if (this.gold < cost.gold || (this.inv.Lumber || 0) < cost.lumber) {
+    if (this.gold < cost.gold || totalAvailable('Lumber', this.inv, null, this.cabinet_inv) < cost.lumber) {
       this.msg(`You need ${cost.gold}G and ${cost.lumber} Lumber.`, '08');
       return false;
     }
     this.gold -= cost.gold;
-    this.take('Lumber', cost.lumber);
+    consumeAcrossStorages('Lumber', cost.lumber, this.inv, null, this.cabinet_inv);
     return true;
   }
 
@@ -7406,13 +7641,24 @@ export class Game {
     this.msg(known ? `Silas crossed ${h.crop} Seeds again for ${fee}G.` : `Silas crossed a new seed: ${h.crop} Seeds!`, '0A');
   }
 
-  /** Morning work: sprinklers, the rain channel, then typhoon damage. */
+  /** Morning work: sprinklers (Standard/Quality/Starsteel), artisan readiness, rain channel, then typhoon damage. */
   farm_works_morning(report: string[]): void {
     const fw = this.farm_works;
     const stormy = this.weather === 'Typhoon';
+    let readyBees = 0;
+    let readyLogs = 0;
     for (const [k, piece] of Object.entries(fw.pieces)) {
-      if (piece === 'Sprinkler') for (const c of fixtureCoverage(k, false)) if (this.tilled.has(c)) this.wet.add(c);
+      const cells = sprinklerCoverage(k, piece);
+      if (cells.length) {
+        for (const c of cells) if (this.tilled.has(c)) this.wet.add(c);
+      } else if (piece === 'Bee House' && this.artisan_yield(k, 'Bee House').ready) {
+        readyBees += 1;
+      } else if (piece === 'Mushroom Log' && this.artisan_yield(k, 'Mushroom Log').ready) {
+        readyLogs += 1;
+      }
     }
+    if (readyBees) report.push(`${readyBees} Bee House${readyBees > 1 ? 's have' : ' has'} fresh honey ready to collect.`);
+    if (readyLogs) report.push(`${readyLogs} Mushroom Log${readyLogs > 1 ? 's have' : ' has'} mushrooms ready to pick.`);
     if (fw.channel) {
       const dry = CHANNEL_CELLS.filter((c) => this.tilled.has(c));
       if (this.weather === 'Rain' || stormy) fw.water = BARREL_CAP;
@@ -7529,14 +7775,16 @@ export class Game {
 
   farm_auto_feed(report: string[]): void {
     if (!Object.values(this.farm_works.pieces).includes('Auto-Feeder')) return;
-    const feed = Math.min(Math.max(0, this.chickens - this.fed), this.inv['Chicken Feed'] || 0);
+    const feedAvail = totalAvailable('Chicken Feed', this.inv, null, this.cabinet_inv);
+    const feed = Math.min(Math.max(0, this.chickens - this.fed), feedAvail);
     if (feed > 0) {
-      this.take('Chicken Feed', feed);
+      consumeAcrossStorages('Chicken Feed', feed, this.inv, null, this.cabinet_inv);
       this.fed += feed;
     }
-    const hungry = this.animals.filter((a) => !a.fed).slice(0, this.inv['Fodder'] || 0);
+    const fodderAvail = totalAvailable('Fodder', this.inv, null, this.cabinet_inv);
+    const hungry = this.animals.filter((a) => !a.fed).slice(0, fodderAvail);
     if (hungry.length) {
-      this.take('Fodder', hungry.length);
+      consumeAcrossStorages('Fodder', hungry.length, this.inv, null, this.cabinet_inv);
       hungry.forEach((a) => (a.fed = true));
     }
     if (feed || hungry.length) report.push(`The Auto-Feeder filled the troughs (${feed} chickens, ${hungry.length} barn animals).`);
@@ -7567,9 +7815,11 @@ export class Game {
       await this.say('Nothing grows outdoors in Winter, dear. Come back in Spring!', 'Hollis');
       return;
     }
+    const discount = this.town_rank().tier.seedDiscount;
+    const seedPrice = (c: string) => Math.max(10, Math.round(CROPS[c][1] * (1 - discount)));
     const opts = crops.map((c) => {
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
-      return `${c} Seeds (${CROPS[c][1]}G)${gate.unlocked ? '' : ' [LOCKED — Ship 100 each]'}`;
+      return `${c} Seeds (${seedPrice(c)}G)${gate.unlocked ? '' : ' [LOCKED — Ship 100 each]'}`;
     });
     const info = (s: number) => {
       const c = crops[s];
@@ -7577,6 +7827,7 @@ export class Game {
       const regrow = d[3] ? `, regrows every ${d[3]}d` : '';
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
       const lines = [`  ${d[2]} days to grow${regrow} — ships for ${d[4]}G each (sows 3x3)`];
+      if (discount > 0) lines.push(`  Town Rank ${this.town_rank().tier.grade} discount applied: ${Math.round(discount * 100)}% off seeds!`);
       lines.push(...this.crop_forecast_lines(c).map((l) => `  ${l}`));
       if (c === COMPANION.crop || c === COMPANION.helper) {
         lines.push(`  Companion: a ${COMPANION.helper} in bloom beside a ${COMPANION.crop} gives ${1 + COMPANION.bonus} a picking.`);
@@ -7590,7 +7841,7 @@ export class Game {
       }
       return lines;
     };
-    const sel = await this.menu(`Hollis's Supermarket Seeds   ${this.gold}G`, opts, 0, info);
+    const sel = await this.menu(`Hollis's Supermarket Seeds${discount > 0 ? ` (-${Math.round(discount * 100)}%)` : ''}   ${this.gold}G`, opts, 0, info);
     if (sel !== null) {
       const c = crops[sel];
       const gate = checkSecretCropUnlock(c, this.shipped_counts);
@@ -7601,7 +7852,7 @@ export class Game {
         );
         return;
       }
-      await this.buy(`${c} Seeds`, CROPS[c][1]);
+      await this.buy(`${c} Seeds`, seedPrice(c));
     }
   }
 
@@ -7820,6 +8071,8 @@ export class Game {
 
     lines.push(`  ${this.date_str()} — ${this.weather}`);
     lines.push(`  Tomorrow: ${this.tomorrow}   Fortune: ${LUCK_LABELS[this.daily_luck].name}`);
+    const tr = this.town_rank();
+    lines.push(`  Town   Rank ${tr.tier.grade} (${tr.tier.title}) · ${tr.points} pts${tr.next ? ` (${tr.pointsToNext} to Rank ${tr.next.grade})` : ' (MAX)'}`);
     const buff = this.active_buff();
     if (buff) lines.push(`  Buff   ${buff.label}`);
     if (this.spouse_routine && this.spouse_routine.day === this.absday()) {
@@ -8673,7 +8926,7 @@ export class Game {
   }
 
   museum_pool(category: string | null = null): string[] {
-    const excluded = new Set(['Junk Ore', 'Boot', 'Empty Can', 'Failed Dish']);
+    const excluded = new Set(['Junk Ore', 'Boot', 'Empty Can', 'Failed Dish', 'Geode', 'Frozen Geode', 'Magma Geode']);
     const cats = this.museum_categories();
     const allowed = new Set(category ? cats.filter(([, c]) => c === category).map(([, c]) => c) : cats.map(([, c]) => c));
     return py_sorted(
@@ -9377,9 +9630,11 @@ export class Game {
           const xp = this.mastery_xp[discipline] || 0;
           const next = MASTERY_RANKS[level + 1];
           const progress = next ? `${Math.min(xp, next.xp)}/${next.xp} XP` : `${xp} XP (max)`;
-          const perkId = this.mastery_perks[discipline];
-          const perk = MASTERY_PERKS.find((p) => p.id === perkId);
-          return `${MASTERY_LABELS[discipline].padEnd(9)} ${MASTERY_RANKS[level].name.padEnd(7)} ${progress}${perk ? ` · [${perk.name}]` : level >= 1 ? ' · [Pick Perk!]' : ''}`;
+          const p1 = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[discipline]);
+          const p2 = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[`${discipline}_2`]);
+          const badge = [p1?.name, p2?.name].filter(Boolean).join(' + ');
+          const needPick = (level >= 1 && !p1) || (level >= 2 && !p2);
+          return `${MASTERY_LABELS[discipline].padEnd(9)} ${MASTERY_RANKS[level].name.padEnd(7)} ${progress}${badge ? ` · [${badge}]` : ''}${needPick ? ' · [Pick Perk!]' : ''}`;
         }),
         'Back',
       ];
@@ -9388,30 +9643,37 @@ export class Game {
         opts,
         0,
         (i) => {
-          if (i >= MASTERY_DISCIPLINES.length) return ['  Reach Adept rank in any discipline to choose a permanent perk.'];
+          if (i >= MASTERY_DISCIPLINES.length) return ['  Reach Adept (Rank 1) & Expert (Rank 2) in any discipline to choose permanent perks.'];
           const d = MASTERY_DISCIPLINES[i];
           const level = this.mastery_level(d);
-          const perk = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[d]);
+          const p1 = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[d]);
+          const p2 = MASTERY_PERKS.find((p) => p.id === this.mastery_perks[`${d}_2`]);
           return [
-            perk ? `  Active perk: ${perk.name} — ${perk.desc}` : level >= 1 ? '  Unlocked! Press Enter to choose a perk for this discipline.' : '  Reach Adept (rank 1) to unlock perks.',
-            '  Rank rewards: 250G / 500G / 1000G / 2000G plus seeds, forage, fish, ore or feed.',
+            p1 ? `  Adept Perk: ${p1.name} — ${p1.desc}` : level >= 1 ? '  Adept Perk unlocked! Press Enter to choose.' : '  Reach Adept (Rank 1) to unlock Tier 1 perks.',
+            p2 ? `  Expert Perk: ${p2.name} — ${p2.desc}` : level >= 2 ? '  Expert Perk unlocked! Press Enter to activate.' : '  Reach Expert (Rank 2) to unlock Tier 2 perks.',
           ];
         },
       );
       if (sel === null || sel >= MASTERY_DISCIPLINES.length) return;
       const disc = MASTERY_DISCIPLINES[sel];
-      if (this.mastery_level(disc) < 1) {
+      const lvl = this.mastery_level(disc);
+      if (lvl < 1) {
         await this.say(`Reach Adept rank in ${MASTERY_LABELS[disc]} first to choose a mastery perk.`, 'Farm Mastery');
         continue;
       }
-      const choices = perksForDiscipline(disc);
+      const choices = perksForDiscipline(disc).filter((p) => p.rank <= lvl);
       const pSel = await this.menu(
-        `Choose ${MASTERY_LABELS[disc]} Perk`,
-        [...choices.map((p) => `${this.mastery_perks[disc] === p.id ? '● ' : '○ '}${p.name} — ${p.desc}`), 'Cancel'],
+        `Choose ${MASTERY_LABELS[disc]} Perk (Tier 1 & Tier 2)`,
+        [...choices.map((p) => {
+          const slot = p.rank === 2 ? `${disc}_2` : disc;
+          return `${this.mastery_perks[slot] === p.id ? '● ' : '○ '}[T${p.rank}] ${p.name} — ${p.desc}`;
+        }), 'Cancel'],
       );
       if (pSel !== null && pSel < choices.length) {
-        this.mastery_perks[disc] = choices[pSel].id;
-        this.msg(`${MASTERY_LABELS[disc]} perk active: ${choices[pSel].name}!`, '0B');
+        const picked = choices[pSel];
+        const slot = picked.rank === 2 ? `${disc}_2` : disc;
+        this.mastery_perks[slot] = picked.id;
+        this.msg(`${MASTERY_LABELS[disc]} Tier ${picked.rank} perk active: ${picked.name}!`, '0B');
       }
     }
   }
@@ -10937,6 +11199,10 @@ export class Game {
     const mapY = contour ? 0 : 1;
     const dividerY = contour ? H - 2 : H - 4;
     const [vw, vh] = [compact ? W : W - side - 1, dividerY - mapY];
+    const rankGrade = this.town_rank().tier.grade;
+    if (this.started && isMusicEnabled()) {
+      syncAmbientAudio(musicSceneFor(this.mapname, this.season, !!this.map.indoor));
+    }
     s.ctx = {
       mapName: this.mapname,
       indoor: !!this.map.indoor,
@@ -10947,6 +11213,9 @@ export class Game {
       wetness: this.wetness[this.mapname] || 0,
       cues: s.accessibleCues,
       palette: s.paletteMode,
+      mineFloor: this.mapname === 'mine' ? this.mine_floor : undefined,
+      mineType: this.mapname === 'mine' ? this.mine_type : undefined,
+      townRank: rankGrade,
       toolTier: UPGRADABLE.includes(this.tool) ? (this.levels[this.tool] || 0) : 0,
       zoom: 1,
       reducedMotion: s.reducedMotion,
@@ -11162,6 +11431,10 @@ export class Game {
       ledger(y++, 'BARN', hungry ? `${hungry} hungry` : `${this.animals.length} fed`, hungry ? '08' : '04');
     }
     if (this.power_berries || this.has_mystic_berry) ledger(y++, 'BERRIES', `${this.power_berries}${this.has_mystic_berry ? ' + Mystic' : ''}`);
+    if (!compact || y + 1 < end) {
+      const tr = this.town_rank();
+      ledger(y++, 'TOWN', `Rank ${tr.tier.grade}`, tr.tier.grade === 'S' ? '0A' : '0C');
+    }
     if (y < end) {
       if (facing.length <= w - 7) {
         pair(y++, 'FACING', facing, '0E');
@@ -13031,7 +13304,7 @@ export class Game {
   }
 
   ingredient_plan(dish: string): Record<string, number> | null {
-    const left = { ...this.inv };
+    const left = combinedPool(this.inv, this.fridge_inv, this.cabinet_inv);
     const plan: Record<string, number> = {};
     for (let [tok, q] of py_sorted(RECIPES[dish][0])) {
       let pool: string[] = [];
@@ -13063,14 +13336,14 @@ export class Game {
       const opts: string[] = ['[Experimental Free-Form Cooking]', '[Host Dinner for Two Neighbors]'];
       for (const d of dishes) {
         const ut = RECIPES[d][1];
-        const ok = (!ut || ut in this.inv) && this.ingredient_plan(d) !== null;
+        const ok = (!ut || totalAvailable(ut, this.inv, this.fridge_inv, this.cabinet_inv) > 0) && this.ingredient_plan(d) !== null;
         const known = this.recipes_discovered.includes(d);
         opts.push(`${ok ? '*' : ' '} ${d}${known ? '' : ' (new)'}`);
       }
       const info = (s: number) => {
         if (s === 0) {
           return [
-            '  Combine 1–3 ingredients from your rucksack to discover new recipes!',
+            '  Combine 1–3 ingredients from Pockets, Fridge, or Cabinet to discover new recipes!',
             '  Matching a real recipe discovers & cooks it; unmatched combos yield a Failed Dish.',
           ];
         }
@@ -13089,13 +13362,13 @@ export class Game {
         ];
         const preserve = this.preserve_note(d);
         if (preserve) lines.push(`  ${preserve}`);
-        if (ut && !(ut in this.inv)) {
+        if (ut && totalAvailable(ut, this.inv, this.fridge_inv, this.cabinet_inv) <= 0) {
           lines.push(`  Needs a ${ut} (Supermarket / TV Shopping)`);
         }
         const plan = this.ingredient_plan(d);
         if (plan) {
           lines.push(
-            '  Uses: ' +
+            '  Uses (Pockets + Fridge/Cabinet): ' +
               Object.entries(plan)
                 .map(([i, q]) => `${q} ${i}`)
                 .join(', ')
@@ -13103,7 +13376,7 @@ export class Game {
         }
         return lines;
       };
-      const sel = await this.menu(`Kitchen (${this.recipes_discovered.length}/${dishes.length} discovered · * = ready)`, opts, 0, info);
+      const sel = await this.menu(`Kitchen (${this.recipes_discovered.length}/${dishes.length} · Pockets+Fridge+Cabinet)`, opts, 0, info);
       if (sel === null) return;
       if (sel === 0) {
         await this.experimental_cook();
@@ -13116,32 +13389,36 @@ export class Game {
       const d = dishes[sel - 2];
       const ut = RECIPES[d][1];
       const plan = this.ingredient_plan(d);
-      if (ut && !(ut in this.inv)) {
+      if (ut && totalAvailable(ut, this.inv, this.fridge_inv, this.cabinet_inv) <= 0) {
         await this.say(`You need a ${ut} to make ${d}.`, null);
       } else if (plan === null) {
         await this.say(`You don't have the ingredients for ${d}.`, null);
       } else {
+        let usedFridge = 0;
+        let usedCab = 0;
         for (const [i, q] of Object.entries(plan)) {
-          this.take(i, q);
+          const res = consumeAcrossStorages(i, q, this.inv, this.fridge_inv, this.cabinet_inv);
+          usedFridge += res.fromFridge;
+          usedCab += res.fromCabinet;
         }
         this.give(d);
         if (!this.recipes_discovered.includes(d)) this.recipes_discovered.push(d);
         playSfx('harvest');
-        this.msg(`You cooked ${d}!`, '0A');
+        this.msg(`You cooked ${d}${storageSourceNote(usedFridge, usedCab)}!`, '0A');
       }
     }
   }
 
   async experimental_cook(): Promise<void> {
     const picked: string[] = [];
-    const tempInv: Record<string, number> = { ...this.inv };
+    const tempInv: Record<string, number> = combinedPool(this.inv, this.fridge_inv, this.cabinet_inv);
     while (picked.length < 3) {
       const usable = Object.keys(tempInv).filter(
         (i) => tempInv[i] > 0 && ['crop', 'forage', 'fish', 'animal', 'ingredient', 'food'].includes(ITEMS[i]?.[2]),
       );
       if (!usable.length) {
         if (!picked.length) {
-          await this.say('You have no food ingredients in your rucksack to experiment with.', null);
+          await this.say('You have no food ingredients in your rucksack, Fridge, or Cabinet to experiment with.', null);
           return;
         }
         break;
@@ -13155,14 +13432,22 @@ export class Game {
       tempInv[chosen] -= 1;
     }
     if (!picked.length) return;
-    for (const p of picked) this.take(p, 1);
-    const matched = matchExperimentalRecipe(picked, RECIPES, ITEMS, FRUITS, this.inv);
+    let usedFridge = 0;
+    let usedCab = 0;
+    for (const p of picked) {
+      const res = consumeAcrossStorages(p, 1, this.inv, this.fridge_inv, this.cabinet_inv);
+      usedFridge += res.fromFridge;
+      usedCab += res.fromCabinet;
+    }
+    const allUtensils = combinedPool(this.inv, this.fridge_inv, this.cabinet_inv);
+    const matched = matchExperimentalRecipe(picked, RECIPES, ITEMS, FRUITS, allUtensils);
     if (matched) {
       this.give(matched, 1);
       const fresh = !this.recipes_discovered.includes(matched);
       if (fresh) this.recipes_discovered.push(matched);
       playSfx('fanfare');
-      this.msg(fresh ? `Recipe discovered! You cooked ${matched}!` : `You cooked ${matched}!`, '0B');
+      const note = storageSourceNote(usedFridge, usedCab);
+      this.msg(fresh ? `Recipe discovered! You cooked ${matched}${note}!` : `You cooked ${matched}${note}!`, '0B');
     } else {
       this.give('Failed Dish', 1);
       this.msg(`You experimented with ${picked.join(' + ')} and made a Failed Dish! (Used in Hedgerow Tea!)`, '0E');

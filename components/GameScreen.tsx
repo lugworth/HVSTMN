@@ -31,7 +31,7 @@ import {
   type KeyBindings,
 } from '@/src/game/accessibility';
 import { defaultAssist, readAssistSettings, type AssistSettings } from '@/src/game/progression';
-import { isSfxEnabled, loadSfxPreference } from '@/src/game/audio';
+import { isMusicEnabled, isSfxEnabled, loadMusicPreference, loadSfxPreference, stopAmbientAudio, unlockAudio } from '@/src/game/audio';
 
 const FARM_FONT = '"GLADE Farm Symbols"';
 const FONT = `"HRVSTMN Mono", ${FARM_FONT}, "DejaVu Sans Mono", ui-monospace, Menlo, Consolas, monospace`;
@@ -253,6 +253,7 @@ export default function GameScreen() {
   const [highContrast, setHighContrastState] = useState(false);
   const highContrastRef = useRef(false);
   const [sfxOn, setSfxOnState] = useState(true);
+  const [musicOn, setMusicOnState] = useState(true);
   const [assist, setAssistState] = useState<AssistSettings>(defaultAssist());
   const keyBindingsRef = useRef<KeyBindings>({});
   const relayoutRef = useRef<(() => void) | null>(null);
@@ -643,6 +644,7 @@ export default function GameScreen() {
             run: () => gameRef.current?.set_text_scale(sc),
           })),
           { id: 'contrast', label: 'High contrast', kind: 'checkbox', checked: highContrast, run: () => gameRef.current?.set_high_contrast(!highContrastRef.current) },
+          { id: 'music', label: 'Music', kind: 'checkbox', checked: musicOn, run: () => gameRef.current?.set_music(!musicOn) },
           { id: 'sfx', label: 'Sound effects', kind: 'checkbox', checked: sfxOn, run: () => gameRef.current?.set_sfx(!sfxOn) },
           { id: 'crt', label: 'CRT scanlines', kind: 'checkbox', checked: crt, run: toggleCrt },
           { id: 'motion', label: 'Motion', kind: 'checkbox', checked: !reducedMotion, run: toggleMotion },
@@ -763,6 +765,8 @@ export default function GameScreen() {
     };
     loadSfxPreference(window.localStorage);
     setSfxOnState(isSfxEnabled());
+    loadMusicPreference(window.localStorage);
+    setMusicOnState(isMusicEnabled());
     setAssistState(readAssistSettings(window.localStorage));
     keyBindingsRef.current = readKeyBindings(window.localStorage);
     screenRef.current = screen;
@@ -996,9 +1000,12 @@ export default function GameScreen() {
       stopRow();
       if (gameRef.current) gameRef.current.row = null;
     };
+    const onFirstAudioGesture = () => unlockAudio();
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
+    window.addEventListener('pointerdown', onFirstAudioGesture, { passive: true });
+    window.addEventListener('keydown', onFirstAudioGesture, { passive: true });
 
     // Window resizes, phone rotation, browser toolbars sliding away and the touch pad appearing
     // all change the stage size; the observer catches every one of them.
@@ -1047,6 +1054,7 @@ export default function GameScreen() {
       keyBindingsRef.current = { ...b };
     };
     game.onSfx = (on) => setSfxOnState(on);
+    game.onMusic = (on) => setMusicOnState(on);
     // Focus the name field (touch only; it stays mounted) inside the tap that opened the prompt,
     // so the phone keyboard comes up without a second tap.
     game.onTyping = () => {
@@ -1121,6 +1129,9 @@ export default function GameScreen() {
       document.removeEventListener('gesturestart', noDefault);
       document.removeEventListener('touchmove', noDefault);
       document.removeEventListener('contextmenu', noDefault);
+      window.removeEventListener('pointerdown', onFirstAudioGesture);
+      window.removeEventListener('keydown', onFirstAudioGesture);
+      stopAmbientAudio();
       clearTimeout(resizeTimer);
       clearInterval(animTimer);
       clearInterval(hudTimer);

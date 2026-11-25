@@ -11,28 +11,39 @@ export interface MasteryPerkDef {
 }
 
 export const MASTERY_PERKS: readonly MasteryPerkDef[] = [
+  // Rank 1 (Adept)
   { id: 'farm_can', discipline: 'farming', rank: 1, name: 'Deep Spout', desc: '+10 Watering Can capacity at every refill.' },
   { id: 'farm_value', discipline: 'farming', rank: 1, name: 'Select Grade', desc: '+15% shipping gold on harvested farm crops.' },
   { id: 'forage_double', discipline: 'foraging', rank: 1, name: 'Keen Eye', desc: '+20% chance to gather a second forage item.' },
   { id: 'forage_stamina', discipline: 'foraging', rank: 1, name: 'Trail Stride', desc: 'Forage snacks restore +25% more stamina.' },
-  { id: 'fish_bite', discipline: 'fishing', rank: 1, name: 'Steady Float', desc: 'Fish bite faster and reel-in window lasts longer.' },
+  { id: 'fish_bite', discipline: 'fishing', rank: 1, name: 'Steady Float', desc: 'Fish bite faster and catch bar is wider.' },
   { id: 'fish_rare', discipline: 'fishing', rank: 1, name: 'Deep Line', desc: '+15% shipping value on caught fish.' },
   { id: 'mine_ore', discipline: 'mining', rank: 1, name: 'Vein Reader', desc: 'Higher chance of rare ores and gems per rock.' },
   { id: 'mine_stamina', discipline: 'mining', rank: 1, name: 'Light Swing', desc: 'Every other mine swing saves 1 stamina.' },
   { id: 'ranch_aff', discipline: 'ranching', rank: 1, name: 'Gentle Hand', desc: '+2 bonus daily affection for fed animals.' },
   { id: 'ranch_value', discipline: 'ranching', rank: 1, name: 'Creamery Pride', desc: '+15% shipping value on eggs, milk, wool & makers.' },
+  // Rank 2 (Expert)
+  { id: 'farm_artisan', discipline: 'farming', rank: 2, name: 'Artisan Touch', desc: '+20% value on Honey, Cask Wines, Preserves & Aged Cheese.' },
+  { id: 'forage_bounty', discipline: 'foraging', rank: 2, name: 'Forest Bounty', desc: 'Mushroom Logs yield rarer Truffles & Morels.' },
+  { id: 'fish_angler', discipline: 'fishing', rank: 2, name: 'Master Angler', desc: 'Much wider fishing bar and more Sunken Treasure chests.' },
+  { id: 'mine_prospector', discipline: 'mining', rank: 2, name: 'Deep Prospector', desc: 'Higher Geode drop rate and gentler pitfall landings.' },
+  { id: 'ranch_golden', discipline: 'ranching', rank: 2, name: 'Golden Pasture', desc: '+10% extra shipping value on all livestock & artisan dairy.' },
 ];
 
-export function perksForDiscipline(discipline: string): MasteryPerkDef[] {
-  return MASTERY_PERKS.filter((p) => p.discipline === discipline);
+export function perksForDiscipline(discipline: string, rank?: number): MasteryPerkDef[] {
+  return MASTERY_PERKS.filter((p) => p.discipline === discipline && (rank === undefined || p.rank === rank));
 }
 
 export function sanitizeMasteryPerks(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== 'object') return {};
   const out: Record<string, string> = {};
-  for (const [disc, id] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof id === 'string' && MASTERY_PERKS.some((p) => p.discipline === disc && p.id === id)) {
-      out[disc] = id;
+  for (const [slot, id] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof id !== 'string') continue;
+    const isRank2 = slot.endsWith('_2');
+    const disc = isRank2 ? slot.slice(0, -2) : slot;
+    const reqRank = isRank2 ? 2 : 1;
+    if (MASTERY_PERKS.some((p) => p.discipline === disc && p.rank === reqRank && p.id === id)) {
+      out[slot] = id;
     }
   }
   return out;

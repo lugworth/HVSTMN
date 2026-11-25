@@ -29,16 +29,29 @@ export const PIECE_LIMIT = 80;
 
 export const FARM_PIECES = {
   'Farm Path': { tile: 'farm_path', glyph: '·', color: '04', walk: true, price: 25, info: 'Walkable paving for open farm soil.' },
-  'Farm Lamp': { tile: 'farm_lamp', glyph: '†', color: '0A', walk: false, price: 125, info: 'Lights a small pool after dusk.' },
+  'Farm Lamp': { tile: 'farm_lamp', glyph: '†', color: '0A', walk: false, price: 125, info: 'Lights a warm amber pool after dusk.' },
   'Farm Bench': { tile: 'farm_bench', glyph: '╥', color: '09', walk: false, price: 100, info: 'A place to sit by the fields.' },
   'Farm Fence': { tile: 'farm_fence', glyph: '╪', color: '04', walk: false, price: 50, info: 'A short, solid fence panel. Leave a gate!' },
-  'Sprinkler': { tile: 'farm_sprinkler', glyph: '¤', color: '0C', walk: false, price: 900, info: 'Waters the four touching soil tiles each morning.' },
-  'Scarecrow': { tile: 'farm_scarecrow', glyph: '‡', color: '09', walk: false, price: 500, info: 'Its windbreak protects the eight touching tiles from typhoons.' },
-  'Auto-Feeder': { tile: 'farm_feeder', glyph: '▣', color: '0B', walk: false, price: 1800, info: 'At dawn uses Chicken Feed and Fodder from your bag to fill empty troughs. One per farm.' },
+  'Sprinkler': { tile: 'farm_sprinkler', glyph: '¤', color: '0C', walk: false, price: 900, info: 'Waters the 4 touching soil tiles each morning.' },
+  'Quality Sprinkler': { tile: 'farm_qsprinkler', glyph: '❖', color: '0D', walk: false, price: 2200, info: 'Waters all 8 surrounding tiles (3x3) each morning.' },
+  'Starsteel Sprinkler': { tile: 'farm_msprinkler', glyph: '✦', color: '0E', walk: false, price: 5500, info: 'Waters all 24 surrounding tiles (5x5) each morning.' },
+  'Scarecrow': { tile: 'farm_scarecrow', glyph: '‡', color: '09', walk: false, price: 500, info: 'Its windbreak protects the 8 touching tiles from typhoons.' },
+  'Bee House': { tile: 'farm_bee', glyph: '⌂', color: '0A', walk: false, price: 1200, info: 'Produces Honey every 3 days (Spring–Fall). Place near blooming flowers for specialty honey!' },
+  'Mushroom Log': { tile: 'farm_mlog', glyph: '♠', color: '09', walk: false, price: 950, info: 'Grows Mushrooms, Morels, or Truffles every 3–4 days. Faster near trees and after rain.' },
+  'Auto-Feeder': { tile: 'farm_feeder', glyph: '▣', color: '0B', walk: false, price: 1800, info: 'At dawn uses Chicken Feed and Fodder from your bag or Cabinet to fill empty troughs. One per farm.' },
   [CASK_RACK]: { tile: 'farm_cask', glyph: '◙', color: '08', walk: false, price: CASK_PRICE, info: 'One barrel: ferment fruit into wine, or age Small Cheese. Older goods sell for more.' },
 } as const;
 
-export const FARM_USE_TILES = ['orchard_tree', 'rain_barrel', 'greenhouse_frame', 'farm_cask_work', 'farm_cask_ready', ...Object.values(FARM_PIECES).map((p) => p.tile)];
+export const FARM_USE_TILES = [
+  'orchard_tree',
+  'rain_barrel',
+  'greenhouse_frame',
+  'farm_cask_work',
+  'farm_cask_ready',
+  'farm_bee_ready',
+  'farm_mlog_ready',
+  ...Object.values(FARM_PIECES).map((p) => p.tile),
+];
 
 export type FarmPiece = keyof typeof FARM_PIECES;
 export const FARM_PIECE_NAMES = Object.keys(FARM_PIECES) as FarmPiece[];
@@ -53,6 +66,7 @@ export interface FarmWorks {
   water: number;
   greenhouse: boolean;
   pieces: Record<string, FarmPiece>;
+  artisanDays?: Record<string, number>;
 }
 
 export const emptyFarmWorks = (): FarmWorks => ({ hybrids: [], orchard: {}, channel: false, water: 0, greenhouse: false, pieces: {} });
@@ -83,6 +97,15 @@ export function restoreFarmWorks(raw: unknown, canPlace: (key: string, piece: Fa
       }
     }
   }
+  if (data.artisanDays && typeof data.artisanDays === 'object') {
+    const days: Record<string, number> = {};
+    for (const [k, day] of Object.entries(data.artisanDays)) {
+      if ((state.pieces[k] === 'Bee House' || state.pieces[k] === 'Mushroom Log') && Number.isSafeInteger(day) && day >= 0 && day <= today) {
+        days[k] = day;
+      }
+    }
+    if (Object.keys(days).length > 0) state.artisanDays = days;
+  }
   return state;
 }
 
@@ -91,5 +114,23 @@ export function fixtureCoverage(key: string, diagonals: boolean): string[] {
   const out = [pkey(x + 1, y), pkey(x - 1, y), pkey(x, y + 1), pkey(x, y - 1)];
   if (diagonals) out.push(pkey(x + 1, y + 1), pkey(x - 1, y + 1), pkey(x + 1, y - 1), pkey(x - 1, y - 1));
   return out;
+}
+
+/** Return the soil tiles watered each morning by a sprinkler piece. */
+export function sprinklerCoverage(key: string, piece: FarmPiece): string[] {
+  if (piece === 'Sprinkler') return fixtureCoverage(key, false);
+  if (piece === 'Quality Sprinkler') return fixtureCoverage(key, true);
+  if (piece === 'Starsteel Sprinkler') {
+    const [x, y] = key.split(',').map(Number);
+    const out: string[] = [];
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        out.push(pkey(x + dx, y + dy));
+      }
+    }
+    return out;
+  }
+  return [];
 }
 

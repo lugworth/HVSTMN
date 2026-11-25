@@ -11,6 +11,7 @@ import { HIVE_SPOT, PALETTE } from './constants';
 import { contourPattern, type ContourTexture } from './contour';
 import { FENCE_PITCH, SEASON_GLYPHS } from './chrome';
 import { FARM_SYMBOLS, FARM_SYMBOL_FALLBACK } from './farm-symbols';
+import { mineBiomeFor } from './mining-depth';
 
 export type OutCell = {
   ch: string;
@@ -623,6 +624,9 @@ type Frame = {
   map: string;
   /** Current season (0=Spring, 1=Summer, 2=Fall, 3=Winter). */
   season: number;
+  mineFloor?: number;
+  mineType?: 'spring' | 'lake';
+  townRank?: string;
 };
 
 const roofShades = (fgCode: string) => {
@@ -1052,17 +1056,31 @@ export function styleTile(F: Frame, x: number, y: number, tag: CellTag, cell: Ce
       return { ch: '◊', fg: '#9ff0ff', bg: '#2e2924', bold: true, glow: '#70e8ff', glowR: 3, accent: true };
     case 'pocket_moss':
       return { ch: '♣', fg: '#7ccf5a', bg: '#2e2924', bold: true, accent: true };
-    case 'mwall':
+    case 'mwall': {
       if (isTorch(F, x, y, tag)) return { ch: '†', fg: '#ff9900', bg: '#2e2924', bold: true, glow: '#ff9900', glowR: 9, accent: true };
+      const biome = F.mineFloor && F.mineFloor >= 25 ? mineBiomeFor(F.mineFloor, F.mineType) : null;
+      if (biome) return { ch: hs < 0.5 ? biome.wallGlyph : '▒', fg: pal(biome.wallCol, '#6c6c6c'), bg: biome.wallBg, bold: false };
       return { ch: hs < 0.5 ? '▓' : '▒', fg: '#4a423a', bg: '#2e2924', bold: false };
+    }
     case 'floor': {
       const nearTable = [[-2, 0], [2, 0], [0, -1], [0, 1], [-2, 1], [2, 1], [-2, -1], [2, -1]].some(([dx, dy]) => F.tags[y + dy]?.[x + dx]?.t === 'table');
       if (nearTable) return { ch: '░', fg: mix('#ff0099', '#000000', 0.45), bg: mix(groundBg(F, tag), '#ff0099', 0.1), bold: false }; // rug
       return { ch: hs < 0.08 ? '·' : wy % 2 ? '─' : ' ', fg: '#523b26', bg: groundBg(F, tag), bold: false };
     }
-    case 'mfloor':
-      if (hash(wx * 2, wy, 67) < 0.012) return { ch: '✦', fg: '#00ffff', bg: groundBg(F, tag), bold: false, glow: '#00ffff', glowR: 4, accent: true }; // ore glint
-      return { ch: hs < 0.3 ? '·' : ' ', fg: '#4a4038', bg: groundBg(F, tag), bold: false };
+    case 'mfloor': {
+      const biome = F.mineFloor && F.mineFloor >= 25 ? mineBiomeFor(F.mineFloor, F.mineType) : null;
+      const floorBg = biome ? biome.floorBg : groundBg(F, tag);
+      if (hash(wx * 2, wy, 67) < 0.012) return { ch: '✦', fg: biome ? pal(biome.floorCol, '#00ffff') : '#00ffff', bg: floorBg, bold: false, glow: '#00ffff', glowR: 4, accent: true }; // ore glint
+      return { ch: hs < 0.3 ? '·' : ' ', fg: biome ? mix(pal(biome.floorCol, '#5a5048'), '#ffffff', 0.15) : '#4a4038', bg: floorBg, bold: false };
+    }
+    case 'pitfall':
+      return { ch: '○', fg: '#ff4444', bg: '#08050a', bold: true, glow: '#ff3333', glowR: 4, accent: true };
+    case 'town_lantern': {
+      const gold = F.townRank === 'S';
+      return { ch: '†', fg: gold ? '#ffe066' : '#ffbb55', bg: groundBg(F, { ...tag, t: 'path' }), bold: true, glow: gold ? '#ffe066' : '#ff9900', glowR: 7, accent: true };
+    }
+    case 'town_flowerbox':
+      return { ch: '❀', fg: F.season === 3 ? '#75f6e8' : F.season === 2 ? '#ff9900' : '#ff66aa', bg: groundBg(F, { ...tag, t: 'grass' }), bold: true, accent: true };
     case 'fireplace': {
       const flame = F.t > 0 ? pick(['▲', '∧', '^'], hash(Math.floor(F.t * 4), wx, 63)) : '^';
       return { ch: flame, fg: '#ff8a38', bg: '#3a1a0a', bold: true, glow: '#ff7a30', glowR: 8, accent: true };
@@ -1537,7 +1555,7 @@ export function computeFrame(
   const motion = !(ctx?.reducedMotion ?? scr.reducedMotion);
   const skyNow = ctx ? skyFor(ctx) : null;
   // with reduced motion every tile animation (sway, ripples, twinkles) holds its first frame
-  const F: Frame = { buf, tags, theme: themeFor(season, ctx?.day), t: motion ? t : 0, indoor: !!ctx?.indoor, weather: ctx?.weather ?? 'Sunny', amb: skyNow?.amb ?? 1, minutes: ctx?.minutes ?? 720, wetness: ctx?.wetness ?? 0, sea: SEA_MAPS.has(ctx?.mapName ?? ''), map: ctx?.mapName ?? '', season };
+  const F: Frame = { buf, tags, theme: themeFor(season, ctx?.day), t: motion ? t : 0, indoor: !!ctx?.indoor, weather: ctx?.weather ?? 'Sunny', amb: skyNow?.amb ?? 1, minutes: ctx?.minutes ?? 720, wetness: ctx?.wetness ?? 0, sea: SEA_MAPS.has(ctx?.mapName ?? ''), map: ctx?.mapName ?? '', season, mineFloor: ctx?.mineFloor, mineType: ctx?.mineType, townRank: ctx?.townRank };
   const out: OutCell[][] = new Array(H);
 
   for (let y = 0; y < H; y++) {
@@ -1911,6 +1929,10 @@ export function computeFrame(
         } else if (sky.windowsLit && pane && windowLit(ctx.minutes, tag.wx ?? x, tag.wy ?? y)) lights.push({ x, y, r: 3.4, col: hexToRgb('#ffb050'), k: 0.75 });
         if (sky.windowsLit && tag.t === 'door' && !tag.ent) lights.push({ x, y, r: 4, col: hexToRgb('#ffa040'), k: 0.8 });
         if (tag.t === 'fireplace') lights.push({ x, y, r: 5, col: hexToRgb('#ff8a40'), k: 0.8 });
+        if (sky.windowsLit && (tag.t === 'farm_lamp' || tag.t === 'town_lantern')) {
+          const gold = tag.t === 'town_lantern' && ctx.townRank === 'S';
+          lights.push({ x, y, r: gold ? 7.5 : 6, col: hexToRgb(gold ? '#ffe480' : '#ffb850'), k: gold ? 1.05 : 0.9 });
+        }
         if (tag.t === 'mwall' && isTorch(F, x, y, tag)) lights.push({ x, y: y + 1, r: 5, col: hexToRgb('#ff9900'), k: 0.85 });
       }
     }

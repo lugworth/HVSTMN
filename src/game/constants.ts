@@ -3543,6 +3543,66 @@ export const INN_SCENES: InnScene[] = [
       ['Gideon', 'I once heard a knock at the inn door at midnight. Turned out to be the wind.'],
     ],
   },
+  {
+    id: 'spring_herbs',
+    title: 'Botanical debate by the window',
+    cast: ['Silas', 'Odessa', 'Dr. Sayer'],
+    listen: [
+      ['Silas', 'Wild spring sprouts carry twice the aroma if you pick them before the dew dries!'],
+      ['Dr. Sayer', 'Statistically, Silas, the mineral content is identical — though the walk at dawn is good medicine.'],
+      ['Odessa', 'I press one from every ridge trail into the library ledger so we never forget which year bloomed early.'],
+    ],
+    join: 'Share what is blooming on your farm',
+    joined: [
+      ['Silas', 'Aha! Plant flowers beside a Bee House and the whole meadow tastes like spring!'],
+      ['Dr. Sayer', 'Take a cup of herbal tonic on the house — good farmers deserve good rest.'],
+    ],
+  },
+  {
+    id: 'summer_cider',
+    title: 'Cider & sea shanties on the hearth',
+    cast: ['Corin', 'Elspeth', 'Nico', 'Felix'],
+    listen: [
+      ['Nico', 'Back by the southern tide, we sang while mending nets — kept the hands moving steady.'],
+      ['Corin', 'Pour another round of cold grape cider, Elspeth! That tune deserves a chorus!'],
+      ['Felix', 'I never pictured myself singing in a tavern, yet here I am tapping my boot.'],
+    ],
+    join: 'Clap along and raise a mug',
+    joined: [
+      ['Elspeth', 'That is the spirit! Brackenford sounds brightest when the whole table joins in.'],
+      ['Nico', 'Next clear afternoon, cast off the pier — I swear the fish bite better after a good song!'],
+    ],
+  },
+  {
+    id: 'fall_bakeoff',
+    title: 'Autumn pie-crust council',
+    cast: ['Tess', 'Rosalind', 'Juniper'],
+    listen: [
+      ['Juniper', 'Cold butter, fast hands, and a fresh orchard pear — nothing beats a flaky crust.'],
+      ['Rosalind', 'Try brushing the rim with Rosecap Honey before it goes in the oven!'],
+      ['Tess', 'Wait until Dad smells this — he will try to put it on the Inn menu by tomorrow noon!'],
+    ],
+    join: 'Taste-test the warm slices',
+    joined: [
+      ['Tess', 'Official judge verdict? Ha — look at that grin! Take a slice home for the morning.'],
+      ['Juniper', 'You always know good farm ingredients when you taste them.'],
+    ],
+  },
+  {
+    id: 'winter_forge',
+    title: 'Sparks & stories over hot stew',
+    cast: ['Rowan', 'Hilde', 'Gideon'],
+    listen: [
+      ['Rowan', 'Cracked three geodes before noon today — one had a Star Shard glowing right through the crust.'],
+      ['Hilde', 'Good hammer swing, boy. Never rush the stone; let the vein tell you where it wants to split.'],
+      ['Gideon', 'Save your elbows for the soup spoon, you two. Winter nights are long enough without cold bowls.'],
+    ],
+    join: 'Ask about the deep mine veins',
+    joined: [
+      ['Rowan', 'Bring any Geodes you find down there to the forge — 25G and I will crack them clean open!'],
+      ['Hilde', 'Watch your footing for pitfall shafts, farmer. Fast way down, hard on the knees!'],
+    ],
+  },
 ];
 
 /** Task 04: Rowan's two-chapter request. Chapter one asks for Copperseam Mine copper. */
@@ -4022,3 +4082,22 @@ ITEMS['Block Print'] = [120, 0, 'special'];
 ITEMS['Brackenford Potluck Stew'] = [420, 45, 'dish'];
 RECIPES['Brackenford Potluck Stew'] = [[['any:crop', 2], ['any:forage', 1]], 'Pot', 45, 420];
 ITEMS['Crimson Scarf'] = [0, 0, 'special'];
+// Geodes, Geode Minerals, Flower Honeys, Morel & new tiles (Fishing/Mining/Artisan/Town Rank)
+ITEMS['Geode'] = [60, 0, 'ore'];
+ITEMS['Frozen Geode'] = [95, 0, 'ore'];
+ITEMS['Magma Geode'] = [140, 0, 'ore'];
+ITEMS['Quartz'] = [110, 0, 'ore'];
+ITEMS['Amethyst'] = [220, 0, 'ore'];
+ITEMS['Sunstone'] = [320, 0, 'ore'];
+ITEMS['Moonstone'] = [340, 0, 'ore'];
+ITEMS['Star Shard'] = [520, 0, 'ore'];
+ITEMS['Wild Honey'] = [180, 18, 'ingredient'];
+ITEMS['Duskbell Honey'] = [310, 22, 'ingredient'];
+ITEMS['Rosecap Honey'] = [380, 25, 'ingredient'];
+ITEMS['Emberbloom Honey'] = [460, 28, 'ingredient'];
+ITEMS['Morel'] = [145, 16, 'forage'];
+TILES['pitfall'] = ['○', '08', '00', true];
+TILES['farm_bee_ready'] = ['⌂', '0B', '00', false];
+TILES['farm_mlog_ready'] = ['♠', '0B', '00', false];
+TILES['town_lantern'] = ['†', '0A', '00', false];
+TILES['town_flowerbox'] = ['❀', '0E', '00', false];

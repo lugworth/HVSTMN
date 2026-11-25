@@ -121,6 +121,11 @@ export type RenderCtx = {
   cues?: boolean;
   /** World colour treatment ('mono' default, 'duotone', or 'isotope'). */
   palette?: PaletteMode;
+  /** Active mine floor and shaft type for biome styling. */
+  mineFloor?: number;
+  mineType?: 'spring' | 'lake';
+  /** Active Brackenford Town Rank grade ('E'..'S') for square lighting. */
+  townRank?: string;
   /** Equipped tool upgrade tier (0..6) for AoE reticle tinting. */
   toolTier?: number;
   /** Screen cells per map tile horizontally. Always 1 now that large tiles are gone. */
